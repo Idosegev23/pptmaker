@@ -239,25 +239,28 @@ export default function CreateAutoPage() {
           .slice(0, 5)
           .map(s => s.slice(0, 60)),
         
-        // Generated images from AI (including brand assets from logo)
-        _generatedImages: data.proposalContent._images,
+        // Generated images - only keep URLs, not base64 data (to avoid payload size issues)
+        _generatedImages: data.proposalContent._images ? {
+          coverImage: data.proposalContent._images.coverImage?.startsWith('http') ? data.proposalContent._images.coverImage : undefined,
+          brandImage: data.proposalContent._images.brandImage?.startsWith('http') ? data.proposalContent._images.brandImage : undefined,
+          audienceImage: data.proposalContent._images.audienceImage?.startsWith('http') ? data.proposalContent._images.audienceImage : undefined,
+        } : null,
         
-        // Brand assets analysis
-        _brandAssetsAnalysis: data.proposalContent._brandAssets,
+        // Brand assets analysis (without images)
+        _brandAssetsAnalysis: data.proposalContent._brandAssets ? {
+          analysis: data.proposalContent._brandAssets.analysis,
+          designTypes: data.proposalContent._brandAssets.designTypes,
+        } : null,
         
-        // Scraped assets for template
+        // Scraped assets - only URLs, not base64 (to avoid payload size issues)
         _scraped: {
-          logoUrl: data.brandResearch._scrapedAssets?.logoUrl,
-          screenshot: data.brandResearch._scrapedAssets?.screenshot,
-          heroImages: data.brandResearch._scrapedAssets?.heroImages,
-          productImages: data.brandResearch._scrapedAssets?.productImages,
-          lifestyleImages: data.brandResearch._scrapedAssets?.lifestyleImages,
+          logoUrl: data.brandResearch._scrapedAssets?.logoUrl?.startsWith('http') ? data.brandResearch._scrapedAssets.logoUrl : undefined,
+          // Skip screenshot and large image arrays to reduce payload
         },
         
-        // Brand colors and research for template
+        // Brand colors only (small data)
         _brandColors: data.brandColors,
-        _brandResearch: data.brandResearch,
-        _proposalContent: data.proposalContent,
+        // Skip full brandResearch and proposalContent to reduce payload size
       }
 
       // Save document to database

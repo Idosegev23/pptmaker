@@ -585,3 +585,4 @@ export function renderQuoteToHtml(data: QuoteData, config: TemplateConfig): stri
 
 
 
+

@@ -297,3 +297,4 @@ export function getContrastingColor(hex: string): string {
   return isColorDark(hex) ? '#FFFFFF' : '#111111'
 }
 
+
