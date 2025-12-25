@@ -101,24 +101,27 @@ export default async function DashboardPage() {
           </Card>
         </Link>
 
-        <Link href="/create?type=deck" className="group">
-          <Card className="h-full p-6 border-2 border-transparent hover:border-brand-gold transition-all duration-300 group-hover:-translate-y-1">
+        <div className="relative cursor-not-allowed">
+          <Card className="h-full p-6 border-2 border-transparent opacity-50">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-xl bg-brand-gold/10 text-brand-gold">
+              <div className="p-3 rounded-xl bg-gray-200 text-gray-400">
                 <DeckIcon className="w-8 h-8" />
               </div>
               <div className="flex-1">
-                <h3 className="text-xl font-bold mb-2">מצגת קריאטיב</h3>
-                <p className="text-muted-foreground text-sm mb-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="text-xl font-bold text-gray-400">מצגת קריאטיב</h3>
+                  <span className="px-2 py-0.5 text-xs font-medium bg-gray-800 text-white rounded">בבנייה</span>
+                </div>
+                <p className="text-gray-400 text-sm mb-4">
                   צור מצגת מרשימה בפורמט 16:9, עם תמונות AI ועיצוב מקצועי
                 </p>
-                <span className="text-brand-gold font-medium text-sm group-hover:underline">
-                  התחל עכשיו &larr;
+                <span className="text-gray-400 font-medium text-sm">
+                  בקרוב...
                 </span>
               </div>
             </div>
           </Card>
-        </Link>
+        </div>
       </div>
 
       {/* Recent Documents */}
