@@ -1,25 +1,31 @@
 {
   "functions": {
     "src/app/api/generate-proposal/route.ts": {
-      "maxDuration": 300
+      "maxDuration": 800
     },
     "src/app/api/research/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "src/app/api/scrape/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "src/app/api/influencers/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "src/app/api/setup-logos/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "src/app/api/pdf/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "src/app/api/documents/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 120
+    },
+    "src/app/api/chat/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/image/route.ts": {
+      "maxDuration": 120
     }
   }
 }
