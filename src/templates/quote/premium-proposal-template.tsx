@@ -20,7 +20,12 @@ interface PremiumProposalData {
   campaignName?: string
   campaignSubtitle?: string
   
-  // Goals - Rich
+  // Brand Brief - WHY are they coming to us?
+  brandBrief?: string // The core challenge/need
+  brandPainPoints?: string[] // What's hurting them?
+  brandObjective?: string // What do they want to achieve?
+  
+  // Goals - Rich (short & practical)
   goals?: string[]
   goalsDetailed?: { title: string; description: string }[]
   
@@ -30,6 +35,16 @@ interface PremiumProposalData {
   targetDescription?: string
   targetBehavior?: string
   targetInsights?: string[]
+  
+  // Insight - Research-based key insight
+  keyInsight?: string
+  insightSource?: string
+  insightData?: string
+  
+  // Strategy
+  strategyHeadline?: string
+  strategyDescription?: string
+  strategyPillars?: { title: string; description: string }[]
   
   // Brand - Rich
   brandDescription?: string
@@ -478,7 +493,7 @@ export function generatePremiumProposalSlides(
   `
 
   // ========================================
-  // SLIDE 1: COVER
+  // SLIDE 1: COVER - Full screen image with large logos
   // ========================================
   const coverImage = config.images?.coverImage || data._scraped?.heroImages?.[0] || ''
   slides.push(`
@@ -489,54 +504,76 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-cover {
-      background: ${coverImage ? `linear-gradient(to left, rgba(0,0,0,0.7), rgba(0,0,0,0.5)), url('${coverImage}')` : 'linear-gradient(135deg, #111 0%, #333 100%)'};
+      background: ${coverImage ? `url('${coverImage}')` : 'linear-gradient(135deg, #111 0%, #333 100%)'};
       background-size: cover;
       background-position: center;
+      position: relative;
+    }
+    .slide-cover::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.5) 100%);
     }
     .slide-cover .slide-content {
       justify-content: space-between;
+      position: relative;
+      z-index: 1;
+    }
+    .slide-cover .top-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
     }
     .slide-cover .main-title {
-      font-size: 96px;
+      font-size: 110px;
       font-weight: 900;
       color: white;
-      max-width: 900px;
+      max-width: 1000px;
       line-height: 1.05;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
     .slide-cover .subtitle {
-      font-size: 32px;
-      color: rgba(255,255,255,0.8);
+      font-size: 36px;
+      color: rgba(255,255,255,0.9);
       margin-top: 24px;
+      font-weight: 300;
     }
     .slide-cover .meta {
       display: flex;
       gap: 60px;
-      color: rgba(255,255,255,0.6);
-      font-size: 20px;
+      color: rgba(255,255,255,0.7);
+      font-size: 22px;
     }
     .slide-cover .meta-item {
       display: flex;
       align-items: center;
       gap: 12px;
     }
-    .slide-cover .logos {
-      display: flex;
-      gap: 40px;
-      align-items: center;
+    .slide-cover .client-logo-hero {
+      height: 120px;
+      max-width: 300px;
+      object-fit: contain;
+      filter: brightness(0) invert(1) drop-shadow(0 2px 10px rgba(0,0,0,0.5));
     }
-    .slide-cover .logos img {
-      height: 50px;
+    .slide-cover .leaders-logo-hero {
+      height: 60px;
       filter: brightness(0) invert(1);
+      opacity: 0.9;
     }
-    .slide-cover .client-logo-large {
-      height: 80px !important;
+    .slide-cover .bottom-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      width: 100%;
     }
     .slide-cover .accent-bar {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      height: 8px;
+      height: 6px;
       background: var(--accent);
     }
   </style>
@@ -544,9 +581,9 @@ export function generatePremiumProposalSlides(
 <body>
   <div class="slide slide-cover">
     <div class="slide-content">
-      <div class="logos">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo-large">` : ''}
-        <img src="${leadersLogo}" alt="Leaders">
+      <div class="top-section">
+        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo-hero">` : '<div></div>'}
+        <img src="${leadersLogo}" alt="Leaders" class="leaders-logo-hero">
       </div>
       
       <div>
@@ -554,9 +591,10 @@ export function generatePremiumProposalSlides(
         ${data.campaignSubtitle ? `<p class="subtitle">${data.campaignSubtitle}</p>` : ''}
       </div>
       
-      <div class="meta">
-        <div class="meta-item">${formatHebrewDate(data.issueDate)}</div>
-        ${data.brandName ? `<div class="meta-item">${data.brandName}</div>` : ''}
+      <div class="bottom-section">
+        <div class="meta">
+          <div class="meta-item">${formatHebrewDate(data.issueDate)}</div>
+        </div>
       </div>
     </div>
     <div class="accent-bar"></div>
@@ -714,9 +752,11 @@ export function generatePremiumProposalSlides(
       margin-bottom: 16px;
     }
     .slide-goals .goal-desc {
-      font-size: 20px;
+      font-size: 18px;
       color: var(--text-light);
-      line-height: 1.6;
+      line-height: 1.5;
+      max-height: 80px;
+      overflow: hidden;
     }
   </style>
 </head>
@@ -736,7 +776,7 @@ export function generatePremiumProposalSlides(
           <div class="goal-card">
             <div class="goal-number">${i + 1}</div>
             <div class="goal-title">${typeof g === 'string' ? g : g.title}</div>
-            ${typeof g !== 'string' && g.description ? `<div class="goal-desc">${g.description}</div>` : ''}
+            ${typeof g !== 'string' && g.description ? `<div class="goal-desc">${g.description.slice(0, 80)}${g.description.length > 80 ? '...' : ''}</div>` : ''}
           </div>
           `).join('')}
         </div>
@@ -887,11 +927,10 @@ export function generatePremiumProposalSlides(
 `)
 
   // ========================================
-  // SLIDE 5: ABOUT THE BRAND
+  // SLIDE 5: KEY INSIGHT - Research-based insight
   // ========================================
-  const brandImage = config.images?.brandImage || data._scraped?.heroImages?.[1] || ''
-  
-  if (data.brandDescription) {
+  const insightText = data.keyInsight || data.brandOpportunity || ''
+  if (insightText) {
     slides.push(`
 <!DOCTYPE html>
 <html dir="rtl" lang="he">
@@ -899,72 +938,293 @@ export function generatePremiumProposalSlides(
   <meta charset="UTF-8">
   ${baseStyles}
   <style>
-    .slide-brand .main-content {
-      flex: 1;
-      display: flex;
-      gap: 80px;
+    .slide-insight {
+      background: linear-gradient(135deg, var(--accent) 0%, ${accentColor}dd 100%);
     }
-    .slide-brand .text-side {
-      flex: 1.5;
-      display: flex;
-      flex-direction: column;
+    .slide-insight .slide-content {
       justify-content: center;
     }
-    .slide-brand .visual-side {
+    .slide-insight .main-content {
       flex: 1;
       display: flex;
       flex-direction: column;
       justify-content: center;
-    }
-    .slide-brand .brand-text {
-      font-size: 26px;
-      line-height: 1.8;
-      color: var(--text-light);
-      margin-top: 40px;
-    }
-    .slide-brand .brand-highlights {
-      margin-top: 50px;
-    }
-    .slide-brand .highlight-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-    .slide-brand .highlight-icon {
-      width: 32px;
-      height: 32px;
-      background: var(--accent);
-      border-radius: 8px;
-      flex-shrink: 0;
-    }
-    .slide-brand .highlight-text {
-      font-size: 22px;
-      color: var(--text);
-    }
-    .slide-brand .brand-image-container {
-      width: 100%;
-      height: 500px;
-      border-radius: 30px;
-      overflow: hidden;
-      background: var(--light);
-    }
-    .slide-brand .brand-image-container img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .slide-brand .client-logo-display {
-      margin-top: 40px;
+      align-items: center;
       text-align: center;
+      max-width: 1200px;
+      margin: 0 auto;
     }
-    .slide-brand .client-logo-display img {
-      max-height: 80px;
+    .slide-insight .section-label {
+      font-size: 20px;
+      color: rgba(255,255,255,0.7);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      margin-bottom: 40px;
+    }
+    .slide-insight .insight-text {
+      font-size: 56px;
+      font-weight: 700;
+      color: white;
+      line-height: 1.3;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .slide-insight .insight-source {
+      font-size: 18px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 50px;
+      font-style: italic;
+    }
+    .slide-insight .quote-mark {
+      font-size: 120px;
+      color: rgba(255,255,255,0.2);
+      position: absolute;
+      top: 100px;
+      right: 100px;
+      font-family: Georgia, serif;
+    }
+    .slide-insight .logo-header img {
+      filter: brightness(0) invert(1);
+    }
+    .slide-insight .client-logo {
+      filter: brightness(0) invert(1) !important;
     }
   </style>
 </head>
 <body>
-  <div class="slide slide-brand">
+  <div class="slide slide-insight">
+    <div class="quote-mark">"</div>
+    <div class="slide-content">
+      <div class="logo-header">
+        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
+        <img src="${leadersLogo}" alt="Leaders">
+      </div>
+      
+      <div class="main-content">
+        <div class="section-label">התובנה המרכזית</div>
+        <div class="insight-text">${insightText.slice(0, 200)}</div>
+        ${data.insightSource ? `<div class="insight-source">מקור: ${data.insightSource}</div>` : ''}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+`)
+  }
+
+  // ========================================
+  // SLIDE 6: STRATEGY
+  // ========================================
+  const strategyPillars = data.strategyPillars || data.activityApproach || []
+  const strategyHeadline = data.strategyHeadline || data.influencerStrategy || ''
+  
+  if (strategyHeadline || strategyPillars.length > 0) {
+    slides.push(`
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  ${baseStyles}
+  <style>
+    .slide-strategy .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .slide-strategy .strategy-header {
+      margin-bottom: 50px;
+    }
+    .slide-strategy .strategy-desc {
+      font-size: 26px;
+      color: var(--text-light);
+      line-height: 1.6;
+      margin-top: 24px;
+      max-width: 900px;
+    }
+    .slide-strategy .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(${Math.min(strategyPillars.length || 3, 3)}, 1fr);
+      gap: 40px;
+      flex: 1;
+    }
+    .slide-strategy .pillar-card {
+      background: white;
+      padding: 50px 40px;
+      border-radius: 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+      display: flex;
+      flex-direction: column;
+      border-bottom: 5px solid var(--accent);
+    }
+    .slide-strategy .pillar-number {
+      width: 50px;
+      height: 50px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+    .slide-strategy .pillar-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+    .slide-strategy .pillar-desc {
+      font-size: 18px;
+      color: var(--text-light);
+      line-height: 1.6;
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="slide slide-strategy">
+    <div class="accent-shape stripe"></div>
+    <div class="slide-content">
+      <div class="logo-header">
+        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
+        <img src="${leadersLogo}" alt="Leaders">
+      </div>
+      
+      <div class="main-content">
+        <div class="strategy-header">
+          <h1 class="h1">האסטרטגיה</h1>
+          ${strategyHeadline ? `<p class="strategy-desc">${strategyHeadline.slice(0, 200)}</p>` : ''}
+        </div>
+        
+        ${strategyPillars.length > 0 ? `
+        <div class="pillars-grid">
+          ${strategyPillars.slice(0, 3).map((p, i) => `
+          <div class="pillar-card">
+            <div class="pillar-number">${i + 1}</div>
+            <div class="pillar-title">${p.title}</div>
+            <div class="pillar-desc">${(p.description || '').slice(0, 120)}</div>
+          </div>
+          `).join('')}
+        </div>
+        ` : ''}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+`)
+  }
+
+  // ========================================
+  // SLIDE 7: THE BRIEF - Why are they coming to us?
+  // ========================================
+  const brandImage = config.images?.brandImage || data._scraped?.heroImages?.[1] || ''
+  const briefText = data.brandBrief || data.brandOpportunity || data.brandDescription || ''
+  const painPoints = data.brandPainPoints || data.brandHighlights || []
+  
+  if (briefText || painPoints.length > 0) {
+    slides.push(`
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  ${baseStyles}
+  <style>
+    .slide-brief {
+      background: linear-gradient(135deg, var(--bg) 0%, #f8f9fa 100%);
+    }
+    .slide-brief .main-content {
+      flex: 1;
+      display: flex;
+      gap: 80px;
+    }
+    .slide-brief .text-side {
+      flex: 1.2;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .slide-brief .visual-side {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .slide-brief .section-label {
+      font-size: 18px;
+      color: var(--accent);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 16px;
+    }
+    .slide-brief .h1 {
+      font-size: 64px;
+      margin-bottom: 40px;
+    }
+    .slide-brief .brief-text {
+      font-size: 28px;
+      line-height: 1.7;
+      color: var(--text-light);
+      margin-bottom: 50px;
+    }
+    .slide-brief .pain-points {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .slide-brief .pain-item {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 24px 30px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      border-right: 4px solid var(--accent);
+    }
+    .slide-brief .pain-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--accent);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .slide-brief .pain-text {
+      font-size: 22px;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .slide-brief .client-logo-large {
+      max-height: 180px;
+      max-width: 350px;
+      object-fit: contain;
+      margin-bottom: 40px;
+    }
+    .slide-brief .brand-image-container {
+      width: 100%;
+      height: 400px;
+      border-radius: 30px;
+      overflow: hidden;
+      background: var(--light);
+    }
+    .slide-brief .brand-image-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+  <div class="slide slide-brief">
     <div class="accent-shape stripe"></div>
     <div class="slide-content">
       <div class="logo-header">
@@ -974,17 +1234,16 @@ export function generatePremiumProposalSlides(
       
       <div class="main-content">
         <div class="text-side">
-          <h1 class="h1">על המותג</h1>
-          <div class="brand-text">
-            ${data.brandDescription?.slice(0, 800)}
-          </div>
+          <div class="section-label">הבריף</div>
+          <h1 class="h1">למה התכנסנו?</h1>
+          ${briefText ? `<div class="brief-text">${briefText.slice(0, 300)}</div>` : ''}
           
-          ${data.brandHighlights && data.brandHighlights.length > 0 ? `
-          <div class="brand-highlights">
-            ${data.brandHighlights.slice(0, 4).map(h => `
-            <div class="highlight-item">
-              <div class="highlight-icon"></div>
-              <div class="highlight-text">${h}</div>
+          ${painPoints.length > 0 ? `
+          <div class="pain-points">
+            ${painPoints.slice(0, 3).map((p, i) => `
+            <div class="pain-item">
+              <div class="pain-icon">${i + 1}</div>
+              <div class="pain-text">${p}</div>
             </div>
             `).join('')}
           </div>
@@ -992,12 +1251,10 @@ export function generatePremiumProposalSlides(
         </div>
         
         <div class="visual-side">
+          ${clientLogo ? `<img src="${clientLogo}" alt="${data.brandName}" class="client-logo-large">` : ''}
+          ${brandImage ? `
           <div class="brand-image-container">
-            ${brandImage ? `<img src="${brandImage}" alt="Brand">` : ''}
-          </div>
-          ${clientLogo ? `
-          <div class="client-logo-display">
-            <img src="${clientLogo}" alt="${data.brandName}">
+            <img src="${brandImage}" alt="Brand">
           </div>
           ` : ''}
         </div>
