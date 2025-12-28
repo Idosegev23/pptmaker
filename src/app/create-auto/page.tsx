@@ -285,6 +285,12 @@ export default function CreateAutoPage() {
           lifestyleImages: undefined as string[] | undefined,
         },
         
+        // Extra images from smart generation
+        _extraImages: undefined as { id: string; url: string; placement: string }[] | undefined,
+        
+        // Image strategy info
+        _imageStrategy: undefined as { conceptSummary?: string; visualDirection?: string; styleGuide?: string } | undefined,
+        
         // Brand colors only (small data)
         _brandColors: data.brandColors,
       }
