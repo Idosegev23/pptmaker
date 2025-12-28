@@ -270,6 +270,7 @@ export function generatePremiumProposalSlides(
         --light-accent: ${accent}08;
         --line: #E0E4E8;
         --white: #FFFFFF;
+        --bg: #FFFFFF;
         
         --h1: 72px;
         --h2: 48px;
