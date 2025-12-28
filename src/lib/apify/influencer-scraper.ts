@@ -291,40 +291,52 @@ function generateSearchKeywords(
 ): string[] {
   const keywords: string[] = []
   
-  // Industry keywords (Hebrew)
-  // Note: Avoid special characters that Apify doesn't accept
+  // Use ENGLISH keywords for better Instagram search results
+  // Hebrew keywords don't work well with Instagram's search
   const industryMap: Record<string, string[]> = {
-    'food': ['אוכל', 'בישול', 'מתכונים', 'שף', 'פודי'],
-    'fashion': ['אופנה', 'סטייל', 'לבוש', 'fashionista'],
-    'fitness': ['כושר', 'ספורט', 'אימון', 'חדרכושר', 'fitness'],
-    'beauty': ['יופי', 'איפור', 'טיפוח', 'beauty'],
-    'lifestyle': ['לייפסטייל', 'lifestyle', 'חיים'],
-    'parenting': ['הורות', 'אמא', 'ילדים', 'משפחה'],
-    'travel': ['טיולים', 'נסיעות', 'travel'],
-    'tech': ['טכנולוגיה', 'tech', 'גאדגטים'],
-    'health': ['בריאות', 'תזונה', 'wellness'],
-    'home': ['בית', 'עיצוב', 'דקורציה', 'homedecor'],
+    'food': ['israeli food blogger', 'food israel', 'telaviv foodie', 'israeli chef'],
+    'fashion': ['israeli fashion', 'telaviv style', 'israel fashion blogger'],
+    'fitness': ['israeli fitness', 'telaviv gym', 'israel workout'],
+    'beauty': ['israeli beauty', 'telaviv makeup', 'israel skincare'],
+    'lifestyle': ['israeli lifestyle', 'telaviv blogger', 'israel influencer'],
+    'parenting': ['israeli mom', 'telaviv family', 'israel parenting'],
+    'travel': ['israel travel', 'telaviv travel', 'israeli traveler'],
+    'tech': ['israeli tech', 'startup israel', 'telaviv tech'],
+    'health': ['israeli wellness', 'israel healthy', 'telaviv nutrition'],
+    'home': ['israeli home', 'telaviv interior', 'israel design'],
+    'מזון': ['israeli food blogger', 'telaviv foodie', 'israel chef'],
+    'אופנה': ['israeli fashion', 'telaviv style', 'fashion israel'],
+    'כושר': ['israeli fitness', 'telaviv trainer', 'israel gym'],
+    'יופי': ['israeli beauty', 'telaviv makeup', 'israel skincare'],
+    'טיולים': ['israel travel', 'telaviv blogger', 'travel israel'],
+    'משקאות': ['israeli drinks', 'telaviv bar', 'israel beverage'],
+    'בריאות': ['israeli health', 'telaviv wellness', 'israel nutrition'],
   }
   
-  // Find matching industry keywords
+  // Find matching industry keywords (check in both English and Hebrew)
+  const lowerIndustry = industry.toLowerCase()
   for (const [key, values] of Object.entries(industryMap)) {
-    if (industry.toLowerCase().includes(key)) {
+    if (lowerIndustry.includes(key) || lowerIndustry.includes(key.toLowerCase())) {
       keywords.push(...values)
+      break // Found a match, use these keywords
     }
   }
   
-  // Add general industry term
-  keywords.push(industry)
-  
-  // Add audience interests
-  if (audience.interests) {
-    keywords.push(...audience.interests.slice(0, 3))
+  // If no match found, use generic Israeli influencer keywords
+  if (keywords.length === 0) {
+    keywords.push('israeli influencer', 'telaviv blogger', 'israel lifestyle')
   }
   
-  // Add Israel-specific
-  keywords.push('ישראל', 'israel')
+  // Add English versions of interests if available
+  if (audience.interests) {
+    const englishInterests = audience.interests
+      .slice(0, 2)
+      .map(i => `israel ${i}`)
+      .filter(i => /^[a-zA-Z\s]+$/.test(i)) // Only add if it's English
+    keywords.push(...englishInterests)
+  }
   
-  return Array.from(new Set(keywords)).slice(0, 5)
+  return Array.from(new Set(keywords)).slice(0, 4)
 }
 
 function calculateInfluencerTiers(

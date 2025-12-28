@@ -19,6 +19,7 @@ export interface InfluencerRecommendation {
   category: string
   followers: string
   engagement: string
+  avgStoryViews?: string // Average story views
   whyRelevant: string
   contentStyle: string
   estimatedCost: string
@@ -146,6 +147,7 @@ export async function researchInfluencers(
       "category": "לייפסטייל / ספורט / אופנה וכו'",
       "followers": "150K",
       "engagement": "4.5%",
+      "avgStoryViews": "25K",
       "whyRelevant": "הסבר למה המשפיען מתאים למותג",
       "contentStyle": "תיאור סגנון התוכן שלו",
       "estimatedCost": "5,000-8,000 ש\"ח לפוסט",
