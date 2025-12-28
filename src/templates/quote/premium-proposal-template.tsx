@@ -939,7 +939,7 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-insight {
-      background: linear-gradient(135deg, var(--accent) 0%, ${accentColor}dd 100%);
+      background: linear-gradient(135deg, var(--accent) 0%, ${accent}dd 100%);
     }
     .slide-insight .slide-content {
       justify-content: center;
@@ -1434,7 +1434,7 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-creative-close {
-      background: linear-gradient(135deg, var(--accent) 0%, ${accentColor}cc 100%);
+      background: linear-gradient(135deg, var(--accent) 0%, ${accent}cc 100%);
     }
     .slide-creative-close .slide-content {
       justify-content: center;
