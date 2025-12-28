@@ -2,7 +2,7 @@
 const nextConfig = {
   // Enable experimental features for server components
   experimental: {
-    serverComponentsExternalPackages: ['playwright', 'pdf-lib'],
+    serverComponentsExternalPackages: ['puppeteer-core', '@sparticuz/chromium', 'pdf-lib'],
   },
   
   // Image optimization
@@ -19,11 +19,12 @@ const nextConfig = {
     ],
   },
 
-  // Webpack configuration for Playwright
+  // Webpack configuration for Puppeteer/Chromium
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals.push({
-        'playwright': 'commonjs playwright',
+        'puppeteer-core': 'commonjs puppeteer-core',
+        '@sparticuz/chromium': 'commonjs @sparticuz/chromium',
       })
     }
     return config
