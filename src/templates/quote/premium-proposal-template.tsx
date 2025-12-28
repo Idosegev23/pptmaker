@@ -340,12 +340,12 @@ export function generatePremiumProposalSlides(
       }
       
       .logo-header img {
-        height: 50px;
+        height: 70px;
         object-fit: contain;
       }
       
       .logo-header .client-logo {
-        height: 60px;
+        height: 90px;
       }
       
       /* Typography */
@@ -552,13 +552,13 @@ export function generatePremiumProposalSlides(
       gap: 12px;
     }
     .slide-cover .client-logo-hero {
-      height: 120px;
-      max-width: 300px;
+      height: 160px;
+      max-width: 400px;
       object-fit: contain;
       filter: brightness(0) invert(1) drop-shadow(0 2px 10px rgba(0,0,0,0.5));
     }
     .slide-cover .leaders-logo-hero {
-      height: 60px;
+      height: 80px;
       filter: brightness(0) invert(1);
       opacity: 0.9;
     }
@@ -714,7 +714,7 @@ export function generatePremiumProposalSlides(
     <div class="accent-shape stripe"></div>
     <div class="slide-content">
       <div class="logo-header">
-        \${clientLogo ? \`<img src="\${clientLogo}" alt="Client" class="client-logo">\` : '<div></div>'}
+        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
         <img src="${leadersLogo}" alt="Leaders">
       </div>
       
@@ -722,27 +722,27 @@ export function generatePremiumProposalSlides(
         <div class="text-side">
           <div class="section-label">הבריף</div>
           <h1 class="h1">למה התכנסנו?</h1>
-          \${briefText ? \`<div class="brief-text">\${briefText.slice(0, 300)}</div>\` : ''}
+          ${briefText ? `<div class="brief-text">${briefText.slice(0, 300)}</div>` : ''}
           
-          \${painPoints.length > 0 ? \`
+          ${painPoints.length > 0 ? `
           <div class="pain-points">
-            \${painPoints.slice(0, 3).map((p, i) => \`
+            ${painPoints.slice(0, 3).map((p, i) => `
             <div class="pain-item">
-              <div class="pain-icon">\${i + 1}</div>
-              <div class="pain-text">\${p}</div>
+              <div class="pain-icon">${i + 1}</div>
+              <div class="pain-text">${p}</div>
             </div>
-            \`).join('')}
+            `).join('')}
           </div>
-          \` : ''}
+          ` : ''}
         </div>
         
         <div class="visual-side">
-          \${clientLogo ? \`<img src="\${clientLogo}" alt="\${data.brandName}" class="client-logo-large">\` : ''}
-          \${brandImage ? \`
+          ${clientLogo ? `<img src="${clientLogo}" alt="${data.brandName}" class="client-logo-large">` : ''}
+          ${brandImage ? `
           <div class="brand-image-container">
-            <img src="\${brandImage}" alt="Brand">
+            <img src="${brandImage}" alt="Brand">
           </div>
-          \` : ''}
+          ` : ''}
         </div>
       </div>
     </div>

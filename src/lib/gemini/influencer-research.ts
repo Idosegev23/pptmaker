@@ -82,6 +82,8 @@ export async function researchInfluencers(
   console.log(`[Influencer Research] Starting research for ${brandResearch.brandName}`)
   
   const prompt = `
+**IMPORTANT: Return ONLY valid JSON. No introductory text, no explanations, just the JSON object.**
+
 אתה מומחה שיווק משפיענים בכיר עם 15 שנות ניסיון בשוק הישראלי.
 בצע מחקר מעמיק והמלץ על אסטרטגיית משפיענים עבור המותג.
 
@@ -212,6 +214,8 @@ export async function researchInfluencers(
 - המלץ על 6-10 משפיענים ספציפיים עם שמות אמיתיים
 - התייחס לתקציב בחלוקת השכבות
 - הצע KPIs ריאליסטיים לשוק הישראלי
+
+**CRITICAL: Your response must be ONLY the JSON object. Do not write any text before or after the JSON.**
 `
 
   try {
