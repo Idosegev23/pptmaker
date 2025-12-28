@@ -232,6 +232,19 @@ export function generatePremiumProposalSlides(
         direction: rtl;
       }
       
+      /* Fix brackets in RTL */
+      .ltr-nums {
+        direction: ltr;
+        unicode-bidi: isolate;
+        display: inline-block;
+      }
+      
+      /* Numbers and punctuation should stay LTR */
+      .metric-value, .stat-number, .price, .percentage {
+        direction: ltr;
+        unicode-bidi: embed;
+      }
+      
       .slide {
         width: 1920px;
         height: 1080px;

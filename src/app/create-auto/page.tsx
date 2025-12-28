@@ -239,12 +239,8 @@ export default function CreateAutoPage() {
           .slice(0, 5)
           .map(s => s.slice(0, 60)),
         
-        // Generated images - only keep URLs, not base64 data (to avoid payload size issues)
-        _generatedImages: data.proposalContent._images ? {
-          coverImage: data.proposalContent._images.coverImage?.startsWith('http') ? data.proposalContent._images.coverImage : undefined,
-          brandImage: data.proposalContent._images.brandImage?.startsWith('http') ? data.proposalContent._images.brandImage : undefined,
-          audienceImage: data.proposalContent._images.audienceImage?.startsWith('http') ? data.proposalContent._images.audienceImage : undefined,
-        } : null,
+        // Placeholders - will be filled after upload
+        _generatedImages: null as Record<string, string> | null,
         
         // Brand assets analysis (without images)
         _brandAssetsAnalysis: data.proposalContent._brandAssets ? {
@@ -252,15 +248,83 @@ export default function CreateAutoPage() {
           designTypes: data.proposalContent._brandAssets.designTypes,
         } : null,
         
-        // Scraped assets - only URLs, not base64 (to avoid payload size issues)
+        // Scraped assets - will be filled after upload
         _scraped: {
-          logoUrl: data.brandResearch._scrapedAssets?.logoUrl?.startsWith('http') ? data.brandResearch._scrapedAssets.logoUrl : undefined,
-          // Skip screenshot and large image arrays to reduce payload
+          logoUrl: undefined as string | undefined,
+          heroImages: undefined as string[] | undefined,
+          lifestyleImages: undefined as string[] | undefined,
         },
         
         // Brand colors only (small data)
         _brandColors: data.brandColors,
-        // Skip full brandResearch and proposalContent to reduce payload size
+      }
+
+      // Upload base64 images to Storage (in parallel)
+      const imagesToUpload: Record<string, string> = {}
+      const scrapedAssets = data.brandResearch._scrapedAssets
+      
+      // Collect generated images
+      if (data.proposalContent._images?.coverImage) {
+        imagesToUpload.coverImage = data.proposalContent._images.coverImage
+      }
+      if (data.proposalContent._images?.brandImage) {
+        imagesToUpload.brandImage = data.proposalContent._images.brandImage
+      }
+      if (data.proposalContent._images?.audienceImage) {
+        imagesToUpload.audienceImage = data.proposalContent._images.audienceImage
+      }
+      
+      // Collect scraped assets (logo and first hero/lifestyle images)
+      if (scrapedAssets?.logoUrl) {
+        imagesToUpload.logoUrl = scrapedAssets.logoUrl
+      }
+      if (scrapedAssets?.heroImages?.[0]) {
+        imagesToUpload.heroImage0 = scrapedAssets.heroImages[0]
+      }
+      if (scrapedAssets?.heroImages?.[1]) {
+        imagesToUpload.heroImage1 = scrapedAssets.heroImages[1]
+      }
+      if (scrapedAssets?.lifestyleImages?.[0]) {
+        imagesToUpload.lifestyleImage0 = scrapedAssets.lifestyleImages[0]
+      }
+      if (scrapedAssets?.lifestyleImages?.[1]) {
+        imagesToUpload.lifestyleImage1 = scrapedAssets.lifestyleImages[1]
+      }
+      
+      // Upload if there are images
+      if (Object.keys(imagesToUpload).length > 0) {
+        console.log('[Create] Uploading', Object.keys(imagesToUpload).length, 'images...')
+        try {
+          const uploadRes = await fetch('/api/upload-images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              images: imagesToUpload,
+              prefix: data.userInputs.brandName.replace(/[^a-zA-Z0-9א-ת]/g, '_'),
+            }),
+          })
+          
+          if (uploadRes.ok) {
+            const { urls } = await uploadRes.json()
+            console.log('[Create] Uploaded images:', Object.keys(urls))
+            
+            // Fill in document data with uploaded URLs
+            documentData._generatedImages = {
+              coverImage: urls.coverImage,
+              brandImage: urls.brandImage,
+              audienceImage: urls.audienceImage,
+            }
+            
+            documentData._scraped = {
+              logoUrl: urls.logoUrl,
+              heroImages: [urls.heroImage0, urls.heroImage1].filter(Boolean),
+              lifestyleImages: [urls.lifestyleImage0, urls.lifestyleImage1].filter(Boolean),
+            }
+          }
+        } catch (uploadErr) {
+          console.error('[Create] Image upload failed:', uploadErr)
+          // Continue without images
+        }
       }
 
       // Save document to database
