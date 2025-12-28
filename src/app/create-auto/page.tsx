@@ -173,12 +173,12 @@ export default function CreateAutoPage() {
         targetSecondary: targetContent?.secondary,
         
         // Brand Brief - Why are they coming to us?
-        brandBrief: data.proposalContent.brandBrief || data.brandResearch.challenges?.[0] || '',
-        brandPainPoints: data.proposalContent.brandPainPoints || data.brandResearch.challenges || [],
+        brandBrief: data.proposalContent.brandBrief || data.brandResearch.targetDemographics?.primaryAudience?.painPoints?.[0] || '',
+        brandPainPoints: data.proposalContent.brandPainPoints || data.brandResearch.targetDemographics?.primaryAudience?.painPoints || [],
         brandObjective: data.proposalContent.brandObjective || data.userInputs.goals?.[0] || '',
         
         // Key Insight - Research-based
-        keyInsight: data.proposalContent.keyInsight || data.brandResearch.marketInsights?.[0] || '',
+        keyInsight: data.proposalContent.keyInsight || data.brandResearch.marketPosition || '',
         insightSource: data.proposalContent.insightSource || 'מחקר שוק',
         
         // Strategy
