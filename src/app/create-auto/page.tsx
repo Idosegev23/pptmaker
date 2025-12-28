@@ -76,6 +76,7 @@ interface ScrapedInfluencerData {
   profileUrl?: string
   profilePicUrl?: string
   followers?: number
+  avgStoryViews?: number | string
   engagementRate?: number
   avgLikes?: number
   avgComments?: number

@@ -261,11 +261,14 @@ export function generatePremiumProposalSlides(
         --accent: ${accent};
         --accent-light: ${accentLight};
         --accent-dark: ${accentDark};
+        --leaders-gray: #2D3436;
+        --leaders-gray-light: #636E72;
         --text: #111111;
-        --text-light: #666666;
-        --muted: #999999;
-        --light: #F8F9FA;
-        --line: #E5E7EB;
+        --text-light: #4A4A4A;
+        --muted: #888888;
+        --light: #F5F7FA;
+        --light-accent: ${accent}08;
+        --line: #E0E4E8;
         --white: #FFFFFF;
         
         --h1: 72px;
@@ -393,9 +396,11 @@ export function generatePremiumProposalSlides(
       
       /* Cards */
       .card {
-        background: var(--light);
+        background: linear-gradient(135deg, var(--white) 0%, var(--light) 100%);
         border-radius: 24px;
         padding: 40px;
+        border: 1px solid var(--line);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
       }
       
       .card-accent {
@@ -412,9 +417,12 @@ export function generatePremiumProposalSlides(
       
       /* Metrics */
       .metric-box {
-        background: var(--light);
+        background: linear-gradient(145deg, var(--white) 0%, var(--light) 100%);
         padding: 40px;
         border-radius: 20px;
+        border: 1px solid var(--line);
+        position: relative;
+        overflow: hidden;
         text-align: center;
       }
       
@@ -816,11 +824,13 @@ export function generatePremiumProposalSlides(
       margin-top: 60px;
     }
     .slide-goals .goal-card {
-      background: var(--light);
+      background: linear-gradient(180deg, var(--white) 0%, var(--light) 100%);
       padding: 50px 40px;
       border-radius: 24px;
       text-align: center;
       border-top: 5px solid var(--accent);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.04);
+      transition: transform 0.3s ease;
     }
     .slide-goals .goal-number {
       width: 60px;
@@ -1031,10 +1041,23 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-insight {
-      background: linear-gradient(135deg, var(--accent) 0%, ${accent}dd 100%);
+      background: linear-gradient(135deg, var(--leaders-gray) 0%, var(--leaders-gray-light) 40%, ${accent} 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .slide-insight::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 80% 20%, ${accent}50 0%, transparent 50%);
     }
     .slide-insight .slide-content {
       justify-content: center;
+      position: relative;
+      z-index: 10;
     }
     .slide-insight .main-content {
       flex: 1;
@@ -1047,32 +1070,39 @@ export function generatePremiumProposalSlides(
       margin: 0 auto;
     }
     .slide-insight .section-label {
-      font-size: 20px;
-      color: rgba(255,255,255,0.7);
+      font-size: 18px;
+      color: rgba(255,255,255,0.8);
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 3px;
-      margin-bottom: 40px;
+      letter-spacing: 4px;
+      margin-bottom: 30px;
+      background: rgba(255,255,255,0.1);
+      padding: 12px 30px;
+      border-radius: 30px;
     }
     .slide-insight .insight-text {
-      font-size: 56px;
+      font-size: 52px;
       font-weight: 700;
       color: white;
-      line-height: 1.3;
-      text-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      line-height: 1.4;
+      text-shadow: 0 4px 30px rgba(0,0,0,0.3);
+      text-wrap: balance;
     }
     .slide-insight .insight-source {
       font-size: 18px;
-      color: rgba(255,255,255,0.7);
+      color: rgba(255,255,255,0.8);
       margin-top: 50px;
       font-style: italic;
+      background: rgba(255,255,255,0.1);
+      padding: 10px 25px;
+      border-radius: 20px;
     }
     .slide-insight .quote-mark {
-      font-size: 120px;
-      color: rgba(255,255,255,0.2);
+      font-size: 200px;
+      color: rgba(255,255,255,0.08);
       position: absolute;
-      top: 100px;
-      right: 100px;
+      top: 60px;
+      right: 80px;
       font-family: Georgia, serif;
     }
     .slide-insight .logo-header img {
@@ -1379,39 +1409,67 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-creative-close {
-      background: linear-gradient(135deg, var(--accent) 0%, ${accent}cc 100%);
+      background: linear-gradient(135deg, #2D3436 0%, #636E72 50%, ${accent} 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .slide-creative-close::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 30% 70%, ${accent}40 0%, transparent 50%),
+                  radial-gradient(circle at 70% 30%, ${accent}30 0%, transparent 40%);
+      animation: none;
     }
     .slide-creative-close .slide-content {
       justify-content: center;
       align-items: center;
       text-align: center;
+      position: relative;
+      z-index: 10;
     }
     .slide-creative-close .headline {
-      font-size: 80px;
+      font-size: 96px;
       font-weight: 900;
       color: white;
-      line-height: 1.2;
-      margin-bottom: 40px;
-      text-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      line-height: 1.1;
+      margin-bottom: 30px;
+      text-shadow: 0 4px 30px rgba(0,0,0,0.4);
+      letter-spacing: -2px;
     }
     .slide-creative-close .subline {
-      font-size: 28px;
-      color: rgba(255,255,255,0.9);
-      max-width: 800px;
-      line-height: 1.6;
+      font-size: 32px;
+      color: rgba(255,255,255,0.85);
+      max-width: 900px;
+      line-height: 1.5;
+      font-weight: 300;
     }
     .slide-creative-close .logos-row {
       display: flex;
-      gap: 60px;
+      gap: 80px;
       align-items: center;
-      margin-top: 80px;
+      margin-top: 100px;
+      padding: 30px 60px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
     }
     .slide-creative-close .logos-row img {
-      height: 50px;
+      height: 60px;
       filter: brightness(0) invert(1);
     }
     .slide-creative-close .client-logo-display {
-      height: 80px !important;
+      height: 90px !important;
+    }
+    .slide-creative-close .accent-line {
+      width: 120px;
+      height: 6px;
+      background: ${accent};
+      margin: 40px auto;
+      border-radius: 3px;
     }
   </style>
 </head>
@@ -1419,6 +1477,7 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-creative-close">
     <div class="slide-content">
       <h1 class="headline">זה הזמן ליצור</h1>
+      <div class="accent-line"></div>
       <p class="subline">${data.activityDifferentiator || 'מוכנים לקחת את המותג לשלב הבא'}</p>
       
       <div class="logos-row">
@@ -1812,26 +1871,39 @@ export function generatePremiumProposalSlides(
       margin-top: 50px;
     }
     .slide-recommendations .influencer-card {
-      background: var(--white);
+      background: linear-gradient(145deg, var(--white) 0%, var(--light) 100%);
       border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 30px;
+      border-radius: 24px;
+      padding: 35px 30px;
       text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+      position: relative;
+      overflow: hidden;
+    }
+    .slide-recommendations .influencer-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-light));
     }
     .slide-recommendations .influencer-avatar {
-      width: 100px;
-      height: 100px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-light, #ff6b8a));
+      width: 110px;
+      height: 110px;
+      background: linear-gradient(135deg, var(--leaders-gray) 0%, var(--leaders-gray-light) 100%);
       border-radius: 50%;
       margin: 0 auto 20px;
       display: flex;
       align-items: center;
       justify-content: center;
       color: white;
-      font-size: 36px;
+      font-size: 40px;
       font-weight: 700;
       overflow: hidden;
-      border: 3px solid var(--accent);
+      border: 4px solid var(--accent);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
     }
     .slide-recommendations .influencer-avatar img {
       width: 100%;
@@ -1851,20 +1923,25 @@ export function generatePremiumProposalSlides(
     .slide-recommendations .influencer-stats {
       display: flex;
       justify-content: center;
-      gap: 20px;
+      gap: 16px;
       margin-top: 20px;
+      background: var(--light);
+      border-radius: 12px;
+      padding: 15px 10px;
     }
     .slide-recommendations .stat {
       text-align: center;
+      flex: 1;
     }
     .slide-recommendations .stat-value {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 700;
-      color: var(--text);
+      color: var(--accent);
     }
     .slide-recommendations .stat-label {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--muted);
+      margin-top: 2px;
     }
     .slide-recommendations .influencer-reason {
       font-size: 14px;
