@@ -2,11 +2,19 @@
  * Israeli Market Image Generator
  * Uses Gemini 3 Pro Image for creating images optimized for the Israeli market
  * with proper Hebrew text support and local aesthetics
+ * 
+ * Now includes Smart Image Generation:
+ * - AI analyzes brand and creates custom image strategy
+ * - AI writes optimized prompts for each image
+ * - Flexible number of images based on brand needs
  */
 
 import { GoogleGenAI } from '@google/genai'
 import type { BrandResearch } from './brand-research'
 import type { BrandColors } from './color-extractor'
+import type { ProposalContent } from '../openai/proposal-writer'
+import { analyzeAndPlanImages, type ImageStrategy } from './image-strategist'
+import { generateSmartPrompts, smartPromptToText, type SmartImagePrompt, type GeneratedPrompts } from './smart-prompt-generator'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
@@ -358,3 +366,163 @@ export async function generateIsraeliProposalImages(
 export function israeliImageToDataUrl(image: IsraeliImage): string {
   return `data:${image.mimeType};base64,${image.imageData.toString('base64')}`
 }
+
+// ============================================
+// SMART IMAGE GENERATION SYSTEM
+// ============================================
+
+export interface SmartGeneratedImage {
+  id: string
+  placement: string
+  imageData: Buffer
+  mimeType: string
+  prompt: SmartImagePrompt
+  aspectRatio: string
+}
+
+export interface SmartImageSet {
+  strategy: ImageStrategy
+  promptsData: GeneratedPrompts
+  images: SmartGeneratedImage[]
+  // Legacy compatibility mapping
+  legacyMapping: {
+    cover?: SmartGeneratedImage
+    brand?: SmartGeneratedImage
+    audience?: SmartGeneratedImage
+    activity?: SmartGeneratedImage
+  }
+}
+
+/**
+ * Generate a single image from a smart prompt
+ */
+async function generateFromSmartPrompt(
+  smartPrompt: SmartImagePrompt
+): Promise<SmartGeneratedImage | null> {
+  console.log(`[Smart Image] Generating: ${smartPrompt.imageId}`)
+  
+  const textPrompt = smartPromptToText(smartPrompt)
+  const imageData = await generateWithRetry(textPrompt, smartPrompt.aspectRatio)
+  
+  if (imageData) {
+    return {
+      id: smartPrompt.imageId,
+      placement: smartPrompt.placement,
+      imageData,
+      mimeType: 'image/png',
+      prompt: smartPrompt,
+      aspectRatio: smartPrompt.aspectRatio,
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Generate images using the smart AI system
+ * This is the new recommended approach
+ */
+export async function generateSmartImages(
+  brandResearch: BrandResearch,
+  brandColors: BrandColors,
+  proposalContent?: Partial<ProposalContent>
+): Promise<SmartImageSet> {
+  console.log(`[Smart Image] Starting smart generation for ${brandResearch.brandName}`)
+  
+  // Step 1: AI analyzes brand and creates strategy
+  console.log('[Smart Image] Step 1: Creating image strategy...')
+  const strategy = await analyzeAndPlanImages(brandResearch, brandColors, proposalContent)
+  console.log(`[Smart Image] Strategy created: ${strategy.images.length} images planned`)
+  
+  // Step 2: AI generates optimized prompts
+  console.log('[Smart Image] Step 2: Generating smart prompts...')
+  const promptsData = await generateSmartPrompts(strategy, brandResearch, brandColors)
+  console.log(`[Smart Image] Prompts generated: ${promptsData.prompts.length}`)
+  
+  // Step 3: Generate images in parallel (prioritize essential ones)
+  console.log('[Smart Image] Step 3: Generating images...')
+  
+  // Sort by priority - essential first
+  const sortedPrompts = [...promptsData.prompts].sort((a, b) => {
+    const priorityOrder = { essential: 0, recommended: 1, optional: 2 }
+    return priorityOrder[a.priority] - priorityOrder[b.priority]
+  })
+  
+  // Generate all images in parallel
+  const imagePromises = sortedPrompts.map(prompt => generateFromSmartPrompt(prompt))
+  const results = await Promise.all(imagePromises)
+  
+  // Filter out nulls
+  const images = results.filter((img): img is SmartGeneratedImage => img !== null)
+  console.log(`[Smart Image] Generated ${images.length}/${sortedPrompts.length} images`)
+  
+  // Create legacy mapping for backward compatibility
+  const legacyMapping: SmartImageSet['legacyMapping'] = {}
+  
+  for (const img of images) {
+    if (img.placement === 'cover' && !legacyMapping.cover) {
+      legacyMapping.cover = img
+    } else if ((img.placement === 'brand' || img.placement === 'lifestyle') && !legacyMapping.brand) {
+      legacyMapping.brand = img
+    } else if (img.placement === 'audience' && !legacyMapping.audience) {
+      legacyMapping.audience = img
+    } else if ((img.placement === 'activity' || img.placement === 'product') && !legacyMapping.activity) {
+      legacyMapping.activity = img
+    }
+  }
+  
+  // Fill in missing legacy slots
+  const unassigned = images.filter(img => 
+    img !== legacyMapping.cover && 
+    img !== legacyMapping.brand && 
+    img !== legacyMapping.audience && 
+    img !== legacyMapping.activity
+  )
+  
+  if (!legacyMapping.cover && unassigned.length > 0) {
+    legacyMapping.cover = unassigned.shift()
+  }
+  if (!legacyMapping.brand && unassigned.length > 0) {
+    legacyMapping.brand = unassigned.shift()
+  }
+  if (!legacyMapping.audience && unassigned.length > 0) {
+    legacyMapping.audience = unassigned.shift()
+  }
+  if (!legacyMapping.activity && unassigned.length > 0) {
+    legacyMapping.activity = unassigned.shift()
+  }
+  
+  console.log('[Smart Image] Legacy mapping:', {
+    cover: !!legacyMapping.cover,
+    brand: !!legacyMapping.brand,
+    audience: !!legacyMapping.audience,
+    activity: !!legacyMapping.activity,
+  })
+  
+  return {
+    strategy,
+    promptsData,
+    images,
+    legacyMapping,
+  }
+}
+
+/**
+ * Convert SmartGeneratedImage to IsraeliImage for compatibility
+ */
+export function smartImageToIsraeliImage(
+  smartImage: SmartGeneratedImage,
+  type: IsraeliImage['type'] = 'cover'
+): IsraeliImage {
+  return {
+    type,
+    imageData: smartImage.imageData,
+    mimeType: smartImage.mimeType,
+    prompt: smartPromptToText(smartImage.prompt),
+    aspectRatio: smartImage.aspectRatio,
+  }
+}
+
+// Re-export types for convenience
+export type { ImageStrategy, ImagePlan } from './image-strategist'
+export type { SmartImagePrompt, GeneratedPrompts } from './smart-prompt-generator'

@@ -88,6 +88,16 @@ export async function POST(request: NextRequest) {
       activityImage: images.activityImage || scrapedAssets?.lifestyleImages?.[1] || scrapedAssets?.lifestyleImages?.[0] || '',
     }
     
+    // Extra images from smart generation
+    const extraImages = documentData._extraImages as { id: string; url: string; placement: string }[] | undefined
+    
+    // Image strategy info
+    const imageStrategy = documentData._imageStrategy as { 
+      conceptSummary?: string
+      visualDirection?: string
+      styleGuide?: string 
+    } | undefined
+    
     console.log('[PDF] Images:', {
       cover: finalImages.coverImage ? 'Yes' : 'No',
       brand: finalImages.brandImage ? 'Yes' : 'No',
@@ -95,6 +105,8 @@ export async function POST(request: NextRequest) {
       activity: finalImages.activityImage ? 'Yes' : 'No',
       fromGenerated: !!images.coverImage,
       fromScraped: !images.coverImage && !!scrapedAssets?.heroImages?.[0],
+      extraImages: extraImages?.length || 0,
+      imageStrategy: imageStrategy?.conceptSummary || 'none',
     })
     
     // Render proposal slides - use premium template for auto-proposals
@@ -107,6 +119,8 @@ export async function POST(request: NextRequest) {
         brandLogoUrl: documentData.brandLogoFile as string | undefined,
         clientLogoUrl: scrapedAssets?.logoUrl,
         images: finalImages,
+        extraImages: extraImages,
+        imageStrategy: imageStrategy,
       })
     } else {
       console.log('[PDF] Using standard template')

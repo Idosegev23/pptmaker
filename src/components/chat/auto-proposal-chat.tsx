@@ -304,6 +304,9 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
       
       // Call onComplete with all data including influencer research, scraped assets, and real influencers
       // Note: imageUrls are now URLs (uploaded on server), not base64!
+      console.log('[Chat] Extra images:', data.extraImages)
+      console.log('[Chat] Image strategy:', data.imageStrategy)
+      
       onComplete({
         brandResearch: {
           ...brandResearch!,
@@ -320,6 +323,10 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
           _scrapedInfluencers: data.scrapedInfluencers,
           // Images are now URLs from Supabase Storage!
           _imageUrls: data.imageUrls,
+          // Extra images from smart generation
+          _extraImages: data.extraImages,
+          // Image strategy info
+          _imageStrategy: data.imageStrategy,
           _brandAssets: data.brandAssets,
         },
         userInputs: {

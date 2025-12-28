@@ -95,6 +95,20 @@ interface ExtendedProposalContent extends ProposalContent {
     audienceImage?: string
     activityImage?: string
   }
+  // Extra images from smart generation
+  _extraImages?: {
+    id: string
+    url: string
+    placement: string
+  }[]
+  // Image strategy info
+  _imageStrategy?: {
+    conceptSummary?: string
+    visualDirection?: string
+    totalPlanned?: number
+    totalGenerated?: number
+    styleGuide?: string
+  }
   _brandAssets?: {
     analysis?: {
       colors?: { primary?: string; secondary?: string; accent?: string }
@@ -304,6 +318,21 @@ export default function CreateAutoPage() {
       } else {
         console.log('[Create] No image URLs received from server')
       }
+      
+      // Extra images from smart generation
+      const extraImages = data.proposalContent._extraImages
+      if (extraImages && extraImages.length > 0) {
+        documentData._extraImages = extraImages
+        console.log('[Create] Extra images:', extraImages.length)
+      }
+      
+      // Image strategy info
+      const imageStrategy = data.proposalContent._imageStrategy
+      if (imageStrategy) {
+        documentData._imageStrategy = imageStrategy
+        console.log('[Create] Image strategy:', imageStrategy.conceptSummary)
+      }
+      
       console.log('[Create] ========== END IMAGE URLs ==========')
       
       console.log('[Create] Final scraped assets:', {

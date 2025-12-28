@@ -3,7 +3,7 @@ import { generateProposalContent } from '@/lib/openai/proposal-writer'
 import { researchInfluencers } from '@/lib/gemini/influencer-research'
 import { discoverAndScrapeInfluencers, scrapeMultipleInfluencers } from '@/lib/apify/influencer-scraper'
 import { generateBrandAssetsFromLogo } from '@/lib/gemini/logo-designer'
-import { generateIsraeliProposalImages } from '@/lib/gemini/israeli-image-generator'
+import { generateSmartImages, generateIsraeliProposalImages } from '@/lib/gemini/israeli-image-generator'
 import { createClient } from '@/lib/supabase/server'
 import type { BrandResearch } from '@/lib/gemini/brand-research'
 import type { BrandColors } from '@/lib/gemini/color-extractor'
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     const logoUrl = scrapedData?.logoUrl
     
     // Run all generation tasks in parallel for speed
-    const [content, influencerStrategy, scrapedInfluencers, brandAssets, images] = await Promise.all([
+    const [content, influencerStrategy, scrapedInfluencers, brandAssets, smartImageSet] = await Promise.all([
       // 1. Generate proposal content
       generateProposalContent(brandResearch, { budget, goals }, brandColors),
       
@@ -109,14 +109,30 @@ export async function POST(request: NextRequest) {
         return null
       }) : Promise.resolve(null),
       
-      // 5. Generate Israeli market lifestyle images (Nano Banana Pro style)
-      generateIsraeliProposalImages(brandResearch, brandColors),
+      // 5. Generate SMART images - AI creates custom strategy and prompts
+      generateSmartImages(brandResearch, brandColors, content).catch(async err => {
+        console.error('[API Generate] Smart image generation failed, falling back to legacy:', err)
+        // Fallback to legacy system
+        const legacyImages = await generateIsraeliProposalImages(brandResearch, brandColors)
+        return {
+          strategy: { totalImages: 4, conceptSummary: 'Fallback', visualDirection: '', images: [] },
+          promptsData: { prompts: [], styleGuide: '' },
+          images: [],
+          legacyMapping: {
+            cover: legacyImages.cover ? { id: 'cover', placement: 'cover', imageData: legacyImages.cover.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
+            brand: legacyImages.lifestyle ? { id: 'brand', placement: 'brand', imageData: legacyImages.lifestyle.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
+            audience: legacyImages.audience ? { id: 'audience', placement: 'audience', imageData: legacyImages.audience.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
+            activity: legacyImages.activity ? { id: 'activity', placement: 'activity', imageData: legacyImages.activity.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
+          }
+        }
+      }),
     ])
     
     console.log(`[API Generate] Content generated, tone: ${content.toneUsed}`)
     console.log(`[API Generate] Influencer strategy: ${influencerStrategy.recommendations?.length || 0} AI recommendations`)
     console.log(`[API Generate] Scraped influencers: ${scrapedInfluencers.length} real profiles`)
     console.log(`[API Generate] Brand assets: ${brandAssets?.designs?.length || 0} designs generated`)
+    console.log(`[API Generate] Smart images: ${smartImageSet.images.length} generated (strategy: ${smartImageSet.strategy.conceptSummary})`)
     
     // If no scraped influencers but we have AI recommendations, try to get profile pics
     let enrichedInfluencers = scrapedInfluencers
@@ -150,17 +166,22 @@ export async function POST(request: NextRequest) {
       .replace(/[^a-zA-Z0-9]/g, '') // Remove all non-ASCII
       .slice(0, 20) || `brand_${timestamp}` // Fallback if empty after cleanup
     
-    console.log('[API Generate] ========== UPLOADING IMAGES TO STORAGE ==========')
+    console.log('[API Generate] ========== UPLOADING SMART IMAGES TO STORAGE ==========')
     
     const imageUrls: Record<string, string | undefined> = {}
+    const extraImageUrls: { id: string; url: string; placement: string }[] = []
+    
+    // Use legacy mapping for backward compatibility + upload all smart images
+    const { legacyMapping, images: allSmartImages } = smartImageSet
     
     // Upload each image in parallel
     const uploadPromises: Promise<void>[] = []
     
-    if (images.cover) {
+    // Upload legacy-mapped images (cover, brand, audience, activity)
+    if (legacyMapping.cover) {
       uploadPromises.push(
         uploadImageToStorage(
-          images.cover.imageData,
+          legacyMapping.cover.imageData,
           `proposals/${brandPrefix}/cover_${timestamp}.png`
         ).then(url => {
           if (url) {
@@ -171,10 +192,10 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    if (images.lifestyle) {
+    if (legacyMapping.brand) {
       uploadPromises.push(
         uploadImageToStorage(
-          images.lifestyle.imageData,
+          legacyMapping.brand.imageData,
           `proposals/${brandPrefix}/brand_${timestamp}.png`
         ).then(url => {
           if (url) {
@@ -185,10 +206,10 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    if (images.audience) {
+    if (legacyMapping.audience) {
       uploadPromises.push(
         uploadImageToStorage(
-          images.audience.imageData,
+          legacyMapping.audience.imageData,
           `proposals/${brandPrefix}/audience_${timestamp}.png`
         ).then(url => {
           if (url) {
@@ -199,15 +220,39 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    if (images.activity) {
+    if (legacyMapping.activity) {
       uploadPromises.push(
         uploadImageToStorage(
-          images.activity.imageData,
+          legacyMapping.activity.imageData,
           `proposals/${brandPrefix}/activity_${timestamp}.png`
         ).then(url => {
           if (url) {
             imageUrls.activityImage = url
             console.log(`[API Generate] activityImage uploaded: ${url.slice(0, 60)}...`)
+          }
+        })
+      )
+    }
+    
+    // Upload additional smart images (not in legacy mapping)
+    const legacyIds = [
+      legacyMapping.cover?.id,
+      legacyMapping.brand?.id,
+      legacyMapping.audience?.id,
+      legacyMapping.activity?.id,
+    ].filter(Boolean)
+    
+    const extraImages = allSmartImages.filter(img => !legacyIds.includes(img.id))
+    
+    for (const img of extraImages) {
+      uploadPromises.push(
+        uploadImageToStorage(
+          img.imageData,
+          `proposals/${brandPrefix}/${img.id}_${timestamp}.png`
+        ).then(url => {
+          if (url) {
+            extraImageUrls.push({ id: img.id, url, placement: img.placement })
+            console.log(`[API Generate] Extra image ${img.id} uploaded: ${url.slice(0, 60)}...`)
           }
         })
       )
@@ -221,8 +266,11 @@ export async function POST(request: NextRequest) {
       console.error('[API Generate] Promise.all failed:', uploadAllError)
     }
     
-    console.log(`[API Generate] Uploaded ${Object.values(imageUrls).filter(Boolean).length} images to Storage`)
+    console.log(`[API Generate] Uploaded ${Object.values(imageUrls).filter(Boolean).length + extraImageUrls.length} images to Storage`)
     console.log('[API Generate] Image URLs to return:', JSON.stringify(imageUrls, null, 2))
+    if (extraImageUrls.length > 0) {
+      console.log('[API Generate] Extra images:', JSON.stringify(extraImageUrls, null, 2))
+    }
     console.log('[API Generate] ========== END IMAGE UPLOAD ==========')
     
     // Brand designs - keep as data URLs (they're smaller and used differently)
@@ -236,6 +284,16 @@ export async function POST(request: NextRequest) {
       content,
       // URLs to uploaded images (not base64!)
       imageUrls: imageUrls,
+      // Extra images from smart generation
+      extraImages: extraImageUrls,
+      // Smart image strategy info
+      imageStrategy: {
+        conceptSummary: smartImageSet.strategy.conceptSummary,
+        visualDirection: smartImageSet.strategy.visualDirection,
+        totalPlanned: smartImageSet.strategy.images.length,
+        totalGenerated: smartImageSet.images.length,
+        styleGuide: smartImageSet.promptsData.styleGuide,
+      },
       // Brand designs as base64 (small, for decorative use)
       brandDesigns: brandDesigns,
       influencerStrategy,

@@ -149,6 +149,18 @@ interface TemplateConfig {
     coverImage?: string
     activityImage?: string
   }
+  // Extra images from smart generation
+  extraImages?: {
+    id: string
+    url: string
+    placement: string
+  }[]
+  // Image strategy info
+  imageStrategy?: {
+    conceptSummary?: string
+    visualDirection?: string
+    styleGuide?: string
+  }
 }
 
 // Helper functions
@@ -193,6 +205,27 @@ function adjustColor(hex: string, percent: number): string {
   const G = Math.min(255, Math.max(0, (num >> 8 & 0x00FF) + amt))
   const B = Math.min(255, Math.max(0, (num & 0x0000FF) + amt))
   return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`
+}
+
+/**
+ * Find an extra image by placement or similar placements
+ */
+function findExtraImage(
+  extraImages: { id: string; url: string; placement: string }[] | undefined,
+  ...placements: string[]
+): string | undefined {
+  if (!extraImages || extraImages.length === 0) return undefined
+  
+  for (const placement of placements) {
+    const found = extraImages.find(img => 
+      img.placement === placement || 
+      img.placement.includes(placement) ||
+      img.id.includes(placement)
+    )
+    if (found) return found.url
+  }
+  
+  return undefined
 }
 
 /**
@@ -495,7 +528,9 @@ export function generatePremiumProposalSlides(
   // ========================================
   // SLIDE 1: COVER - Full screen image with large logos
   // ========================================
-  const coverImage = config.images?.coverImage || data._scraped?.heroImages?.[0] || ''
+  const coverImage = config.images?.coverImage || 
+    findExtraImage(config.extraImages, 'cover', 'hero') || 
+    data._scraped?.heroImages?.[0] || ''
   slides.push(`
 <!DOCTYPE html>
 <html dir="rtl" lang="he">
@@ -606,7 +641,9 @@ export function generatePremiumProposalSlides(
   // ========================================
   // SLIDE 2: THE BRIEF - Why are they coming to us?
   // ========================================
-  const brandImage = config.images?.brandImage || data._scraped?.heroImages?.[1] || ''
+  const brandImage = config.images?.brandImage || 
+    findExtraImage(config.extraImages, 'brand', 'lifestyle', 'product') || 
+    data._scraped?.heroImages?.[1] || ''
   const briefText = data.brandBrief || data.brandOpportunity || data.brandDescription || ''
   const painPoints = data.brandPainPoints || data.brandHighlights || []
   
@@ -845,7 +882,9 @@ export function generatePremiumProposalSlides(
   // ========================================
   // SLIDE 4: TARGET AUDIENCE
   // ========================================
-  const audienceImage = config.images?.audienceImage || data._scraped?.lifestyleImages?.[0] || ''
+  const audienceImage = config.images?.audienceImage || 
+    findExtraImage(config.extraImages, 'audience', 'social', 'lifestyle') || 
+    data._scraped?.lifestyleImages?.[0] || ''
   
   slides.push(`
 <!DOCTYPE html>
@@ -1173,7 +1212,9 @@ export function generatePremiumProposalSlides(
   // ========================================
   // SLIDE 7: THE BIG IDEA (Activity)
   // ========================================
-  const activityImage = config.images?.activityImage || data._scraped?.lifestyleImages?.[1] || ''
+  const activityImage = config.images?.activityImage || 
+    findExtraImage(config.extraImages, 'activity', 'product', 'work') || 
+    data._scraped?.lifestyleImages?.[1] || ''
   
   if (data.activityTitle || data.activityConcept) {
     slides.push(`
