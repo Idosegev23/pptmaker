@@ -15,11 +15,13 @@ async function getBrowser() {
 
   if (isServerless) {
     // Use @sparticuz/chromium for serverless environments
+    const executablePath = await chromium.executablePath()
+    
     return puppeteer.launch({
       args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      defaultViewport: { width: 1920, height: 1080 },
+      executablePath,
+      headless: true,
     })
   } else {
     // Local development - try to use local Chrome

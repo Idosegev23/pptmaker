@@ -86,12 +86,11 @@ export function parseGeminiJson<T>(text: string): T {
 function fixTruncatedJson(json: string): string {
   let fixed = json.trim()
   
-  // Remove trailing incomplete strings (text after last complete value)
-  // Find the last complete value end: }, ], ", number, true, false, null
-  const lastCompleteMatch = fixed.match(/.*[}\]"0-9](?=\s*,?\s*"?[a-zA-Z_]*"?\s*:?\s*[^}\]]*$)/s)
-  if (lastCompleteMatch) {
-    fixed = lastCompleteMatch[0]
-  }
+  // Remove trailing incomplete key-value pairs (e.g., "key":)
+  fixed = fixed.replace(/,\s*"[^"]*"\s*:\s*$/, '')
+  
+  // Remove trailing incomplete values
+  fixed = fixed.replace(/:\s*"[^"]*$/, ': ""')
   
   // Remove trailing commas
   fixed = fixed.replace(/,\s*$/, '')
