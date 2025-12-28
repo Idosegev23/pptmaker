@@ -237,11 +237,16 @@ export function generatePremiumProposalSlides(
 ): string[] {
   const slides: string[] = []
   
-  // Extract brand colors
+  // Extract brand colors - use full palette
   const brandColors = data._brandColors
-  const accent = config.accentColor || brandColors?.primary || '#E94560'
-  const accentLight = adjustColor(accent, 40)
-  const accentDark = adjustColor(accent, -20)
+  const primary = config.accentColor || brandColors?.primary || '#E94560'
+  const secondary = brandColors?.secondary || adjustColor(primary, -30)
+  const accent = brandColors?.accent || adjustColor(primary, 20)
+  const accentLight = adjustColor(primary, 40)
+  const accentDark = adjustColor(primary, -20)
+  
+  // For backwards compatibility
+  const primaryColor = primary
   
   // Logo URLs
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -258,19 +263,29 @@ export function generatePremiumProposalSlides(
       @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
       
       :root {
+        /* Brand Colors */
+        --primary: ${primary};
+        --secondary: ${secondary};
         --accent: ${accent};
         --accent-light: ${accentLight};
         --accent-dark: ${accentDark};
+        
+        /* Leaders Brand */
         --leaders-gray: #2D3436;
         --leaders-gray-light: #636E72;
+        
+        /* Text Colors */
         --text: #111111;
         --text-light: #4A4A4A;
         --muted: #888888;
-        --light: #F5F7FA;
-        --light-accent: ${accent}08;
-        --line: #E0E4E8;
+        
+        /* Backgrounds - using brand colors */
+        --light: ${primary}08;
+        --light-secondary: ${secondary}10;
+        --line: ${primary}20;
         --white: #FFFFFF;
         --bg: #FFFFFF;
+        --bg-gradient: linear-gradient(135deg, #FFFFFF 0%, ${primary}05 100%);
         
         --h1: 72px;
         --h2: 48px;
@@ -312,6 +327,7 @@ export function generatePremiumProposalSlides(
         position: relative;
         overflow: hidden;
         page-break-after: always;
+        background: var(--bg-gradient);
       }
       
       .slide-content {
@@ -334,7 +350,7 @@ export function generatePremiumProposalSlides(
         z-index: 1;
       }
       
-      /* Accent shape decorations */
+      /* Accent shape decorations - using brand colors */
       .accent-shape {
         position: absolute;
         z-index: 1;
@@ -345,9 +361,9 @@ export function generatePremiumProposalSlides(
         right: -100px;
         width: 400px;
         height: 400px;
-        background: var(--accent);
+        background: radial-gradient(circle, var(--primary) 0%, var(--secondary) 100%);
         border-radius: 50%;
-        opacity: 0.1;
+        opacity: 0.12;
       }
       
       .accent-shape.corner-bottom-left {
@@ -355,17 +371,29 @@ export function generatePremiumProposalSlides(
         left: -150px;
         width: 500px;
         height: 500px;
-        background: var(--accent);
+        background: radial-gradient(circle, var(--secondary) 0%, var(--primary) 100%);
         border-radius: 50%;
-        opacity: 0.05;
+        opacity: 0.08;
       }
       
       .accent-shape.stripe {
         top: 0;
         right: 0;
-        width: 15px;
+        width: 12px;
         height: 100%;
-        background: var(--accent);
+        background: linear-gradient(180deg, var(--primary) 0%, var(--secondary) 50%, var(--primary) 100%);
+      }
+      
+      /* Brand color accent line at bottom of slides */
+      .slide::before {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 50%, var(--accent) 100%);
+        z-index: 100;
       }
       
       /* Logo header */
@@ -395,13 +423,26 @@ export function generatePremiumProposalSlides(
       .accent-text { color: var(--accent); }
       .accent-bg { background: var(--accent); color: white; }
       
-      /* Cards */
+      /* Cards - with brand color accents */
       .card {
-        background: linear-gradient(135deg, var(--white) 0%, var(--light) 100%);
+        background: linear-gradient(145deg, var(--white) 0%, var(--light) 100%);
         border-radius: 24px;
         padding: 40px;
         border: 1px solid var(--line);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+        box-shadow: 0 4px 20px ${primary}10;
+        position: relative;
+      }
+      
+      .card::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 20%;
+        right: 20%;
+        height: 3px;
+        background: linear-gradient(90deg, transparent, var(--primary), transparent);
+        border-radius: 2px;
+        opacity: 0.5;
       }
       
       .card-accent {
@@ -548,7 +589,7 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-cover {
-      background: ${coverImage ? `url('${coverImage}')` : 'linear-gradient(135deg, #111 0%, #333 100%)'};
+      background: ${coverImage ? `url('${coverImage}')` : `linear-gradient(135deg, var(--leaders-gray) 0%, ${primary} 100%)`};
       background-size: cover;
       background-position: center;
       position: relative;
@@ -557,7 +598,10 @@ export function generatePremiumProposalSlides(
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.5) 100%);
+      background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, ${primary}40 100%);
+    }
+    .slide.slide-cover::before {
+      bottom: 4px; /* Don't cover the brand line */
     }
     .slide-cover .slide-content {
       justify-content: space-between;
@@ -665,7 +709,7 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-brief {
-      background: linear-gradient(135deg, var(--bg) 0%, #f8f9fa 100%);
+      background: var(--bg-gradient);
     }
     .slide-brief .main-content {
       flex: 1;
@@ -1042,18 +1086,19 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-insight {
-      background: linear-gradient(135deg, var(--leaders-gray) 0%, var(--leaders-gray-light) 40%, ${accent} 100%);
+      background: linear-gradient(135deg, var(--leaders-gray) 0%, ${secondary} 50%, ${primary} 100%);
       position: relative;
       overflow: hidden;
     }
-    .slide-insight::before {
+    .slide-insight::after {
       content: '';
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: radial-gradient(circle at 80% 20%, ${accent}50 0%, transparent 50%);
+      background: radial-gradient(circle at 80% 20%, ${primary}40 0%, transparent 50%),
+                  radial-gradient(circle at 20% 80%, ${secondary}30 0%, transparent 40%);
     }
     .slide-insight .slide-content {
       justify-content: center;
@@ -1410,20 +1455,19 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-creative-close {
-      background: linear-gradient(135deg, #2D3436 0%, #636E72 50%, ${accent} 100%);
+      background: linear-gradient(135deg, var(--leaders-gray) 0%, ${secondary} 50%, ${primary} 100%);
       position: relative;
       overflow: hidden;
     }
-    .slide-creative-close::before {
+    .slide-creative-close::after {
       content: '';
       position: absolute;
       top: -50%;
       left: -50%;
       width: 200%;
       height: 200%;
-      background: radial-gradient(circle at 30% 70%, ${accent}40 0%, transparent 50%),
-                  radial-gradient(circle at 70% 30%, ${accent}30 0%, transparent 40%);
-      animation: none;
+      background: radial-gradient(circle at 30% 70%, ${primary}35 0%, transparent 50%),
+                  radial-gradient(circle at 70% 30%, ${secondary}25 0%, transparent 40%);
     }
     .slide-creative-close .slide-content {
       justify-content: center;
@@ -2305,7 +2349,14 @@ export function generatePremiumProposalSlides(
   ${baseStyles}
   <style>
     .slide-closing {
-      background: linear-gradient(135deg, var(--text) 0%, #333 100%);
+      background: linear-gradient(135deg, var(--leaders-gray) 0%, ${secondary} 60%, ${primary} 100%);
+      position: relative;
+    }
+    .slide-closing::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 50%, ${primary}20 0%, transparent 70%);
     }
     .slide-closing .slide-content {
       justify-content: center;
