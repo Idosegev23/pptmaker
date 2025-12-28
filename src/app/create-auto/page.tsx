@@ -134,6 +134,10 @@ export default function CreateAutoPage() {
 
   async function handleComplete(data: ProposalData) {
     console.log('Auto proposal data collected:', data)
+    console.log('[handleComplete] ========== DEBUGGING IMAGE URLS ==========')
+    console.log('[handleComplete] proposalContent keys:', Object.keys(data.proposalContent))
+    console.log('[handleComplete] _imageUrls:', data.proposalContent._imageUrls)
+    console.log('[handleComplete] ===========================================')
     setIsGenerating(true)
     
     // Get primary audience data

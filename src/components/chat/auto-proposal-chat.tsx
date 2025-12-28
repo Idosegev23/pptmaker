@@ -286,6 +286,12 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
       setMessages(prev => prev.filter(m => m.type !== 'loading'))
       
       // Log what we generated - image URLs from server
+      console.log('[Chat] ========== API RESPONSE ==========')
+      console.log('[Chat] Response keys:', Object.keys(data))
+      console.log('[Chat] data.imageUrls:', data.imageUrls)
+      console.log('[Chat] data.imageUrls type:', typeof data.imageUrls)
+      console.log('[Chat] Full imageUrls:', JSON.stringify(data.imageUrls, null, 2))
+      console.log('[Chat] ====================================')
       console.log('[Chat] Generated proposal:', {
         contentKeys: Object.keys(data.content || {}),
         influencerRecs: data.influencerStrategy?.recommendations?.length || 0,
