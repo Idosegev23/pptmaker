@@ -44,6 +44,12 @@ export async function analyzeLogoForDesign(
 ): Promise<LogoAnalysis> {
   console.log('[Logo Designer] Analyzing logo for design insights')
   
+  // Skip SVG files - Gemini can't process them as images
+  if (logoUrl.endsWith('.svg') || logoUrl.includes('.svg?')) {
+    console.log('[Logo Designer] Skipping SVG logo - not supported, using defaults')
+    return getDefaultLogoAnalysis()
+  }
+  
   try {
     // Fetch logo as base64
     const logoData = await fetchImageAsBase64(logoUrl)

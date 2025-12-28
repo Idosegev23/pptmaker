@@ -92,6 +92,7 @@ interface ExtendedProposalContent extends ProposalContent {
     coverImage?: string
     brandImage?: string
     audienceImage?: string
+    activityImage?: string
     watermark?: string
     pattern?: string
     'hero-background'?: string
@@ -271,7 +272,7 @@ export default function CreateAutoPage() {
       
       // For generated images (base64), upload to Storage
       const generatedImages = data.proposalContent._images
-      if (generatedImages && (generatedImages.coverImage || generatedImages.brandImage || generatedImages.audienceImage)) {
+      if (generatedImages && Object.values(generatedImages).some(v => v?.startsWith('data:'))) {
         console.log('[Create] Uploading generated images...')
         try {
           const imagesToUpload: Record<string, string> = {}
@@ -283,6 +284,11 @@ export default function CreateAutoPage() {
           }
           if (generatedImages.audienceImage?.startsWith('data:')) {
             imagesToUpload.audienceImage = generatedImages.audienceImage
+          }
+          // Add activityImage (was missing!)
+          const activityImg = (generatedImages as Record<string, string | undefined>).activityImage
+          if (activityImg?.startsWith('data:')) {
+            imagesToUpload.activityImage = activityImg
           }
           
           if (Object.keys(imagesToUpload).length > 0) {

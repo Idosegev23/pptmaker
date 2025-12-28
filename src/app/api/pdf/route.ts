@@ -74,26 +74,21 @@ export async function POST(request: NextRequest) {
       lifestyleImages?: string[]
     } | undefined
     
-    // Fallback images from Unsplash when no scraped/generated images
-    const fallbackImages = {
-      cover: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1920&h=1080&fit=crop',
-      brand: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&h=1080&fit=crop',
-      audience: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1920&h=1080&fit=crop',
-      lifestyle: 'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1920&h=1080&fit=crop',
-    }
-    
-    // Build final images with fallbacks
+    // Build final images - prioritize generated, then scraped, no fallbacks (must be brand-specific)
     const finalImages = {
-      coverImage: images.coverImage || scrapedAssets?.heroImages?.[0] || fallbackImages.cover,
-      brandImage: images.brandImage || scrapedAssets?.heroImages?.[1] || fallbackImages.brand,
-      audienceImage: images.audienceImage || scrapedAssets?.lifestyleImages?.[0] || fallbackImages.audience,
+      coverImage: images.coverImage || scrapedAssets?.heroImages?.[0] || '',
+      brandImage: images.brandImage || scrapedAssets?.heroImages?.[1] || scrapedAssets?.heroImages?.[0] || '',
+      audienceImage: images.audienceImage || scrapedAssets?.lifestyleImages?.[0] || '',
+      activityImage: images.activityImage || scrapedAssets?.lifestyleImages?.[1] || scrapedAssets?.lifestyleImages?.[0] || '',
     }
     
     console.log('[PDF] Images:', {
       cover: finalImages.coverImage ? 'Yes' : 'No',
       brand: finalImages.brandImage ? 'Yes' : 'No',
       audience: finalImages.audienceImage ? 'Yes' : 'No',
-      usingFallbacks: !images.coverImage && !scrapedAssets?.heroImages?.[0],
+      activity: finalImages.activityImage ? 'Yes' : 'No',
+      fromGenerated: !!images.coverImage,
+      fromScraped: !images.coverImage && !!scrapedAssets?.heroImages?.[0],
     })
     
     // Render proposal slides - use premium template for auto-proposals

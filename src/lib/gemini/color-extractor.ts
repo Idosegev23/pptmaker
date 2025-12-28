@@ -35,6 +35,12 @@ export interface DesignStyle {
 export async function extractColorsFromLogo(imageUrl: string): Promise<BrandColors> {
   console.log(`[Gemini Vision] Analyzing logo: ${imageUrl}`)
   
+  // Skip SVG files - Gemini can't process them
+  if (imageUrl.endsWith('.svg') || imageUrl.includes('.svg?')) {
+    console.log('[Gemini Vision] Skipping SVG logo - not supported')
+    return getDefaultColors()
+  }
+  
   const prompt = `
 אתה מומחה עיצוב גרפי. נתח את הלוגו בתמונה וחלץ את פלטת הצבעים של המותג.
 
