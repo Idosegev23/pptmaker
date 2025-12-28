@@ -18,9 +18,11 @@ async function uploadImageToStorage(
   mimeType: string = 'image/png'
 ): Promise<string | null> {
   try {
+    console.log(`[Upload] Starting upload: ${fileName}, size: ${buffer.length} bytes`)
+    
     const supabase = await createClient()
     
-    const { error: uploadError } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from('assets')
       .upload(fileName, buffer, {
         contentType: mimeType,
@@ -32,11 +34,16 @@ async function uploadImageToStorage(
       return null
     }
     
+    console.log(`[Upload] Upload success: ${fileName}, path: ${uploadData?.path}`)
+    
     const { data: urlData } = supabase.storage
       .from('assets')
       .getPublicUrl(fileName)
     
-    return urlData.publicUrl
+    const publicUrl = urlData?.publicUrl
+    console.log(`[Upload] Public URL: ${publicUrl?.slice(0, 80)}...`)
+    
+    return publicUrl || null
   } catch (error) {
     console.error(`[Upload] Error ${fileName}:`, error)
     return null
@@ -182,9 +189,15 @@ export async function POST(request: NextRequest) {
     }
     
     // Wait for all uploads
-    await Promise.all(uploadPromises)
+    try {
+      await Promise.all(uploadPromises)
+      console.log(`[API Generate] All uploads completed`)
+    } catch (uploadAllError) {
+      console.error('[API Generate] Promise.all failed:', uploadAllError)
+    }
     
     console.log(`[API Generate] Uploaded ${Object.values(imageUrls).filter(Boolean).length} images to Storage`)
+    console.log('[API Generate] Image URLs to return:', JSON.stringify(imageUrls, null, 2))
     console.log('[API Generate] ========== END IMAGE UPLOAD ==========')
     
     // Brand designs - keep as data URLs (they're smaller and used differently)
