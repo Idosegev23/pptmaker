@@ -1,20 +1,40 @@
-import { chromium, type Browser, type Page } from 'playwright'
-
-let browser: Browser | null = null
-
-async function getBrowser(): Promise<Browser> {
-  if (!browser) {
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    })
-  }
-  return browser
-}
+import puppeteer from 'puppeteer-core'
+import chromium from '@sparticuz/chromium'
 
 export interface PdfOptions {
   format?: 'A4' | '16:9'
   landscape?: boolean
+}
+
+/**
+ * Get browser instance for Vercel serverless
+ */
+async function getBrowser() {
+  // Check if running on Vercel/AWS Lambda
+  const isServerless = process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL
+
+  if (isServerless) {
+    // Use @sparticuz/chromium for serverless environments
+    return puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    })
+  } else {
+    // Local development - try to use local Chrome
+    const executablePath = process.platform === 'darwin' 
+      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+      : process.platform === 'win32'
+        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+        : '/usr/bin/google-chrome'
+
+    return puppeteer.launch({
+      headless: true,
+      executablePath,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    })
+  }
 }
 
 /**
@@ -25,16 +45,15 @@ export async function generatePdf(
   options: PdfOptions = {}
 ): Promise<Buffer> {
   const browser = await getBrowser()
-  const context = await browser.newContext()
-  const page = await context.newPage()
 
   try {
+    const page = await browser.newPage()
+
     // Set content
-    await page.setContent(html, { waitUntil: 'networkidle' })
+    await page.setContent(html, { waitUntil: 'networkidle0' })
 
     // Wait for fonts to load
-    await page.waitForLoadState('domcontentloaded')
-    await page.evaluate(() => document.fonts.ready)
+    await page.evaluate(() => document.fonts?.ready)
 
     // Generate PDF
     const pdfOptions = options.format === '16:9' 
@@ -53,7 +72,7 @@ export async function generatePdf(
     const pdfBuffer = await page.pdf(pdfOptions)
     return Buffer.from(pdfBuffer)
   } finally {
-    await context.close()
+    await browser.close()
   }
 }
 
@@ -87,18 +106,17 @@ export async function generateScreenshot(
   options: { width?: number; height?: number } = {}
 ): Promise<Buffer> {
   const browser = await getBrowser()
-  const context = await browser.newContext({
-    viewport: {
-      width: options.width || 1200,
-      height: options.height || 800,
-    },
-  })
-  const page = await context.newPage()
 
   try {
-    await page.setContent(html, { waitUntil: 'networkidle' })
-    await page.waitForLoadState('domcontentloaded')
-    await page.evaluate(() => document.fonts.ready)
+    const page = await browser.newPage()
+    
+    await page.setViewport({
+      width: options.width || 1200,
+      height: options.height || 800,
+    })
+
+    await page.setContent(html, { waitUntil: 'networkidle0' })
+    await page.evaluate(() => document.fonts?.ready)
 
     const screenshot = await page.screenshot({ 
       fullPage: true,
@@ -106,20 +124,6 @@ export async function generateScreenshot(
     })
     return Buffer.from(screenshot)
   } finally {
-    await context.close()
-  }
-}
-
-/**
- * Cleanup browser instance
- */
-export async function closeBrowser(): Promise<void> {
-  if (browser) {
     await browser.close()
-    browser = null
   }
 }
-
-
-
-

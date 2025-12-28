@@ -5,7 +5,7 @@
 
 /**
  * Parse and clean JSON from Gemini/GPT responses
- * Handles common issues like markdown code blocks, trailing commas, etc.
+ * Handles common issues like markdown code blocks, trailing commas, truncated JSON, etc.
  */
 export function parseGeminiJson<T>(text: string): T {
   // Remove markdown code blocks
@@ -42,7 +42,13 @@ export function parseGeminiJson<T>(text: string): T {
       try {
         return JSON.parse(extracted) as T
       } catch {
-        // Continue to next attempt
+        // Try to fix truncated JSON
+        const fixed = fixTruncatedJson(extracted)
+        try {
+          return JSON.parse(fixed) as T
+        } catch {
+          // Continue to next attempt
+        }
       }
     }
     
@@ -59,8 +65,82 @@ export function parseGeminiJson<T>(text: string): T {
       }
     }
     
+    // Last resort: try to fix truncated JSON from beginning
+    if (jsonStart !== -1) {
+      const truncated = clean.slice(jsonStart)
+      const fixed = fixTruncatedJson(truncated)
+      try {
+        return JSON.parse(fixed) as T
+      } catch {
+        // Give up
+      }
+    }
+    
     throw firstError
   }
+}
+
+/**
+ * Attempt to fix truncated JSON by closing open brackets and quotes
+ */
+function fixTruncatedJson(json: string): string {
+  let fixed = json.trim()
+  
+  // Remove trailing incomplete strings (text after last complete value)
+  // Find the last complete value end: }, ], ", number, true, false, null
+  const lastCompleteMatch = fixed.match(/.*[}\]"0-9](?=\s*,?\s*"?[a-zA-Z_]*"?\s*:?\s*[^}\]]*$)/s)
+  if (lastCompleteMatch) {
+    fixed = lastCompleteMatch[0]
+  }
+  
+  // Remove trailing commas
+  fixed = fixed.replace(/,\s*$/, '')
+  
+  // Count and close brackets
+  let openBraces = 0
+  let openBrackets = 0
+  let inString = false
+  let escaped = false
+  
+  for (const char of fixed) {
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+    if (inString) continue
+    
+    if (char === '{') openBraces++
+    if (char === '}') openBraces--
+    if (char === '[') openBrackets++
+    if (char === ']') openBrackets--
+  }
+  
+  // If we're in a string, close it
+  if (inString) {
+    fixed += '"'
+  }
+  
+  // Close open brackets
+  while (openBrackets > 0) {
+    fixed += ']'
+    openBrackets--
+  }
+  
+  // Close open braces
+  while (openBraces > 0) {
+    fixed += '}'
+    openBraces--
+  }
+  
+  return fixed
 }
 
 /**
