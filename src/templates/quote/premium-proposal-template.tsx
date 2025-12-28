@@ -66,6 +66,15 @@ interface PremiumProposalData {
   contentGuidelines?: string[]
   influencerResearch?: InfluencerStrategy
   
+  // Scraped influencers with real profile data
+  scrapedInfluencers?: {
+    name?: string
+    username?: string
+    profilePicUrl?: string
+    followers?: number
+    engagementRate?: number
+  }[]
+  
   // Influencer Data (manual)
   influencerData?: {
     name: string
@@ -1563,10 +1572,40 @@ export function generatePremiumProposalSlides(
   }
 
   // ========================================
-  // SLIDE 12: RECOMMENDED INFLUENCERS (if we have AI recommendations)
+  // SLIDE 12: RECOMMENDED INFLUENCERS (AI + Scraped with photos)
   // ========================================
-  const recommendations = data.influencerResearch?.recommendations || []
-  if (recommendations.length > 0) {
+  const aiRecommendations = data.influencerResearch?.recommendations || []
+  const scrapedInfluencers = (data.scrapedInfluencers as Array<{
+    name?: string
+    username?: string
+    profilePicUrl?: string
+    followers?: number
+    engagementRate?: number
+  }>) || []
+  
+  // Merge: prefer scraped (has photos) over AI recommendations
+  const mergedInfluencers = [
+    // First add scraped influencers (they have real photos)
+    ...scrapedInfluencers.map(inf => ({
+      name: inf.name || inf.username || 'משפיען',
+      handle: inf.username ? `@${inf.username}` : '',
+      followers: inf.followers ? formatNumber(inf.followers) : '10K+',
+      engagement: inf.engagementRate ? `${inf.engagementRate.toFixed(1)}%` : '3%+',
+      whyRelevant: 'משפיען מתאים לקהל היעד של המותג',
+      profilePicUrl: inf.profilePicUrl || '',
+    })),
+    // Then add AI recommendations (no photos, use initials)
+    ...aiRecommendations.map(inf => ({
+      name: inf.name,
+      handle: inf.handle,
+      followers: inf.followers,
+      engagement: inf.engagement,
+      whyRelevant: inf.whyRelevant,
+      profilePicUrl: '', // AI doesn't have photos
+    })),
+  ].slice(0, 6) // Max 6 influencers
+  
+  if (mergedInfluencers.length > 0) {
     slides.push(`
 <!DOCTYPE html>
 <html dir="rtl" lang="he">
@@ -1593,7 +1632,7 @@ export function generatePremiumProposalSlides(
     .slide-recommendations .influencer-avatar {
       width: 100px;
       height: 100px;
-      background: var(--accent);
+      background: linear-gradient(135deg, var(--accent), var(--accent-light, #ff6b8a));
       border-radius: 50%;
       margin: 0 auto 20px;
       display: flex;
@@ -1602,6 +1641,13 @@ export function generatePremiumProposalSlides(
       color: white;
       font-size: 36px;
       font-weight: 700;
+      overflow: hidden;
+      border: 3px solid var(--accent);
+    }
+    .slide-recommendations .influencer-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
     .slide-recommendations .influencer-name {
       font-size: 22px;
@@ -1657,9 +1703,14 @@ export function generatePremiumProposalSlides(
         <h1 class="h1">משפיענים מומלצים</h1>
         
         <div class="influencers-grid">
-          ${recommendations.slice(0, 6).map(inf => `
+          ${mergedInfluencers.map(inf => `
           <div class="influencer-card">
-            <div class="influencer-avatar">${inf.name.charAt(0)}</div>
+            <div class="influencer-avatar">
+              ${inf.profilePicUrl 
+                ? `<img src="${inf.profilePicUrl}" alt="${inf.name}" onerror="this.style.display='none';this.parentElement.textContent='${inf.name.charAt(0)}';">`
+                : inf.name.charAt(0)
+              }
+            </div>
             <div class="influencer-name">${inf.name}</div>
             <div class="influencer-handle">${inf.handle}</div>
             <div class="influencer-stats">
@@ -1672,7 +1723,7 @@ export function generatePremiumProposalSlides(
                 <div class="stat-label">מעורבות</div>
               </div>
             </div>
-            <div class="influencer-reason">${inf.whyRelevant.slice(0, 80)}...</div>
+            <div class="influencer-reason">${(inf.whyRelevant || '').slice(0, 80)}${inf.whyRelevant && inf.whyRelevant.length > 80 ? '...' : ''}</div>
           </div>
           `).join('')}
         </div>
