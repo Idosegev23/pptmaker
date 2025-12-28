@@ -1992,11 +1992,13 @@ export function generatePremiumProposalSlides(
       text-align: center;
     }
     .slide-closing .closing-headline {
-      font-size: 96px;
+      font-size: 72px;
       font-weight: 900;
       color: white;
-      line-height: 1.1;
+      line-height: 1.2;
       margin-bottom: 60px;
+      max-width: 1400px;
+      text-wrap: balance;
     }
     .slide-closing .logos-row {
       display: flex;

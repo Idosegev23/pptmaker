@@ -49,6 +49,12 @@ export async function POST(request: NextRequest) {
     // Get pre-generated images or generate new ones
     let images: Record<string, string> = (documentData._generatedImages as Record<string, string>) || {}
     
+    console.log('[PDF] Document _generatedImages:', {
+      hasGeneratedImages: !!documentData._generatedImages,
+      keys: Object.keys(images),
+      count: Object.keys(images).length,
+    })
+    
     if (!isAutoProposal && generateImages && process.env.GEMINI_API_KEY && Object.keys(images).length === 0) {
       console.log('[PDF] Generating images with Gemini...')
       try {

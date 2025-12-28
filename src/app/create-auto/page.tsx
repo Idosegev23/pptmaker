@@ -233,8 +233,8 @@ export default function CreateAutoPage() {
           engagementRate: inf.engagementRate || 0,
         })),
         
-        // Closing with defaults - limit text length
-        closingHeadline: (data.proposalContent.closingStatement || "LET'S GET STARTED").slice(0, 50),
+          // Closing headline - allow more text for Hebrew
+          closingHeadline: data.proposalContent.closingStatement || "LET'S GET STARTED",
         // Limit nextSteps to 5 items with max 60 chars each
         nextSteps: (data.proposalContent.nextSteps || ['אישור הצעה', 'בחירת משפיענים', 'תחילת עבודה'])
           .slice(0, 5)
@@ -272,7 +272,12 @@ export default function CreateAutoPage() {
       
       // For generated images (base64), upload to Storage
       const generatedImages = data.proposalContent._images
-      if (generatedImages && Object.values(generatedImages).some(v => v?.startsWith('data:'))) {
+      console.log('[Create] Checking generated images:', {
+        hasImages: !!generatedImages,
+        keys: generatedImages ? Object.keys(generatedImages) : [],
+        hasBase64: generatedImages ? Object.values(generatedImages).some(v => typeof v === 'string' && v?.startsWith('data:')) : false,
+      })
+      if (generatedImages && Object.values(generatedImages).some(v => typeof v === 'string' && v?.startsWith('data:'))) {
         console.log('[Create] Uploading generated images...')
         try {
           const imagesToUpload: Record<string, string> = {}
