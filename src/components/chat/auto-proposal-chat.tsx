@@ -285,25 +285,19 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
       
       setMessages(prev => prev.filter(m => m.type !== 'loading'))
       
-      // Log what we generated - detailed image info
-      const imgKeys = Object.keys(data.images || {})
-      const imgSamples = imgKeys.map(k => {
-        const v = data.images?.[k]
-        if (!v) return `${k}: null`
-        if (typeof v === 'string') return `${k}: ${v.slice(0, 50)}...`
-        return `${k}: ${typeof v}`
-      })
+      // Log what we generated - image URLs from server
       console.log('[Chat] Generated proposal:', {
         contentKeys: Object.keys(data.content || {}),
         influencerRecs: data.influencerStrategy?.recommendations?.length || 0,
-        imageKeys: imgKeys,
-        imageSamples: imgSamples,
+        imageUrls: data.imageUrls,
+        brandDesigns: Object.keys(data.brandDesigns || {}),
       })
       
       addMessage('bot', `הצעת המחיר מוכנה! כוללת ${data.influencerStrategy?.recommendations?.length || 0} המלצות משפיענים.`)
       setState('complete')
       
       // Call onComplete with all data including influencer research, scraped assets, and real influencers
+      // Note: imageUrls are now URLs (uploaded on server), not base64!
       onComplete({
         brandResearch: {
           ...brandResearch!,
@@ -318,7 +312,8 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
           ...data.content,
           _influencerResearch: data.influencerStrategy,
           _scrapedInfluencers: data.scrapedInfluencers,
-          _images: data.images,
+          // Images are now URLs from Supabase Storage!
+          _imageUrls: data.imageUrls,
           _brandAssets: data.brandAssets,
         },
         userInputs: {

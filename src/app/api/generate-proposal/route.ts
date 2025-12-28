@@ -3,9 +3,45 @@ import { generateProposalContent } from '@/lib/openai/proposal-writer'
 import { researchInfluencers } from '@/lib/gemini/influencer-research'
 import { discoverAndScrapeInfluencers } from '@/lib/apify/influencer-scraper'
 import { generateBrandAssetsFromLogo } from '@/lib/gemini/logo-designer'
-import { generateIsraeliProposalImages, israeliImageToDataUrl } from '@/lib/gemini/israeli-image-generator'
+import { generateIsraeliProposalImages } from '@/lib/gemini/israeli-image-generator'
+import { createClient } from '@/lib/supabase/server'
 import type { BrandResearch } from '@/lib/gemini/brand-research'
 import type { BrandColors } from '@/lib/gemini/color-extractor'
+
+/**
+ * Upload image buffer directly to Supabase Storage
+ * Returns public URL
+ */
+async function uploadImageToStorage(
+  buffer: Buffer,
+  fileName: string,
+  mimeType: string = 'image/png'
+): Promise<string | null> {
+  try {
+    const supabase = await createClient()
+    
+    const { error: uploadError } = await supabase.storage
+      .from('assets')
+      .upload(fileName, buffer, {
+        contentType: mimeType,
+        upsert: true,
+      })
+    
+    if (uploadError) {
+      console.error(`[Upload] Failed ${fileName}:`, uploadError)
+      return null
+    }
+    
+    const { data: urlData } = supabase.storage
+      .from('assets')
+      .getPublicUrl(fileName)
+    
+    return urlData.publicUrl
+  } catch (error) {
+    console.error(`[Upload] Error ${fileName}:`, error)
+    return null
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -75,39 +111,92 @@ export async function POST(request: NextRequest) {
     console.log(`[API Generate] Scraped influencers: ${scrapedInfluencers.length} real profiles`)
     console.log(`[API Generate] Brand assets: ${brandAssets?.designs?.length || 0} designs generated`)
     
-    // Convert Israeli images to data URLs
-    const imageUrls = {
-      coverImage: images.cover ? israeliImageToDataUrl(images.cover) : undefined,
-      brandImage: images.lifestyle ? israeliImageToDataUrl(images.lifestyle) : undefined,
-      audienceImage: images.audience ? israeliImageToDataUrl(images.audience) : undefined,
-      activityImage: images.activity ? israeliImageToDataUrl(images.activity) : undefined,
+    // Upload images directly to Supabase Storage (avoid sending huge base64 to client)
+    const timestamp = Date.now()
+    const brandPrefix = brandResearch.brandName.replace(/[^a-zA-Z0-9א-ת]/g, '_')
+    
+    console.log('[API Generate] ========== UPLOADING IMAGES TO STORAGE ==========')
+    
+    const imageUrls: Record<string, string | undefined> = {}
+    
+    // Upload each image in parallel
+    const uploadPromises: Promise<void>[] = []
+    
+    if (images.cover) {
+      uploadPromises.push(
+        uploadImageToStorage(
+          images.cover.imageData,
+          `proposals/${brandPrefix}/cover_${timestamp}.png`
+        ).then(url => {
+          if (url) {
+            imageUrls.coverImage = url
+            console.log(`[API Generate] coverImage uploaded: ${url.slice(0, 60)}...`)
+          }
+        })
+      )
     }
     
-    // Add brand assets if generated
+    if (images.lifestyle) {
+      uploadPromises.push(
+        uploadImageToStorage(
+          images.lifestyle.imageData,
+          `proposals/${brandPrefix}/brand_${timestamp}.png`
+        ).then(url => {
+          if (url) {
+            imageUrls.brandImage = url
+            console.log(`[API Generate] brandImage uploaded: ${url.slice(0, 60)}...`)
+          }
+        })
+      )
+    }
+    
+    if (images.audience) {
+      uploadPromises.push(
+        uploadImageToStorage(
+          images.audience.imageData,
+          `proposals/${brandPrefix}/audience_${timestamp}.png`
+        ).then(url => {
+          if (url) {
+            imageUrls.audienceImage = url
+            console.log(`[API Generate] audienceImage uploaded: ${url.slice(0, 60)}...`)
+          }
+        })
+      )
+    }
+    
+    if (images.activity) {
+      uploadPromises.push(
+        uploadImageToStorage(
+          images.activity.imageData,
+          `proposals/${brandPrefix}/activity_${timestamp}.png`
+        ).then(url => {
+          if (url) {
+            imageUrls.activityImage = url
+            console.log(`[API Generate] activityImage uploaded: ${url.slice(0, 60)}...`)
+          }
+        })
+      )
+    }
+    
+    // Wait for all uploads
+    await Promise.all(uploadPromises)
+    
+    console.log(`[API Generate] Uploaded ${Object.values(imageUrls).filter(Boolean).length} images to Storage`)
+    console.log('[API Generate] ========== END IMAGE UPLOAD ==========')
+    
+    // Brand designs - keep as data URLs (they're smaller and used differently)
     const brandDesigns = brandAssets?.designs?.reduce((acc, design) => {
       acc[design.type] = `data:image/png;base64,${design.imageData}`
       return acc
     }, {} as Record<string, string>) || {}
     
-    // Log detailed image info
-    console.log('[API Generate] ========== IMAGE OUTPUT ==========')
-    Object.entries(imageUrls).forEach(([k, v]) => {
-      if (v) {
-        console.log(`[API Generate] ${k}: ${v.slice(0, 50)}... (length: ${v.length})`)
-      } else {
-        console.log(`[API Generate] ${k}: undefined`)
-      }
-    })
-    console.log(`[API Generate] Total: ${Object.values(imageUrls).filter(Boolean).length} images, ${Object.keys(brandDesigns).length} brand designs`)
-    console.log('[API Generate] ========== END IMAGE OUTPUT ==========')
-    
     return NextResponse.json({
       success: true,
       content,
-      images: {
-        ...imageUrls,
-        ...brandDesigns,
-      },
+      // URLs to uploaded images (not base64!)
+      imageUrls: imageUrls,
+      // Brand designs as base64 (small, for decorative use)
+      brandDesigns: brandDesigns,
       influencerStrategy,
       scrapedInfluencers: scrapedInfluencers.map(inf => ({
         name: inf.fullName || inf.username,

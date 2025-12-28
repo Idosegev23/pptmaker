@@ -88,14 +88,12 @@ interface ScrapedInfluencerData {
 interface ExtendedProposalContent extends ProposalContent {
   _influencerResearch?: InfluencerStrategy
   _scrapedInfluencers?: ScrapedInfluencerData[]
-  _images?: {
+  // Image URLs (already uploaded to Supabase Storage by generate-proposal API)
+  _imageUrls?: {
     coverImage?: string
     brandImage?: string
     audienceImage?: string
     activityImage?: string
-    watermark?: string
-    pattern?: string
-    'hero-background'?: string
   }
   _brandAssets?: {
     analysis?: {
@@ -270,81 +268,26 @@ export default function CreateAutoPage() {
         lifestyleImages: (scrapedAssets?.lifestyleImages || []).slice(0, 3).filter(Boolean),
       }
       
-      // For generated images (base64), upload to Storage
-      const generatedImages = data.proposalContent._images
-      console.log('[Create] ========== IMAGE DEBUG ==========')
-      console.log('[Create] _images object:', generatedImages ? 'exists' : 'null/undefined')
-      if (generatedImages) {
-        const keys = Object.keys(generatedImages)
-        console.log('[Create] Image keys:', keys)
-        keys.forEach(k => {
-          const v = (generatedImages as Record<string, unknown>)[k]
-          if (!v) {
-            console.log(`[Create] ${k}: null/undefined`)
-          } else if (typeof v === 'string') {
-            console.log(`[Create] ${k}: string, starts with "${v.slice(0, 30)}...", length: ${v.length}`)
-          } else {
-            console.log(`[Create] ${k}: ${typeof v}`)
-          }
-        })
-      }
+      // Images are now URLs - already uploaded by generate-proposal API!
+      // No need to upload again - just use the URLs directly
+      const imageUrls = data.proposalContent._imageUrls
+      console.log('[Create] ========== IMAGE URLs FROM SERVER ==========')
+      console.log('[Create] Image URLs received:', imageUrls)
       
-      const hasBase64 = generatedImages ? Object.values(generatedImages).some(v => typeof v === 'string' && v?.startsWith('data:')) : false
-      console.log('[Create] Has base64 images:', hasBase64)
-      
-      if (generatedImages && hasBase64) {
-        console.log('[Create] Uploading generated images to Supabase...')
-        try {
-          const imagesToUpload: Record<string, string> = {}
-          if (generatedImages.coverImage?.startsWith('data:')) {
-            imagesToUpload.coverImage = generatedImages.coverImage
-            console.log('[Create] Will upload coverImage')
-          }
-          if (generatedImages.brandImage?.startsWith('data:')) {
-            imagesToUpload.brandImage = generatedImages.brandImage
-            console.log('[Create] Will upload brandImage')
-          }
-          if (generatedImages.audienceImage?.startsWith('data:')) {
-            imagesToUpload.audienceImage = generatedImages.audienceImage
-            console.log('[Create] Will upload audienceImage')
-          }
-          const activityImg = (generatedImages as Record<string, string | undefined>).activityImage
-          if (activityImg?.startsWith('data:')) {
-            imagesToUpload.activityImage = activityImg
-            console.log('[Create] Will upload activityImage')
-          }
-          
-          console.log('[Create] Total images to upload:', Object.keys(imagesToUpload).length)
-          
-          if (Object.keys(imagesToUpload).length > 0) {
-            const uploadRes = await fetch('/api/upload-images', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                images: imagesToUpload,
-                prefix: data.userInputs.brandName.replace(/[^a-zA-Z0-9א-ת]/g, '_'),
-              }),
-            })
-            
-            console.log('[Create] Upload response status:', uploadRes.status)
-            
-            if (uploadRes.ok) {
-              const result = await uploadRes.json()
-              console.log('[Create] Upload result:', result)
-              documentData._generatedImages = result.urls
-            } else {
-              const errorText = await uploadRes.text()
-              console.error('[Create] Upload failed:', errorText)
-            }
-          }
-        } catch (uploadErr) {
-          console.error('[Create] Image upload exception:', uploadErr)
-        }
+      if (imageUrls && Object.keys(imageUrls).length > 0) {
+        // Filter out undefined values
+        const validUrls: Record<string, string> = {}
+        if (imageUrls.coverImage) validUrls.coverImage = imageUrls.coverImage
+        if (imageUrls.brandImage) validUrls.brandImage = imageUrls.brandImage
+        if (imageUrls.audienceImage) validUrls.audienceImage = imageUrls.audienceImage
+        if (imageUrls.activityImage) validUrls.activityImage = imageUrls.activityImage
+        
+        documentData._generatedImages = validUrls
+        console.log('[Create] Set _generatedImages:', Object.keys(validUrls))
       } else {
-        console.log('[Create] No base64 images to upload')
+        console.log('[Create] No image URLs received from server')
       }
-      console.log('[Create] Final _generatedImages:', documentData._generatedImages)
-      console.log('[Create] ========== END IMAGE DEBUG ==========')
+      console.log('[Create] ========== END IMAGE URLs ==========')
       
       console.log('[Create] Final scraped assets:', {
         logo: !!documentData._scraped?.logoUrl,
