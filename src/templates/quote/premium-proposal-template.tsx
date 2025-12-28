@@ -1503,6 +1503,69 @@ export function generatePremiumProposalSlides(
   }
 
   // ========================================
+  // SLIDE: CREATIVE CLOSING - After creative section
+  // ========================================
+  slides.push(`
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  ${baseStyles}
+  <style>
+    .slide-creative-close {
+      background: linear-gradient(135deg, var(--accent) 0%, ${accentColor}cc 100%);
+    }
+    .slide-creative-close .slide-content {
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+    .slide-creative-close .headline {
+      font-size: 80px;
+      font-weight: 900;
+      color: white;
+      line-height: 1.2;
+      margin-bottom: 40px;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .slide-creative-close .subline {
+      font-size: 28px;
+      color: rgba(255,255,255,0.9);
+      max-width: 800px;
+      line-height: 1.6;
+    }
+    .slide-creative-close .logos-row {
+      display: flex;
+      gap: 60px;
+      align-items: center;
+      margin-top: 80px;
+    }
+    .slide-creative-close .logos-row img {
+      height: 50px;
+      filter: brightness(0) invert(1);
+    }
+    .slide-creative-close .client-logo-display {
+      height: 80px !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="slide slide-creative-close">
+    <div class="slide-content">
+      <h1 class="headline">זה הזמן ליצור</h1>
+      <p class="subline">${data.activityDifferentiator || 'מוכנים לקחת את המותג לשלב הבא'}</p>
+      
+      <div class="logos-row">
+        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo-display">` : ''}
+        <img src="${leadersLogo}" alt="Leaders">
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+`)
+
+  // ========================================
   // SLIDE 9: DELIVERABLES
   // ========================================
   const deliverables = data.deliverablesDetailed || []
@@ -1979,8 +2042,11 @@ export function generatePremiumProposalSlides(
                 <div class="stat-value">${inf.engagement}</div>
                 <div class="stat-label">מעורבות</div>
               </div>
+              <div class="stat">
+                <div class="stat-value">--</div>
+                <div class="stat-label">צפיות סטורי</div>
+              </div>
             </div>
-            <div class="influencer-reason">${(inf.whyRelevant || '').slice(0, 80)}${inf.whyRelevant && inf.whyRelevant.length > 80 ? '...' : ''}</div>
           </div>
           `).join('')}
         </div>
