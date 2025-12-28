@@ -125,9 +125,15 @@ Technical:
 - Aspect ratio: ${config.aspectRatio || '16:9'}
 - High resolution, crisp details
 - Brand colors incorporated subtly in the scene
-- No text in the image (text will be added in post)
 
-DO NOT include: generic stock photo feel, cold/sterile environments, non-Israeli aesthetics
+CRITICAL REQUIREMENT - NO TEXT:
+- Generate ONLY a visual/photographic image
+- Do NOT include ANY text, letters, words, logos, or typography
+- Do NOT include brand names, slogans, or captions
+- The image must be purely visual - text will be overlaid separately
+- If you see text in your output, regenerate without it
+
+DO NOT include: generic stock photo feel, cold/sterile environments, non-Israeli aesthetics, any text or writing
 `.trim()
 
   const imageData = await generateWithRetry(prompt, config.aspectRatio || '16:9')
@@ -186,9 +192,10 @@ Technical:
 - 16:9 aspect ratio
 - High quality, editorial style
 - Depth of field with subject focus
-- No text or watermarks
 
-Avoid: staged/fake looking, cold lighting, homogeneous looks
+CRITICAL - NO TEXT: Generate a purely visual/photographic image with absolutely NO text, letters, words, logos, brand names, watermarks, or typography of any kind.
+
+Avoid: staged/fake looking, cold lighting, homogeneous looks, any text or writing
 `.trim()
 
   const imageData = await generateWithRetry(prompt, '16:9')
@@ -300,7 +307,7 @@ Technical:
 - Mobile-first design
 - High contrast for small screens
 
-No text in image - will be added as overlay.
+CRITICAL - NO TEXT: Generate a purely visual/photographic image with absolutely NO text, letters, words, logos, brand names, or typography of any kind. Text will be overlaid separately.
 `.trim()
 
   const imageData = await generateWithRetry(prompt, aspectRatios[platform])

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateProposalContent } from '@/lib/openai/proposal-writer'
 import { researchInfluencers } from '@/lib/gemini/influencer-research'
-import { discoverAndScrapeInfluencers } from '@/lib/apify/influencer-scraper'
+import { discoverAndScrapeInfluencers, scrapeMultipleInfluencers } from '@/lib/apify/influencer-scraper'
 import { generateBrandAssetsFromLogo } from '@/lib/gemini/logo-designer'
 import { generateIsraeliProposalImages } from '@/lib/gemini/israeli-image-generator'
 import { createClient } from '@/lib/supabase/server'
@@ -118,6 +118,31 @@ export async function POST(request: NextRequest) {
     console.log(`[API Generate] Scraped influencers: ${scrapedInfluencers.length} real profiles`)
     console.log(`[API Generate] Brand assets: ${brandAssets?.designs?.length || 0} designs generated`)
     
+    // If no scraped influencers but we have AI recommendations, try to get profile pics
+    let enrichedInfluencers = scrapedInfluencers
+    if (scrapedInfluencers.length === 0 && influencerStrategy.recommendations?.length > 0) {
+      console.log('[API Generate] No scraped influencers - enriching AI recommendations with profile pictures...')
+      
+      // Extract handles from AI recommendations (remove @ prefix if present)
+      const handles = influencerStrategy.recommendations
+        .slice(0, 6)
+        .map(rec => rec.handle?.replace('@', '').trim())
+        .filter(Boolean) as string[]
+      
+      if (handles.length > 0) {
+        console.log(`[API Generate] Scraping ${handles.length} influencer profiles: ${handles.join(', ')}`)
+        
+        try {
+          const scrapedProfiles = await scrapeMultipleInfluencers(handles)
+          console.log(`[API Generate] Got ${scrapedProfiles.length} profile pictures`)
+          
+          enrichedInfluencers = scrapedProfiles
+        } catch (scrapeError) {
+          console.error('[API Generate] Failed to scrape influencer profiles:', scrapeError)
+        }
+      }
+    }
+    
     // Upload images directly to Supabase Storage (avoid sending huge base64 to client)
     const timestamp = Date.now()
     // Use only ASCII characters for file names (Supabase doesn't support Hebrew in keys)
@@ -214,7 +239,7 @@ export async function POST(request: NextRequest) {
       // Brand designs as base64 (small, for decorative use)
       brandDesigns: brandDesigns,
       influencerStrategy,
-      scrapedInfluencers: scrapedInfluencers.map(inf => ({
+      scrapedInfluencers: enrichedInfluencers.map(inf => ({
         name: inf.fullName || inf.username,
         username: inf.username,
         profileUrl: inf.profileUrl,
