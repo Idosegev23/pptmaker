@@ -259,73 +259,58 @@ export default function CreateAutoPage() {
         _brandColors: data.brandColors,
       }
 
-      // Upload base64 images to Storage (in parallel)
-      const imagesToUpload: Record<string, string> = {}
+      // Get scraped assets - use external URLs directly (they're from the brand's website)
       const scrapedAssets = data.brandResearch._scrapedAssets
       
-      // Collect generated images
-      if (data.proposalContent._images?.coverImage) {
-        imagesToUpload.coverImage = data.proposalContent._images.coverImage
-      }
-      if (data.proposalContent._images?.brandImage) {
-        imagesToUpload.brandImage = data.proposalContent._images.brandImage
-      }
-      if (data.proposalContent._images?.audienceImage) {
-        imagesToUpload.audienceImage = data.proposalContent._images.audienceImage
+      // Use scraped images directly (external URLs) - no need to upload
+      documentData._scraped = {
+        logoUrl: scrapedAssets?.logoUrl || undefined,
+        heroImages: (scrapedAssets?.heroImages || []).slice(0, 3).filter(Boolean),
+        lifestyleImages: (scrapedAssets?.lifestyleImages || []).slice(0, 3).filter(Boolean),
       }
       
-      // Collect scraped assets (logo and first hero/lifestyle images)
-      if (scrapedAssets?.logoUrl) {
-        imagesToUpload.logoUrl = scrapedAssets.logoUrl
-      }
-      if (scrapedAssets?.heroImages?.[0]) {
-        imagesToUpload.heroImage0 = scrapedAssets.heroImages[0]
-      }
-      if (scrapedAssets?.heroImages?.[1]) {
-        imagesToUpload.heroImage1 = scrapedAssets.heroImages[1]
-      }
-      if (scrapedAssets?.lifestyleImages?.[0]) {
-        imagesToUpload.lifestyleImage0 = scrapedAssets.lifestyleImages[0]
-      }
-      if (scrapedAssets?.lifestyleImages?.[1]) {
-        imagesToUpload.lifestyleImage1 = scrapedAssets.lifestyleImages[1]
-      }
-      
-      // Upload if there are images
-      if (Object.keys(imagesToUpload).length > 0) {
-        console.log('[Create] Uploading', Object.keys(imagesToUpload).length, 'images...')
+      // For generated images (base64), upload to Storage
+      const generatedImages = data.proposalContent._images
+      if (generatedImages && (generatedImages.coverImage || generatedImages.brandImage || generatedImages.audienceImage)) {
+        console.log('[Create] Uploading generated images...')
         try {
-          const uploadRes = await fetch('/api/upload-images', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              images: imagesToUpload,
-              prefix: data.userInputs.brandName.replace(/[^a-zA-Z0-9א-ת]/g, '_'),
-            }),
-          })
+          const imagesToUpload: Record<string, string> = {}
+          if (generatedImages.coverImage?.startsWith('data:')) {
+            imagesToUpload.coverImage = generatedImages.coverImage
+          }
+          if (generatedImages.brandImage?.startsWith('data:')) {
+            imagesToUpload.brandImage = generatedImages.brandImage
+          }
+          if (generatedImages.audienceImage?.startsWith('data:')) {
+            imagesToUpload.audienceImage = generatedImages.audienceImage
+          }
           
-          if (uploadRes.ok) {
-            const { urls } = await uploadRes.json()
-            console.log('[Create] Uploaded images:', Object.keys(urls))
+          if (Object.keys(imagesToUpload).length > 0) {
+            const uploadRes = await fetch('/api/upload-images', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                images: imagesToUpload,
+                prefix: data.userInputs.brandName.replace(/[^a-zA-Z0-9א-ת]/g, '_'),
+              }),
+            })
             
-            // Fill in document data with uploaded URLs
-            documentData._generatedImages = {
-              coverImage: urls.coverImage,
-              brandImage: urls.brandImage,
-              audienceImage: urls.audienceImage,
-            }
-            
-            documentData._scraped = {
-              logoUrl: urls.logoUrl,
-              heroImages: [urls.heroImage0, urls.heroImage1].filter(Boolean),
-              lifestyleImages: [urls.lifestyleImage0, urls.lifestyleImage1].filter(Boolean),
+            if (uploadRes.ok) {
+              const { urls } = await uploadRes.json()
+              console.log('[Create] Uploaded generated images:', Object.keys(urls))
+              documentData._generatedImages = urls
             }
           }
         } catch (uploadErr) {
           console.error('[Create] Image upload failed:', uploadErr)
-          // Continue without images
         }
       }
+      
+      console.log('[Create] Final scraped assets:', {
+        logo: !!documentData._scraped?.logoUrl,
+        heroImages: documentData._scraped?.heroImages?.length || 0,
+        lifestyleImages: documentData._scraped?.lifestyleImages?.length || 0,
+      })
 
       // Save document to database
       const response = await fetch('/api/documents', {
