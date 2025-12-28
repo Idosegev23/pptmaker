@@ -272,29 +272,49 @@ export default function CreateAutoPage() {
       
       // For generated images (base64), upload to Storage
       const generatedImages = data.proposalContent._images
-      console.log('[Create] Checking generated images:', {
-        hasImages: !!generatedImages,
-        keys: generatedImages ? Object.keys(generatedImages) : [],
-        hasBase64: generatedImages ? Object.values(generatedImages).some(v => typeof v === 'string' && v?.startsWith('data:')) : false,
-      })
-      if (generatedImages && Object.values(generatedImages).some(v => typeof v === 'string' && v?.startsWith('data:'))) {
-        console.log('[Create] Uploading generated images...')
+      console.log('[Create] ========== IMAGE DEBUG ==========')
+      console.log('[Create] _images object:', generatedImages ? 'exists' : 'null/undefined')
+      if (generatedImages) {
+        const keys = Object.keys(generatedImages)
+        console.log('[Create] Image keys:', keys)
+        keys.forEach(k => {
+          const v = (generatedImages as Record<string, unknown>)[k]
+          if (!v) {
+            console.log(`[Create] ${k}: null/undefined`)
+          } else if (typeof v === 'string') {
+            console.log(`[Create] ${k}: string, starts with "${v.slice(0, 30)}...", length: ${v.length}`)
+          } else {
+            console.log(`[Create] ${k}: ${typeof v}`)
+          }
+        })
+      }
+      
+      const hasBase64 = generatedImages ? Object.values(generatedImages).some(v => typeof v === 'string' && v?.startsWith('data:')) : false
+      console.log('[Create] Has base64 images:', hasBase64)
+      
+      if (generatedImages && hasBase64) {
+        console.log('[Create] Uploading generated images to Supabase...')
         try {
           const imagesToUpload: Record<string, string> = {}
           if (generatedImages.coverImage?.startsWith('data:')) {
             imagesToUpload.coverImage = generatedImages.coverImage
+            console.log('[Create] Will upload coverImage')
           }
           if (generatedImages.brandImage?.startsWith('data:')) {
             imagesToUpload.brandImage = generatedImages.brandImage
+            console.log('[Create] Will upload brandImage')
           }
           if (generatedImages.audienceImage?.startsWith('data:')) {
             imagesToUpload.audienceImage = generatedImages.audienceImage
+            console.log('[Create] Will upload audienceImage')
           }
-          // Add activityImage (was missing!)
           const activityImg = (generatedImages as Record<string, string | undefined>).activityImage
           if (activityImg?.startsWith('data:')) {
             imagesToUpload.activityImage = activityImg
+            console.log('[Create] Will upload activityImage')
           }
+          
+          console.log('[Create] Total images to upload:', Object.keys(imagesToUpload).length)
           
           if (Object.keys(imagesToUpload).length > 0) {
             const uploadRes = await fetch('/api/upload-images', {
@@ -306,16 +326,25 @@ export default function CreateAutoPage() {
               }),
             })
             
+            console.log('[Create] Upload response status:', uploadRes.status)
+            
             if (uploadRes.ok) {
-              const { urls } = await uploadRes.json()
-              console.log('[Create] Uploaded generated images:', Object.keys(urls))
-              documentData._generatedImages = urls
+              const result = await uploadRes.json()
+              console.log('[Create] Upload result:', result)
+              documentData._generatedImages = result.urls
+            } else {
+              const errorText = await uploadRes.text()
+              console.error('[Create] Upload failed:', errorText)
             }
           }
         } catch (uploadErr) {
-          console.error('[Create] Image upload failed:', uploadErr)
+          console.error('[Create] Image upload exception:', uploadErr)
         }
+      } else {
+        console.log('[Create] No base64 images to upload')
       }
+      console.log('[Create] Final _generatedImages:', documentData._generatedImages)
+      console.log('[Create] ========== END IMAGE DEBUG ==========')
       
       console.log('[Create] Final scraped assets:', {
         logo: !!documentData._scraped?.logoUrl,

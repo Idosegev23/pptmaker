@@ -89,7 +89,17 @@ export async function POST(request: NextRequest) {
       return acc
     }, {} as Record<string, string>) || {}
     
-    console.log(`[API Generate] Generated ${Object.values(imageUrls).filter(Boolean).length} images, ${Object.keys(brandDesigns).length} brand designs`)
+    // Log detailed image info
+    console.log('[API Generate] ========== IMAGE OUTPUT ==========')
+    Object.entries(imageUrls).forEach(([k, v]) => {
+      if (v) {
+        console.log(`[API Generate] ${k}: ${v.slice(0, 50)}... (length: ${v.length})`)
+      } else {
+        console.log(`[API Generate] ${k}: undefined`)
+      }
+    })
+    console.log(`[API Generate] Total: ${Object.values(imageUrls).filter(Boolean).length} images, ${Object.keys(brandDesigns).length} brand designs`)
+    console.log('[API Generate] ========== END IMAGE OUTPUT ==========')
     
     return NextResponse.json({
       success: true,

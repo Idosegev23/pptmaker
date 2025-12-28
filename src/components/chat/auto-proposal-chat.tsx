@@ -196,6 +196,7 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
       const researchData = await researchRes.json()
       
       // Store results
+      console.log('[Chat] Research colors received:', researchData.colors)
       setBrandResearch(researchData.research)
       setBrandColors(researchData.colors)
       
@@ -284,11 +285,19 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
       
       setMessages(prev => prev.filter(m => m.type !== 'loading'))
       
-      // Log what we generated
+      // Log what we generated - detailed image info
+      const imgKeys = Object.keys(data.images || {})
+      const imgSamples = imgKeys.map(k => {
+        const v = data.images?.[k]
+        if (!v) return `${k}: null`
+        if (typeof v === 'string') return `${k}: ${v.slice(0, 50)}...`
+        return `${k}: ${typeof v}`
+      })
       console.log('[Chat] Generated proposal:', {
         contentKeys: Object.keys(data.content || {}),
         influencerRecs: data.influencerStrategy?.recommendations?.length || 0,
-        imagesGenerated: Object.keys(data.images || {}).filter(k => data.images[k]).length,
+        imageKeys: imgKeys,
+        imageSamples: imgSamples,
       })
       
       addMessage('bot', `הצעת המחיר מוכנה! כוללת ${data.influencerStrategy?.recommendations?.length || 0} המלצות משפיענים.`)
