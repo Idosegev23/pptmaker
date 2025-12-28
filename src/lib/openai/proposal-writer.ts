@@ -19,10 +19,15 @@ export interface ProposalContent {
   campaignName?: string
   campaignSubtitle?: string
   
-  // Goals (Slide 2)
+  // Brief (Slide 2) - WHY are they coming to us?
+  brandBrief?: string // The core challenge/need in one sentence
+  brandPainPoints?: string[] // What's hurting them? (2-3 points)
+  brandObjective?: string // What do they want to achieve?
+  
+  // Goals (Slide 3)
   goals: {
     title: string
-    description: string
+    description: string // Keep SHORT - max 80 chars
   }[]
   targetAudience: {
     primary: {
@@ -39,12 +44,23 @@ export interface ProposalContent {
     insights: string[] // Key insights about the audience
   }
   
-  // Brand (Slide 3)
+  // Key Insight (Slide 5) - Research-based
+  keyInsight?: string // The central insight that drives the campaign
+  insightSource?: string // Where does this insight come from?
+  
+  // Strategy (Slide 6)
+  strategyHeadline?: string // One sentence strategy summary
+  strategyPillars?: { // 2-3 pillars
+    title: string
+    description: string
+  }[]
+  
+  // Brand (Slide 7)
   brandDescription: string // 3-5 paragraphs, rich content
   brandHighlights: string[] // Key points about the brand
   brandOpportunity: string // Why influencer marketing fits
   
-  // Activity (Slide 4)
+  // Activity (Slide 8)
   activityTitle: string
   activityConcept: string // The big idea - 2-3 sentences
   activityDescription: string // Detailed description paragraph
@@ -118,13 +134,21 @@ const proposalSchema = {
   properties: {
     campaignName: { type: 'string', description: 'שם הקמפיין - קצר וקליט' },
     campaignSubtitle: { type: 'string', description: 'תת-כותרת שמסבירה את הכיוון' },
+    // NEW: Brief - Why are they coming to us?
+    brandBrief: { type: 'string', description: 'משפט אחד - מהו האתגר או הצורך שהביא את הלקוח אלינו' },
+    brandPainPoints: { 
+      type: 'array', 
+      items: { type: 'string' },
+      description: '2-3 נקודות כאב קצרות - מה כואב להם?'
+    },
+    brandObjective: { type: 'string', description: 'מה הם רוצים להשיג - משפט אחד' },
     goals: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
           title: { type: 'string' },
-          description: { type: 'string', description: 'הסבר של 2-3 משפטים' }
+          description: { type: 'string', description: 'הסבר קצר - מקסימום 80 תווים!' }
         },
         required: ['title', 'description'],
         additionalProperties: false
@@ -148,6 +172,24 @@ const proposalSchema = {
       },
       required: ['primary', 'behavior', 'insights'],
       additionalProperties: false
+    },
+    // NEW: Key Insight
+    keyInsight: { type: 'string', description: 'התובנה המרכזית שמניעה את הקמפיין - משפט אחד חזק' },
+    insightSource: { type: 'string', description: 'מקור התובנה - לדוגמה: מחקר שוק, ניתוח מתחרים' },
+    // NEW: Strategy
+    strategyHeadline: { type: 'string', description: 'משפט אחד שמסכם את האסטרטגיה' },
+    strategyPillars: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          description: { type: 'string' }
+        },
+        required: ['title', 'description'],
+        additionalProperties: false
+      },
+      description: '2-3 עמודי תווך של האסטרטגיה'
     },
     brandDescription: { type: 'string', description: '3-5 פסקאות מפורטות' },
     brandHighlights: { type: 'array', items: { type: 'string' } },
@@ -207,7 +249,12 @@ const proposalSchema = {
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
   },
   required: [
-    'campaignName', 'campaignSubtitle', 'goals', 'targetAudience', 'brandDescription',
+    'campaignName', 'campaignSubtitle', 
+    // NEW fields
+    'brandBrief', 'brandPainPoints', 'brandObjective', 'keyInsight', 'insightSource',
+    'strategyHeadline', 'strategyPillars',
+    // Existing fields
+    'goals', 'targetAudience', 'brandDescription',
     'brandHighlights', 'brandOpportunity', 'activityTitle', 'activityConcept',
     'activityDescription', 'activityApproach', 'activityDifferentiator', 'deliverables',
     'deliverablesSummary', 'metrics', 'metricsExplanation', 'influencerStrategy',

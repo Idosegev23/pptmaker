@@ -172,6 +172,19 @@ export default function CreateAutoPage() {
         targetInsights: targetContent?.insights || ['מושפעים מתוכן אותנטי', 'מחפשים המלצות אמיתיות'],
         targetSecondary: targetContent?.secondary,
         
+        // Brand Brief - Why are they coming to us?
+        brandBrief: data.proposalContent.brandBrief || data.brandResearch.challenges?.[0] || '',
+        brandPainPoints: data.proposalContent.brandPainPoints || data.brandResearch.challenges || [],
+        brandObjective: data.proposalContent.brandObjective || data.userInputs.goals?.[0] || '',
+        
+        // Key Insight - Research-based
+        keyInsight: data.proposalContent.keyInsight || data.brandResearch.marketInsights?.[0] || '',
+        insightSource: data.proposalContent.insightSource || 'מחקר שוק',
+        
+        // Strategy
+        strategyHeadline: data.proposalContent.strategyHeadline || data.proposalContent.influencerStrategy || '',
+        strategyPillars: data.proposalContent.strategyPillars || data.proposalContent.activityApproach || [],
+        
         // Brand - Rich description with defaults
         brandDescription: data.proposalContent.brandDescription || data.brandResearch.companyDescription || `${data.userInputs.brandName} הוא מותג פעיל בישראל.`,
         brandHighlights: data.proposalContent.brandHighlights || data.brandResearch.uniqueSellingPoints || [],
