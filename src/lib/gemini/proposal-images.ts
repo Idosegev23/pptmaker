@@ -98,7 +98,7 @@ async function generateSingleImage(prompt: string): Promise<string | null> {
     console.log('[Gemini 3 Pro Image] Generating:', prompt.slice(0, 80) + '...')
     
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-2.0-flash-preview-image-generation',
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }], // Enable Google Search grounding
