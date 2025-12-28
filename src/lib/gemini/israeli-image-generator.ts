@@ -10,8 +10,8 @@ import type { BrandColors } from './color-extractor'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-// Nano Banana Pro - Gemini 2.0 Flash image generation model
-const IMAGE_MODEL = 'gemini-2.0-flash-preview-image-generation'
+// Nano Banana Pro - Gemini 3 Pro Image model
+const IMAGE_MODEL = 'gemini-3-pro-image-preview'
 
 // Retry configuration
 const MAX_RETRIES = 3

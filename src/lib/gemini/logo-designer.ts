@@ -8,7 +8,7 @@ import { GoogleGenAI } from '@google/genai'
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
 // Model for image generation - Nano Banana Pro
-const IMAGE_MODEL = 'gemini-2.0-flash-preview-image-generation'
+const IMAGE_MODEL = 'gemini-3-pro-image-preview'
 // Model for analysis - Gemini 3 Pro
 const ANALYSIS_MODEL = 'gemini-3-pro-preview'
 

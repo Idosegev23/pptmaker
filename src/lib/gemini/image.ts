@@ -3,8 +3,8 @@ import { GoogleGenAI } from '@google/genai'
 // Initialize the Google GenAI client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-// Model: Gemini 2.0 Flash Image Generation (Nano Banana Pro)
-const MODEL = 'gemini-2.0-flash-preview-image-generation'
+// Model: Nano Banana Pro (gemini-3-pro-image-preview)
+const MODEL = 'gemini-3-pro-image-preview'
 
 export interface GeneratedImage {
   base64: string
