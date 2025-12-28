@@ -113,7 +113,10 @@ export async function POST(request: NextRequest) {
     
     // Upload images directly to Supabase Storage (avoid sending huge base64 to client)
     const timestamp = Date.now()
-    const brandPrefix = brandResearch.brandName.replace(/[^a-zA-Z0-9א-ת]/g, '_')
+    // Use only ASCII characters for file names (Supabase doesn't support Hebrew in keys)
+    const brandPrefix = brandResearch.brandName
+      .replace(/[^a-zA-Z0-9]/g, '') // Remove all non-ASCII
+      .slice(0, 20) || `brand_${timestamp}` // Fallback if empty after cleanup
     
     console.log('[API Generate] ========== UPLOADING IMAGES TO STORAGE ==========')
     
