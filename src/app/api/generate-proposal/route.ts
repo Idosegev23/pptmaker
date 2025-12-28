@@ -79,12 +79,12 @@ export async function POST(request: NextRequest) {
     
     // Get logo URL for brand assets
     const logoUrl = scrapedData?.logoUrl
-    
-    // Run all generation tasks in parallel for speed
-    const [content, influencerStrategy, scrapedInfluencers, brandAssets, smartImageSet] = await Promise.all([
+
+    // Run content, influencer, and brand tasks in parallel
+    const [content, influencerStrategy, scrapedInfluencers, brandAssets] = await Promise.all([
       // 1. Generate proposal content
       generateProposalContent(brandResearch, { budget, goals }, brandColors),
-      
+
       // 2. AI influencer research
       researchInfluencers(brandResearch, budget, goals),
       
@@ -108,25 +108,25 @@ export async function POST(request: NextRequest) {
         console.error('[API Generate] Brand assets generation failed:', err)
         return null
       }) : Promise.resolve(null),
-      
-      // 5. Generate SMART images - AI creates custom strategy and prompts
-      generateSmartImages(brandResearch, brandColors, content).catch(async err => {
-        console.error('[API Generate] Smart image generation failed, falling back to legacy:', err)
-        // Fallback to legacy system
-        const legacyImages = await generateIsraeliProposalImages(brandResearch, brandColors)
-        return {
-          strategy: { totalImages: 4, conceptSummary: 'Fallback', visualDirection: '', images: [] },
-          promptsData: { prompts: [], styleGuide: '' },
-          images: [],
-          legacyMapping: {
-            cover: legacyImages.cover ? { id: 'cover', placement: 'cover', imageData: legacyImages.cover.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
-            brand: legacyImages.lifestyle ? { id: 'brand', placement: 'brand', imageData: legacyImages.lifestyle.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
-            audience: legacyImages.audience ? { id: 'audience', placement: 'audience', imageData: legacyImages.audience.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
-            activity: legacyImages.activity ? { id: 'activity', placement: 'activity', imageData: legacyImages.activity.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
-          }
-        }
-      }),
     ])
+    
+    // 5. Generate SMART images - needs content for context, so run after
+    const smartImageSet = await generateSmartImages(brandResearch, brandColors, content).catch(async err => {
+      console.error('[API Generate] Smart image generation failed, falling back to legacy:', err)
+      // Fallback to legacy system
+      const legacyImages = await generateIsraeliProposalImages(brandResearch, brandColors)
+      return {
+        strategy: { totalImages: 4, conceptSummary: 'Fallback', visualDirection: '', images: [] as never[] },
+        promptsData: { prompts: [] as never[], styleGuide: '' },
+        images: [] as never[],
+        legacyMapping: {
+          cover: legacyImages.cover ? { id: 'cover', placement: 'cover' as const, imageData: legacyImages.cover.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
+          brand: legacyImages.lifestyle ? { id: 'brand', placement: 'brand' as const, imageData: legacyImages.lifestyle.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
+          audience: legacyImages.audience ? { id: 'audience', placement: 'audience' as const, imageData: legacyImages.audience.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
+          activity: legacyImages.activity ? { id: 'activity', placement: 'activity' as const, imageData: legacyImages.activity.imageData, mimeType: 'image/png', prompt: {} as never, aspectRatio: '16:9' } : undefined,
+        }
+      }
+    })
     
     console.log(`[API Generate] Content generated, tone: ${content.toneUsed}`)
     console.log(`[API Generate] Influencer strategy: ${influencerStrategy.recommendations?.length || 0} AI recommendations`)
