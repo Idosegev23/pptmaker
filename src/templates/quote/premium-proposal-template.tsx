@@ -625,7 +625,7 @@ export function generatePremiumProposalSlides(
       color: white;
       max-width: 1000px;
       line-height: 1.05;
-      text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      /* Removed text-shadow to avoid gray box appearance in PDF */
     }
     .slide-cover .subtitle {
       font-size: 36px;
@@ -1136,7 +1136,7 @@ export function generatePremiumProposalSlides(
       font-weight: 700;
       color: white;
       line-height: 1.4;
-      text-shadow: 0 4px 30px rgba(0,0,0,0.3);
+      /* Removed text-shadow to avoid gray box appearance in PDF */
       text-wrap: balance;
     }
     .slide-insight .insight-source {
@@ -1487,7 +1487,7 @@ export function generatePremiumProposalSlides(
       color: white;
       line-height: 1.1;
       margin-bottom: 30px;
-      text-shadow: 0 4px 30px rgba(0,0,0,0.4);
+      /* Removed text-shadow to avoid gray box appearance in PDF */
       letter-spacing: -2px;
     }
     .slide-creative-close .subline {
