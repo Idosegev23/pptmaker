@@ -54,8 +54,9 @@ export async function generatePdf(
     // Set content
     await page.setContent(html, { waitUntil: 'networkidle0' })
 
-    // Wait for fonts to load
+    // Wait for fonts to load - extra time for serverless environments
     await page.evaluate(() => document.fonts?.ready)
+    await new Promise(resolve => setTimeout(resolve, 1000)) // Extra 1s for font rendering
 
     // Generate PDF
     const pdfOptions = options.format === '16:9' 

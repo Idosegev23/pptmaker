@@ -598,7 +598,12 @@ export function generatePremiumProposalSlides(
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, ${primary}40 100%);
+      /* Subtle gradient overlay - not box behind text */
+      background: linear-gradient(to top, 
+        rgba(0,0,0,0.65) 0%, 
+        rgba(0,0,0,0.3) 30%, 
+        rgba(0,0,0,0.15) 60%,
+        ${primary}30 100%);
     }
     .slide.slide-cover::before {
       bottom: 4px; /* Don't cover the brand line */
