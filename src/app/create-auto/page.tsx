@@ -365,8 +365,8 @@ export default function CreateAutoPage() {
 
       const result = await response.json()
       
-      // Redirect to preview
-      router.push(`/preview/${result.id}`)
+      // Redirect to editor for review and edits
+      router.push(`/edit/${result.id}`)
     } catch (error) {
       console.error('Error creating document:', error)
       alert('שגיאה ביצירת המסמך')

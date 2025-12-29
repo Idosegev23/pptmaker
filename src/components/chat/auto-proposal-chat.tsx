@@ -12,6 +12,7 @@ type ChatState =
   | 'initial'           // Waiting for brand name
   | 'waiting_for_url'   // Waiting for website URL
   | 'scraping'          // Scraping website
+  | 'waiting_for_logo'  // No logo found, waiting for upload
   | 'researching'       // AI research in progress
   | 'confirm_research'  // Show research results for confirmation
   | 'waiting_for_budget' // Waiting for budget input
@@ -71,9 +72,11 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
   } | null>(null)
   const [budget, setBudget] = useState(0)
   const [selectedGoals, setSelectedGoals] = useState<string[]>([])
+  const [uploadedLogoUrl, setUploadedLogoUrl] = useState<string | null>(null)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
   
   // Auto-scroll
   useEffect(() => {
@@ -177,18 +180,51 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
         colors: scraped.colorPalette,
       })
       
-      // Update message
-      setMessages(prev => prev.filter(m => m.type !== 'loading'))
-      addMessage('loading', 'מבצע מחקר מותג מעמיק...')
-      setState('researching')
+      // Check if logo was found - if not, ask user to upload
+      if (!scraped.logoUrl) {
+        setMessages(prev => prev.filter(m => m.type !== 'loading'))
+        addMessage('bot', '🖼️ לא מצאתי לוגו באתר. אנא העלה את הלוגו של המותג כדי שנוכל להמשיך:')
+        setState('waiting_for_logo')
+        setIsLoading(false)
+        return
+      }
       
+      // Update message and continue to research
+      setMessages(prev => prev.filter(m => m.type !== 'loading'))
+      await continueToResearch(scraped)
+      
+    } catch (error) {
+      console.error('Research error:', error)
+      setMessages(prev => prev.filter(m => m.type !== 'loading'))
+      addMessage('bot', 'משהו השתבש. בוא ננסה שוב - מה כתובת האתר?')
+      setState('waiting_for_url')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  // Continue research after scraping (or after logo upload)
+  const continueToResearch = async (scraped?: Record<string, unknown>) => {
+    // Get scraped data - either from parameter or from state
+    const scrapedToUse = scraped || scrapedData
+    if (!scrapedToUse) {
+      addMessage('bot', 'משהו השתבש. בוא ננסה שוב.')
+      setState('waiting_for_url')
+      return
+    }
+    
+    setIsLoading(true)
+    addMessage('loading', 'מבצע מחקר מותג מעמיק...')
+    setState('researching')
+    
+    try {
       // Call research API with scraped data
       const researchRes = await fetch('/api/research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           brandName,
-          websiteData: scraped,
+          websiteData: scrapedToUse,
         }),
       })
       
@@ -204,13 +240,14 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
       setMessages(prev => prev.filter(m => m.type !== 'loading'))
       
       // Show research summary with scraped data
+      const scrapedInfo = scrapedToUse as { logoUrl?: string; screenshot?: string; heroImages?: string[] }
       addMessage('research_summary', 'הנה מה שמצאתי:', {
         research: researchData.research,
         colors: researchData.colors,
         scraped: {
-          logoUrl: scraped.logoUrl,
-          screenshot: scraped.screenshot,
-          heroImagesCount: scraped.heroImages?.length || 0,
+          logoUrl: scrapedInfo.logoUrl,
+          screenshot: scrapedInfo.screenshot,
+          heroImagesCount: scrapedInfo.heroImages?.length || 0,
         },
       })
       
@@ -225,6 +262,45 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
       addMessage('bot', 'משהו השתבש. בוא ננסה שוב - מה כתובת האתר?')
       setState('waiting_for_url')
     } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  // Handle logo upload when scraper didn't find one
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    setIsLoading(true)
+    addMessage('loading', 'מעלה את הלוגו...')
+    
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('fieldId', 'logo')
+      
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      
+      if (!res.ok) throw new Error('Failed to upload logo')
+      
+      const { url } = await res.json()
+      
+      // Update scraped data with uploaded logo
+      setUploadedLogoUrl(url)
+      const updatedScrapedData = { ...scrapedData, logoUrl: url }
+      setScrapedData(updatedScrapedData)
+      
+      // Remove loading and show success
+      setMessages(prev => prev.filter(m => m.type !== 'loading'))
+      addMessage('user', '✓ לוגו הועלה בהצלחה')
+      
+      // Continue to research with the updated data
+      await continueToResearch(updatedScrapedData)
+      
+    } catch (error) {
+      console.error('Logo upload error:', error)
+      setMessages(prev => prev.filter(m => m.type !== 'loading'))
+      addMessage('bot', 'שגיאה בהעלאת הלוגו. נסה שוב.')
       setIsLoading(false)
     }
   }
@@ -513,6 +589,30 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
     if (isLoading) return null
     
     switch (state) {
+      case 'waiting_for_logo':
+        return (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-3 items-center">
+              <input
+                type="file"
+                ref={logoInputRef}
+                onChange={handleLogoUpload}
+                accept="image/*"
+                className="hidden"
+              />
+              <Button 
+                onClick={() => logoInputRef.current?.click()} 
+                className="flex-1 bg-gray-900 hover:bg-gray-800"
+              >
+                📤 העלה לוגו
+              </Button>
+            </div>
+            <p className="text-xs text-gray-400 text-center">
+              מומלץ: PNG או SVG ברזולוציה גבוהה
+            </p>
+          </div>
+        )
+        
       case 'confirm_research':
         return (
           <div className="flex gap-3">
