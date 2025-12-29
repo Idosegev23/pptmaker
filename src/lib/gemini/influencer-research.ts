@@ -24,6 +24,7 @@ export interface InfluencerRecommendation {
   contentStyle: string
   estimatedCost: string
   profileUrl: string
+  profilePicUrl?: string // Added after scraping
 }
 
 export interface InfluencerStrategy {

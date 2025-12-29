@@ -134,10 +134,12 @@ export async function POST(request: NextRequest) {
     console.log(`[API Generate] Brand assets: ${brandAssets?.designs?.length || 0} designs generated`)
     console.log(`[API Generate] Smart images: ${smartImageSet.images.length} generated (strategy: ${smartImageSet.strategy.conceptSummary})`)
     
-    // If no scraped influencers but we have AI recommendations, try to get profile pics
+    // Try to enrich AI recommendations with profile pictures
     let enrichedInfluencers = scrapedInfluencers
-    if (scrapedInfluencers.length === 0 && influencerStrategy.recommendations?.length > 0) {
-      console.log('[API Generate] No scraped influencers - enriching AI recommendations with profile pictures...')
+    let enrichedAIRecommendations = influencerStrategy.recommendations || []
+    
+    if (influencerStrategy.recommendations?.length > 0) {
+      console.log('[API Generate] Enriching AI recommendations with profile pictures...')
       
       // Extract handles from AI recommendations (remove @ prefix if present)
       const handles = influencerStrategy.recommendations
@@ -150,14 +152,41 @@ export async function POST(request: NextRequest) {
         
         try {
           const scrapedProfiles = await scrapeMultipleInfluencers(handles)
-          console.log(`[API Generate] Got ${scrapedProfiles.length} profile pictures`)
+          console.log(`[API Generate] Got ${scrapedProfiles.length} profile pictures from scraper`)
           
-          enrichedInfluencers = scrapedProfiles
+          // Merge scraped profile pics back into AI recommendations
+          enrichedAIRecommendations = influencerStrategy.recommendations.map(aiRec => {
+            const handle = aiRec.handle?.replace('@', '').trim()
+            const scrapedProfile = scrapedProfiles.find(p => 
+              p.username.toLowerCase() === handle?.toLowerCase()
+            )
+            
+            if (scrapedProfile) {
+              console.log(`[API Generate] Found profile pic for @${handle}`)
+              return {
+                ...aiRec,
+                profilePicUrl: scrapedProfile.profilePicUrl,
+                // Also update engagement if we have real data
+                engagement: scrapedProfile.engagementRate 
+                  ? `${scrapedProfile.engagementRate.toFixed(1)}%` 
+                  : aiRec.engagement,
+              }
+            }
+            return aiRec
+          })
+          
+          // Also keep full scraped data for template
+          if (scrapedInfluencers.length === 0) {
+            enrichedInfluencers = scrapedProfiles
+          }
         } catch (scrapeError) {
           console.error('[API Generate] Failed to scrape influencer profiles:', scrapeError)
         }
       }
     }
+    
+    // Update influencerStrategy with enriched recommendations
+    influencerStrategy.recommendations = enrichedAIRecommendations
     
     // Upload images directly to Supabase Storage (avoid sending huge base64 to client)
     const timestamp = Date.now()

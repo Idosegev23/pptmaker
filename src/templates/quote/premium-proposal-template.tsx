@@ -1886,7 +1886,7 @@ export function generatePremiumProposalSlides(
       whyRelevant: 'משפיען מתאים לקהל היעד של המותג',
       profilePicUrl: inf.profilePicUrl || '',
     })),
-    // Then add AI recommendations (no photos, use initials)
+    // Then add AI recommendations - try to use profileUrl for scraping later
     ...aiRecommendations.map(inf => ({
       name: inf.name,
       handle: inf.handle,
@@ -1894,7 +1894,8 @@ export function generatePremiumProposalSlides(
       engagement: inf.engagement,
       avgStoryViews: (inf as { avgStoryViews?: string }).avgStoryViews || '--',
       whyRelevant: inf.whyRelevant,
-      profilePicUrl: '', // AI doesn't have photos
+      profilePicUrl: (inf as { profilePicUrl?: string }).profilePicUrl || '', // May have been enriched
+      profileUrl: inf.profileUrl || '', // Instagram profile URL
     })),
   ].slice(0, 6) // Max 6 influencers
   
