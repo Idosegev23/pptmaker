@@ -27,10 +27,14 @@ export async function POST(request: NextRequest) {
       console.log(`[API Influencers] Scraping ${usernames.length} specific profiles`)
       const scraped = await scrapeMultipleInfluencers(usernames)
       
+      // Filter: Only include influencers with 10K+ followers
+      const filteredScraped = scraped.filter(inf => inf.followers >= 10000)
+      console.log(`[API Influencers] Filtered to ${filteredScraped.length} influencers with 10K+ followers`)
+      
       return NextResponse.json({
         success: true,
-        influencers: scraped,
-        count: scraped.length,
+        influencers: filteredScraped,
+        count: filteredScraped.length,
       })
     }
     
@@ -72,13 +76,17 @@ export async function POST(request: NextRequest) {
       
       console.log(`[API Influencers] Scraped ${scrapedInfluencers.length} real profiles`)
       
+      // Filter: Only include influencers with 10K+ followers
+      const filteredScraped = scrapedInfluencers.filter(inf => inf.followers >= 10000)
+      console.log(`[API Influencers] Filtered to ${filteredScraped.length} influencers with 10K+ followers`)
+      
       // Combine AI strategy with real scraped data
       return NextResponse.json({
         success: true,
         strategy,
         recommendations: strategy.recommendations,
-        scrapedInfluencers,
-        combinedCount: scrapedInfluencers.length + (strategy.recommendations?.length || 0),
+        scrapedInfluencers: filteredScraped,
+        combinedCount: filteredScraped.length + (strategy.recommendations?.length || 0),
       })
     }
     

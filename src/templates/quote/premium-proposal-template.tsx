@@ -89,7 +89,24 @@ interface PremiumProposalData {
     followers?: number
     engagementRate?: number
   }[]
-  
+
+  // Enhanced influencer data (new format with full demographics)
+  enhancedInfluencers?: {
+    name: string
+    username: string
+    profilePicUrl: string
+    categories: string[]
+    followers: number
+    avgStoryViews?: number
+    avgReelViews?: number
+    engagementRate: number
+    israeliAudiencePercent?: number
+    genderSplit?: { male: number; female: number }
+    ageSplit?: { range: string; percent: number }[]
+    bio?: string
+    isVerified?: boolean
+  }[]
+
   // Influencer Data (manual)
   influencerData?: {
     name: string
@@ -100,7 +117,29 @@ interface PremiumProposalData {
     engagementRate?: number
   }[]
   influencerNote?: string
-  
+
+  // Strategy Flow Chart
+  strategyFlow?: {
+    steps: { label: string; description: string; icon?: string }[]
+  }
+
+  // Creative multi-slide
+  creativeSlides?: {
+    title: string
+    description: string
+    referenceImages?: string[]
+    conceptType?: string
+  }[]
+
+  // Quantities Summary
+  quantitiesSummary?: {
+    influencerCount: number
+    contentTypes: { type: string; quantityPerInfluencer: number; totalQuantity: number }[]
+    campaignDurationMonths: number
+    totalDeliverables: number
+    formula?: string
+  }
+
   // Closing
   closingHeadline?: string
   nextSteps?: string[]
@@ -261,6 +300,7 @@ export function generatePremiumProposalSlides(
   const baseStyles = `
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700;800&display=swap');
       
       :root {
         /* Brand Colors */
@@ -287,10 +327,10 @@ export function generatePremiumProposalSlides(
         --bg: #FFFFFF;
         --bg-gradient: linear-gradient(135deg, #FFFFFF 0%, ${primary}05 100%);
         
-        --h1: 72px;
+        --h1: 60px;
         --h2: 48px;
         --h3: 36px;
-        --body: 24px;
+        --body: 28px;
         --small: 18px;
         --tiny: 14px;
       }
@@ -396,21 +436,45 @@ export function generatePremiumProposalSlides(
         z-index: 100;
       }
       
-      /* Logo header */
+      /* Logo header (kept for spacing, logos moved to footer) */
       .logo-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
         margin-bottom: 40px;
+        min-height: 0px;
       }
-      
+
       .logo-header img {
         height: 70px;
         object-fit: contain;
       }
-      
+
       .logo-header .client-logo {
         height: 90px;
+      }
+
+      /* Logo footer - bottom of each slide */
+      .logo-footer {
+        position: absolute;
+        bottom: 20px;
+        left: 30px;
+        right: 30px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 10;
+      }
+
+      .logo-footer img {
+        height: 35px;
+        opacity: 0.7;
+        object-fit: contain;
+      }
+
+      .logo-footer.inverted img {
+        filter: brightness(0) invert(1);
+        opacity: 0.7;
       }
       
       /* Typography */
@@ -808,11 +872,6 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-brief">
     <div class="accent-shape stripe"></div>
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <div class="text-side">
           <div class="section-label">הבריף</div>
@@ -840,6 +899,10 @@ export function generatePremiumProposalSlides(
           ` : ''}
         </div>
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -914,11 +977,6 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-goals">
     <div class="accent-shape stripe"></div>
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <h1 class="h1">מטרות הקמפיין</h1>
         <div class="goals-grid">
@@ -933,6 +991,10 @@ export function generatePremiumProposalSlides(
       </div>
     </div>
     ${clientLogo ? `<img src="${clientLogo}" class="brand-watermark" alt="">` : ''}
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
+    </div>
   </div>
 </body>
 </html>
@@ -1030,11 +1092,6 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-audience">
     <div class="accent-shape corner-bottom-left"></div>
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <div class="text-side">
           <h1 class="h1">קהל היעד</h1>
@@ -1072,6 +1129,10 @@ export function generatePremiumProposalSlides(
           </div>
         </div>
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -1156,11 +1217,9 @@ export function generatePremiumProposalSlides(
       right: 80px;
       font-family: Georgia, serif;
     }
-    .slide-insight .logo-header img {
+    .slide-insight .logo-footer img {
       filter: brightness(0) invert(1);
-    }
-    .slide-insight .client-logo {
-      filter: brightness(0) invert(1) !important;
+      opacity: 0.7;
     }
   </style>
 </head>
@@ -1168,16 +1227,15 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-insight">
     <div class="quote-mark">"</div>
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <div class="section-label">התובנה המרכזית</div>
         <div class="insight-text">${insightText.slice(0, 200)}</div>
         ${data.insightSource ? `<div class="insight-source">מקור: ${data.insightSource}</div>` : ''}
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -1260,18 +1318,24 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-strategy">
     <div class="accent-shape stripe"></div>
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <div class="strategy-header">
           <h1 class="h1">האסטרטגיה</h1>
           ${strategyHeadline ? `<p class="strategy-desc">${strategyHeadline.slice(0, 200)}</p>` : ''}
         </div>
         
-        ${strategyPillars.length > 0 ? `
+        ${data.strategyFlow?.steps?.length ? `
+        <div style="display:flex; align-items:flex-start; justify-content:center; gap:10px; margin-top:40px; position:relative;">
+          ${data.strategyFlow.steps.map((step, i) => `
+            ${i > 0 ? `<div style="display:flex;align-items:center;padding-top:35px;font-size:40px;color:var(--accent);">&#8592;</div>` : ''}
+            <div style="flex:1;max-width:350px;text-align:center;background:var(--white);border-radius:20px;padding:30px 20px;box-shadow:0 8px 30px rgba(0,0,0,0.08);border-bottom:4px solid var(--accent);">
+              <div style="width:50px;height:50px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;margin:0 auto 15px;">${i + 1}</div>
+              <div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:10px;">${step.label}</div>
+              <div style="font-size:16px;color:var(--text-light);line-height:1.5;">${step.description}</div>
+            </div>
+          `).join('')}
+        </div>
+        ` : strategyPillars.length > 0 ? `
         <div class="pillars-grid">
           ${strategyPillars.slice(0, 3).map((p, i) => `
           <div class="pillar-card">
@@ -1283,6 +1347,10 @@ export function generatePremiumProposalSlides(
         </div>
         ` : ''}
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -1326,8 +1394,9 @@ export function generatePremiumProposalSlides(
       margin-top: 40px;
       max-width: 1200px;
     }
-    .slide-big-idea .logo-header img {
+    .slide-big-idea .logo-footer img {
       filter: brightness(0) invert(1);
+      opacity: 0.7;
     }
     .slide-big-idea .accent-line {
       width: 150px;
@@ -1347,17 +1416,16 @@ export function generatePremiumProposalSlides(
 <body>
   <div class="slide slide-big-idea">
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <h1>${data.activityTitle || 'הרעיון המרכזי'}</h1>
         <div class="accent-line"></div>
         ${data.activityConcept ? `<p class="concept-text">${data.activityConcept}</p>` : ''}
         ${data.activityDescription ? `<p class="activity-desc">${data.activityDescription}</p>` : ''}
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -1419,11 +1487,6 @@ export function generatePremiumProposalSlides(
 <body>
   <div class="slide slide-approach">
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <h1 class="h1">הגישה שלנו</h1>
         
@@ -1442,6 +1505,10 @@ export function generatePremiumProposalSlides(
         </div>
         ` : ''}
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -1497,22 +1564,9 @@ export function generatePremiumProposalSlides(
       line-height: 1.5;
       font-weight: 300;
     }
-    .slide-creative-close .logos-row {
-      display: flex;
-      gap: 80px;
-      align-items: center;
-      margin-top: 100px;
-      padding: 30px 60px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 20px;
-      backdrop-filter: blur(10px);
-    }
-    .slide-creative-close .logos-row img {
-      height: 60px;
+    .slide-creative-close .logo-footer img {
       filter: brightness(0) invert(1);
-    }
-    .slide-creative-close .client-logo-display {
-      height: 90px !important;
+      opacity: 0.7;
     }
     .slide-creative-close .accent-line {
       width: 120px;
@@ -1529,11 +1583,10 @@ export function generatePremiumProposalSlides(
       <h1 class="headline">זה הזמן ליצור</h1>
       <div class="accent-line"></div>
       <p class="subline">${data.activityDifferentiator || 'מוכנים לקחת את המותג לשלב הבא'}</p>
-      
-      <div class="logos-row">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo-display">` : ''}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -1612,11 +1665,6 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-deliverables">
     <div class="accent-shape corner-bottom-left"></div>
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <h1 class="h1">תוצרים</h1>
         
@@ -1640,6 +1688,10 @@ export function generatePremiumProposalSlides(
         ${data.deliverablesSummary ? `<p class="summary">${data.deliverablesSummary}</p>` : ''}
       </div>
     </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
+    </div>
   </div>
 </body>
 </html>
@@ -1647,7 +1699,117 @@ export function generatePremiumProposalSlides(
   }
 
   // ========================================
-  // SLIDE 10: METRICS & KPIs
+  // SLIDE 9.5: QUANTITIES SUMMARY (NEW)
+  // ========================================
+  const qs = data.quantitiesSummary
+  if (qs && qs.contentTypes?.length > 0) {
+    const grandTotal = qs.totalDeliverables || qs.contentTypes.reduce((sum, ct) => sum + (ct.totalQuantity || 0), 0)
+    const formulaText = qs.formula || `${qs.influencerCount} משפיענים × ${qs.contentTypes.length} סוגי תוכן × ${qs.campaignDurationMonths} חודשים = ${grandTotal} תוצרים`
+
+    slides.push(`
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  ${baseStyles}
+  <style>
+    .slide-quantities .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .slide-quantities .quantities-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 50px;
+      font-size: 24px;
+    }
+    .slide-quantities .quantities-table th {
+      background: var(--accent);
+      color: white;
+      padding: 20px 30px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 22px;
+    }
+    .slide-quantities .quantities-table td {
+      padding: 20px 30px;
+      text-align: center;
+      border-bottom: 1px solid var(--line);
+    }
+    .slide-quantities .quantities-table tr:nth-child(even) td {
+      background: var(--light);
+    }
+    .slide-quantities .total-row td {
+      background: ${adjustColor(primary, -10)} !important;
+      color: white;
+      font-weight: 800;
+      font-size: 28px;
+    }
+    .slide-quantities .formula-box {
+      text-align: center;
+      margin-top: 50px;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--accent);
+      padding: 30px;
+      background: var(--light);
+      border-radius: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="slide slide-quantities">
+    <div class="accent-shape corner-bottom-left"></div>
+    <div class="slide-content">
+      <div class="main-content">
+        <h1 class="h1">סיכום כמויות</h1>
+
+        <table class="quantities-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>סוג תוכן</th>
+              <th>לכל משפיען</th>
+              <th>משפיענים</th>
+              <th>חודשים</th>
+              <th>סה"כ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${qs.contentTypes.map((ct, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:600">${ct.type}</td>
+                <td class="ltr-nums">${ct.quantityPerInfluencer}</td>
+                <td class="ltr-nums">${qs.influencerCount}</td>
+                <td class="ltr-nums">${qs.campaignDurationMonths}</td>
+                <td class="ltr-nums" style="font-weight:700">${ct.totalQuantity || ct.quantityPerInfluencer * qs.influencerCount * qs.campaignDurationMonths}</td>
+              </tr>
+            `).join('')}
+            <tr class="total-row">
+              <td colspan="5">סה"כ תוצרים</td>
+              <td class="ltr-nums">${grandTotal}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="formula-box">${formulaText}</div>
+      </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
+    </div>
+  </div>
+</body>
+</html>
+`)
+  }
+
+  // ========================================
+  // SLIDE 10: METRICS & KPIs (Enhanced with CPE formula)
   // ========================================
   slides.push(`
 <!DOCTYPE html>
@@ -1712,11 +1874,6 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-metrics">
     <div class="accent-shape stripe"></div>
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <h1 class="h1">יעדים ומדדים</h1>
         
@@ -1739,10 +1896,22 @@ export function generatePremiumProposalSlides(
           </div>
         </div>
         
-        ${data.metricsExplanation ? `
+        ${data.budget && data.potentialEngagement ? `
+        <div style="text-align:center; margin-top: 40px; padding: 30px; background: var(--light); border-radius: 20px;">
+          <div style="font-size: 20px; color: var(--muted); margin-bottom: 10px;">נוסחת CPE</div>
+          <div style="font-size: 36px; font-weight: 700; color: var(--accent); direction: ltr; unicode-bidi: isolate;">
+            ${currency}${formatNumber(data.budget)} &divide; ${formatNumber(data.potentialEngagement)} = ${currency}${data.cpe || (data.budget / data.potentialEngagement).toFixed(2)}
+          </div>
+          <div style="font-size: 16px; color: var(--muted); margin-top: 8px;">Budget &divide; Engagement = CPE</div>
+        </div>
+        ` : data.metricsExplanation ? `
         <div class="explanation">${data.metricsExplanation}</div>
         ` : ''}
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -1825,11 +1994,6 @@ export function generatePremiumProposalSlides(
 <body>
   <div class="slide slide-inf-strategy">
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <div class="text-side">
           <h1 class="h1">אסטרטגיית משפיענים</h1>
@@ -1860,6 +2024,10 @@ export function generatePremiumProposalSlides(
         </div>
       </div>
     </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
+    </div>
   </div>
 </body>
 </html>
@@ -1879,10 +2047,23 @@ export function generatePremiumProposalSlides(
     avgStoryViews?: number | string
   }>) || []
   
+  // Filter: Only include influencers with 10K+ followers
+  const filteredScraped = scrapedInfluencers.filter(inf => !inf.followers || inf.followers >= 10000)
+  const filteredAI = aiRecommendations.filter(inf => {
+    // Parse followers string like "15K" or "150K" to number
+    const followersStr = inf.followers || ''
+    const match = followersStr.match(/(\d+(?:\.\d+)?)\s*([KMk])?/)
+    if (!match) return true // If can't parse, keep it
+    let num = parseFloat(match[1])
+    if (match[2]?.toUpperCase() === 'K') num *= 1000
+    if (match[2]?.toUpperCase() === 'M') num *= 1000000
+    return num >= 10000
+  })
+  
   // Merge: prefer scraped (has photos) over AI recommendations
   const mergedInfluencers = [
     // First add scraped influencers (they have real photos)
-    ...scrapedInfluencers.map(inf => ({
+    ...filteredScraped.map(inf => ({
       name: inf.name || inf.username || 'משפיען',
       handle: inf.username ? `@${inf.username}` : '',
       followers: inf.followers ? formatNumber(inf.followers) : '10K+',
@@ -1892,7 +2073,7 @@ export function generatePremiumProposalSlides(
       profilePicUrl: inf.profilePicUrl || '',
     })),
     // Then add AI recommendations - try to use profileUrl for scraping later
-    ...aiRecommendations.map(inf => ({
+    ...filteredAI.map(inf => ({
       name: inf.name,
       handle: inf.handle,
       followers: inf.followers,
@@ -1943,7 +2124,7 @@ export function generatePremiumProposalSlides(
     .slide-recommendations .influencer-avatar {
       width: 110px;
       height: 110px;
-      background: linear-gradient(135deg, var(--leaders-gray) 0%, var(--leaders-gray-light) 100%);
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 50%, var(--leaders-gray-light) 100%);
       border-radius: 50%;
       margin: 0 auto 20px;
       display: flex;
@@ -1955,11 +2136,21 @@ export function generatePremiumProposalSlides(
       overflow: hidden;
       border: 4px solid var(--accent);
       box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+      position: relative;
     }
     .slide-recommendations .influencer-avatar img {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .slide-recommendations .influencer-avatar .avatar-letter {
+      font-size: 40px;
+      font-weight: 700;
+      color: white;
+      text-transform: uppercase;
     }
     .slide-recommendations .influencer-name {
       font-size: 22px;
@@ -2011,11 +2202,6 @@ export function generatePremiumProposalSlides(
 <body>
   <div class="slide slide-recommendations">
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <h1 class="h1">משפיענים מומלצים</h1>
         
@@ -2023,9 +2209,10 @@ export function generatePremiumProposalSlides(
           ${mergedInfluencers.map(inf => `
           <div class="influencer-card">
             <div class="influencer-avatar">
+              <span class="avatar-letter">${inf.name.charAt(0).toUpperCase()}</span>
               ${inf.profilePicUrl 
-                ? `<img src="${inf.profilePicUrl}" alt="${inf.name}" onerror="this.style.display='none';this.parentElement.textContent='${inf.name.charAt(0)}';">`
-                : inf.name.charAt(0)
+                ? `<img src="${inf.profilePicUrl}" alt="${inf.name}" onerror="this.style.display='none';" loading="lazy">`
+                : ''
               }
             </div>
             <div class="influencer-name">${inf.name}</div>
@@ -2050,6 +2237,10 @@ export function generatePremiumProposalSlides(
         
         <div class="note">* רשימה ראשונית - הבחירה הסופית תיעשה בשיתוף הלקוח</div>
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -2122,11 +2313,6 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-manual-inf">
     <div class="accent-shape corner-top-right"></div>
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <h1 class="h1">משפיענים</h1>
         
@@ -2145,10 +2331,161 @@ export function generatePremiumProposalSlides(
         ${data.influencerNote ? `<div class="note">${data.influencerNote}</div>` : ''}
       </div>
     </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
+    </div>
   </div>
 </body>
 </html>
 `)
+  }
+
+  // ========================================
+  // SLIDE 13.5: ENHANCED INFLUENCERS (NEW - with full demographics)
+  // ========================================
+  const enhancedInf = data.enhancedInfluencers || []
+  if (enhancedInf.length > 0) {
+    // Split into batches of 3
+    for (let batch = 0; batch < enhancedInf.length; batch += 3) {
+      const batchInfluencers = enhancedInf.slice(batch, batch + 3)
+      const isFirst = batch === 0
+
+      slides.push(`
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  ${baseStyles}
+  <style>
+    .slide-enh-inf .main-content { flex: 1; }
+    .slide-enh-inf .inf-grid {
+      display: grid;
+      grid-template-columns: repeat(${Math.min(batchInfluencers.length, 3)}, 1fr);
+      gap: 30px;
+      margin-top: 40px;
+    }
+    .slide-enh-inf .inf-card {
+      background: linear-gradient(145deg, var(--white) 0%, var(--light) 100%);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 30px 25px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .slide-enh-inf .inf-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-light));
+    }
+    .slide-enh-inf .inf-avatar {
+      width: 90px; height: 90px; border-radius: 50%; margin: 0 auto 15px;
+      background: var(--accent); display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 32px; font-weight: 700; overflow: hidden;
+      border: 3px solid var(--accent); position: relative;
+    }
+    .slide-enh-inf .inf-avatar img {
+      width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0;
+    }
+    .slide-enh-inf .inf-name { font-size: 20px; font-weight: 700; color: var(--text); }
+    .slide-enh-inf .inf-handle { font-size: 14px; color: var(--accent); margin-top: 2px; }
+    .slide-enh-inf .inf-categories {
+      display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px;
+    }
+    .slide-enh-inf .inf-cat {
+      font-size: 11px; background: var(--light); color: var(--text-light);
+      padding: 3px 10px; border-radius: 12px;
+    }
+    .slide-enh-inf .inf-stats {
+      margin-top: 15px; background: var(--light); border-radius: 12px; padding: 12px;
+    }
+    .slide-enh-inf .inf-stat-row {
+      display: flex; justify-content: space-between; padding: 5px 0;
+      font-size: 14px; border-bottom: 1px solid var(--line);
+    }
+    .slide-enh-inf .inf-stat-row:last-child { border-bottom: none; }
+    .slide-enh-inf .inf-stat-label { color: var(--muted); }
+    .slide-enh-inf .inf-stat-val { font-weight: 600; color: var(--text); direction: ltr; unicode-bidi: isolate; }
+    .slide-enh-inf .inf-demo {
+      margin-top: 12px; padding: 10px; background: var(--white); border-radius: 10px;
+      border: 1px solid var(--line);
+    }
+    .slide-enh-inf .inf-demo-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .slide-enh-inf .inf-bar-container { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+    .slide-enh-inf .inf-bar { height: 100%; background: var(--accent); border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="slide slide-enh-inf">
+    <div class="slide-content">
+      <div class="main-content">
+        <h1 class="h1">${isFirst ? 'משפיענים מומלצים' : 'משפיענים מומלצים (המשך)'}</h1>
+
+        <div class="inf-grid">
+          ${batchInfluencers.map(inf => `
+          <div class="inf-card">
+            <div class="inf-avatar">
+              <span>${inf.name.charAt(0)}</span>
+              ${inf.profilePicUrl ? `<img src="${inf.profilePicUrl}" alt="${inf.name}" onerror="this.style.display='none'">` : ''}
+            </div>
+            <div class="inf-name">${inf.name}${inf.isVerified ? ' &#10003;' : ''}</div>
+            <div class="inf-handle">@${inf.username}</div>
+            ${inf.categories?.length ? `
+            <div class="inf-categories">
+              ${inf.categories.slice(0, 3).map(c => `<span class="inf-cat">${c}</span>`).join('')}
+            </div>` : ''}
+
+            <div class="inf-stats">
+              <div class="inf-stat-row">
+                <span class="inf-stat-label">עוקבים</span>
+                <span class="inf-stat-val">${formatNumber(inf.followers)}</span>
+              </div>
+              ${inf.avgStoryViews ? `
+              <div class="inf-stat-row">
+                <span class="inf-stat-label">צפיות סטורי</span>
+                <span class="inf-stat-val">${formatNumber(inf.avgStoryViews)}</span>
+              </div>` : ''}
+              ${inf.avgReelViews ? `
+              <div class="inf-stat-row">
+                <span class="inf-stat-label">צפיות ריל</span>
+                <span class="inf-stat-val">${formatNumber(inf.avgReelViews)}</span>
+              </div>` : ''}
+              <div class="inf-stat-row">
+                <span class="inf-stat-label">מעורבות</span>
+                <span class="inf-stat-val">${inf.engagementRate.toFixed(1)}%</span>
+              </div>
+              ${inf.israeliAudiencePercent ? `
+              <div class="inf-stat-row">
+                <span class="inf-stat-label">קהל ישראלי</span>
+                <span class="inf-stat-val">${inf.israeliAudiencePercent}%</span>
+              </div>` : ''}
+            </div>
+
+            ${inf.genderSplit ? `
+            <div class="inf-demo">
+              <div class="inf-demo-title">חלוקת מגדר</div>
+              <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                <span>נשים ${inf.genderSplit.female}%</span>
+                <span>גברים ${inf.genderSplit.male}%</span>
+              </div>
+              <div class="inf-bar-container">
+                <div class="inf-bar" style="width:${inf.genderSplit.female}%"></div>
+              </div>
+            </div>` : ''}
+          </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
+    </div>
+  </div>
+</body>
+</html>
+`)
+    }
   }
 
   // ========================================
@@ -2235,11 +2572,6 @@ export function generatePremiumProposalSlides(
 <body>
   <div class="slide slide-timeline">
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <h1 class="h1">לוח זמנים</h1>
         
@@ -2258,6 +2590,10 @@ export function generatePremiumProposalSlides(
           `).join('')}
         </div>
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -2320,11 +2656,6 @@ export function generatePremiumProposalSlides(
   <div class="slide slide-next-steps">
     <div class="accent-shape corner-bottom-left"></div>
     <div class="slide-content">
-      <div class="logo-header">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo">` : '<div></div>'}
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
-      
       <div class="main-content">
         <h1 class="h1">השלבים הבאים</h1>
         
@@ -2337,6 +2668,10 @@ export function generatePremiumProposalSlides(
           `).join('')}
         </div>
       </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>
@@ -2378,17 +2713,9 @@ export function generatePremiumProposalSlides(
       max-width: 1400px;
       text-wrap: balance;
     }
-    .slide-closing .logos-row {
-      display: flex;
-      gap: 80px;
-      align-items: center;
-    }
-    .slide-closing .logos-row img {
-      height: 60px;
+    .slide-closing .logo-footer img {
       filter: brightness(0) invert(1);
-    }
-    .slide-closing .client-logo-big {
-      height: 100px !important;
+      opacity: 0.7;
     }
     .slide-closing .accent-line {
       width: 200px;
@@ -2403,12 +2730,10 @@ export function generatePremiumProposalSlides(
     <div class="slide-content">
       <div class="accent-line"></div>
       <h1 class="closing-headline">${data.closingHeadline || "LET'S CREATE"}</h1>
-      
-      <div class="logos-row">
-        ${clientLogo ? `<img src="${clientLogo}" alt="Client" class="client-logo-big">` : ''}
-        <span style="color: rgba(255,255,255,0.3); font-size: 48px;">×</span>
-        <img src="${leadersLogo}" alt="Leaders">
-      </div>
+    </div>
+    <div class="logo-footer">
+      ${clientLogo ? `<img src="${clientLogo}" alt="Client">` : '<div></div>'}
+      <img src="${leadersLogo}" alt="Leaders">
     </div>
   </div>
 </body>

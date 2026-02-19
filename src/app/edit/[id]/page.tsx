@@ -8,7 +8,7 @@ import { Button, Card, Input } from '@/components/ui'
 import type { Document } from '@/types/database'
 
 // Tab definitions
-type TabId = 'general' | 'texts' | 'images' | 'colors' | 'influencers'
+type TabId = 'general' | 'texts' | 'strategy' | 'images' | 'colors' | 'influencers'
 
 interface Tab {
   id: TabId
@@ -19,6 +19,7 @@ interface Tab {
 const TABS: Tab[] = [
   { id: 'general', label: 'כללי', icon: '⚙️' },
   { id: 'texts', label: 'טקסטים', icon: '📝' },
+  { id: 'strategy', label: 'אסטרטגיה', icon: '🎯' },
   { id: 'images', label: 'תמונות', icon: '🖼️' },
   { id: 'colors', label: 'צבעים', icon: '🎨' },
   { id: 'influencers', label: 'משפיענים', icon: '👥' },
@@ -69,6 +70,16 @@ interface DocumentData {
   }
   _scraped?: {
     logoUrl?: string
+  }
+  strategyFlow?: {
+    steps: { label: string; description: string }[]
+  }
+  creativeSlides?: { title: string; description: string; conceptType?: string }[]
+  quantitiesSummary?: {
+    influencerCount: number
+    contentTypes: { type: string; quantityPerInfluencer: number; totalQuantity: number }[]
+    campaignDurationMonths: number
+    totalDeliverables: number
   }
   [key: string]: unknown
 }
@@ -272,6 +283,102 @@ export default function EditPage() {
       whyRelevant: '',
     })
     updateField('influencerResearch', { ...documentData.influencerResearch, recommendations })
+  }
+
+  // Strategy Flow helpers
+  const addStrategyStep = () => {
+    const steps = [...(documentData.strategyFlow?.steps || [])]
+    steps.push({ label: '', description: '' })
+    updateField('strategyFlow', { ...documentData.strategyFlow, steps })
+  }
+
+  const updateStrategyStep = (index: number, field: string, value: string) => {
+    const steps = [...(documentData.strategyFlow?.steps || [])]
+    steps[index] = { ...steps[index], [field]: value }
+    updateField('strategyFlow', { ...documentData.strategyFlow, steps })
+  }
+
+  const removeStrategyStep = (index: number) => {
+    const steps = [...(documentData.strategyFlow?.steps || [])]
+    steps.splice(index, 1)
+    updateField('strategyFlow', { ...documentData.strategyFlow, steps })
+  }
+
+  // Creative Slides helpers
+  const addCreativeSlide = () => {
+    const slides = [...(documentData.creativeSlides || [])]
+    slides.push({ title: '', description: '' })
+    updateField('creativeSlides', slides)
+  }
+
+  const updateCreativeSlide = (index: number, field: string, value: string) => {
+    const slides = [...(documentData.creativeSlides || [])]
+    slides[index] = { ...slides[index], [field]: value }
+    updateField('creativeSlides', slides)
+  }
+
+  const removeCreativeSlide = (index: number) => {
+    const slides = [...(documentData.creativeSlides || [])]
+    slides.splice(index, 1)
+    updateField('creativeSlides', slides)
+  }
+
+  // Quantities Summary helpers
+  const updateQuantitiesField = (field: string, value: number) => {
+    const current = documentData.quantitiesSummary || {
+      influencerCount: 0,
+      contentTypes: [],
+      campaignDurationMonths: 0,
+      totalDeliverables: 0,
+    }
+    const updated = { ...current, [field]: value }
+    // Recalculate totalDeliverables
+    updated.totalDeliverables = (updated.contentTypes || []).reduce(
+      (sum: number, ct: { totalQuantity: number }) => sum + (ct.totalQuantity || 0), 0
+    )
+    updateField('quantitiesSummary', updated)
+  }
+
+  const addContentType = () => {
+    const current = documentData.quantitiesSummary || {
+      influencerCount: 0,
+      contentTypes: [],
+      campaignDurationMonths: 0,
+      totalDeliverables: 0,
+    }
+    const contentTypes = [...(current.contentTypes || [])]
+    contentTypes.push({ type: '', quantityPerInfluencer: 0, totalQuantity: 0 })
+    updateField('quantitiesSummary', { ...current, contentTypes })
+  }
+
+  const updateContentType = (index: number, field: string, value: string | number) => {
+    const current = documentData.quantitiesSummary || {
+      influencerCount: 0,
+      contentTypes: [],
+      campaignDurationMonths: 0,
+      totalDeliverables: 0,
+    }
+    const contentTypes = [...(current.contentTypes || [])]
+    contentTypes[index] = { ...contentTypes[index], [field]: value }
+    // Auto-calculate totalQuantity
+    const influencerCount = current.influencerCount || 0
+    contentTypes[index].totalQuantity = contentTypes[index].quantityPerInfluencer * influencerCount
+    // Recalculate totalDeliverables
+    const totalDeliverables = contentTypes.reduce((sum, ct) => sum + (ct.totalQuantity || 0), 0)
+    updateField('quantitiesSummary', { ...current, contentTypes, totalDeliverables })
+  }
+
+  const removeContentType = (index: number) => {
+    const current = documentData.quantitiesSummary || {
+      influencerCount: 0,
+      contentTypes: [],
+      campaignDurationMonths: 0,
+      totalDeliverables: 0,
+    }
+    const contentTypes = [...(current.contentTypes || [])]
+    contentTypes.splice(index, 1)
+    const totalDeliverables = contentTypes.reduce((sum, ct) => sum + (ct.totalQuantity || 0), 0)
+    updateField('quantitiesSummary', { ...current, contentTypes, totalDeliverables })
   }
 
   if (isLoading) {
@@ -529,6 +636,236 @@ export default function EditPage() {
                 </div>
               )}
 
+              {/* Strategy Tab */}
+              {activeTab === 'strategy' && (
+                <div className="space-y-8">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6">אסטרטגיה</h2>
+
+                  {/* Strategy Flow Steps */}
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">שלבי האסטרטגיה</h3>
+                        <p className="text-sm text-gray-500">הגדירו את שלבי התהליך האסטרטגי</p>
+                      </div>
+                      <Button variant="outline" onClick={addStrategyStep}>
+                        + הוסף שלב
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      {(documentData.strategyFlow?.steps || []).map((step, index) => (
+                        <div key={index} className="border rounded-xl p-4 bg-gray-50">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold flex-shrink-0 mt-1">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1 space-y-3">
+                              <div>
+                                <label className="text-xs text-gray-500">כותרת השלב</label>
+                                <Input
+                                  value={step.label || ''}
+                                  onChange={e => updateStrategyStep(index, 'label', e.target.value)}
+                                  placeholder={`שלב ${index + 1}`}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500">תיאור</label>
+                                <textarea
+                                  value={step.description || ''}
+                                  onChange={e => updateStrategyStep(index, 'description', e.target.value)}
+                                  placeholder="תיאור השלב..."
+                                  className="w-full px-3 py-2 border rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  rows={2}
+                                />
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeStrategyStep(index)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {(documentData.strategyFlow?.steps || []).length === 0 && (
+                        <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-xl">
+                          <p className="text-3xl mb-2">🎯</p>
+                          <p>אין שלבי אסטרטגיה עדיין</p>
+                          <Button variant="outline" onClick={addStrategyStep} className="mt-3">
+                            + הוסף שלב ראשון
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <hr className="border-gray-200" />
+
+                  {/* Creative Slides */}
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">שקפי קריאייטיב</h3>
+                        <p className="text-sm text-gray-500">רעיונות קריאייטיביים לקמפיין</p>
+                      </div>
+                      <Button variant="outline" onClick={addCreativeSlide}>
+                        + הוסף שקף
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      {(documentData.creativeSlides || []).map((slide, index) => (
+                        <div key={index} className="border rounded-xl p-4 bg-gray-50">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-1">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1 space-y-3">
+                              <div>
+                                <label className="text-xs text-gray-500">כותרת</label>
+                                <Input
+                                  value={slide.title || ''}
+                                  onChange={e => updateCreativeSlide(index, 'title', e.target.value)}
+                                  placeholder={`שקף קריאייטיב ${index + 1}`}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500">תיאור</label>
+                                <textarea
+                                  value={slide.description || ''}
+                                  onChange={e => updateCreativeSlide(index, 'description', e.target.value)}
+                                  placeholder="תיאור הרעיון הקריאייטיבי..."
+                                  className="w-full px-3 py-2 border rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  rows={3}
+                                />
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeCreativeSlide(index)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {(documentData.creativeSlides || []).length === 0 && (
+                        <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-xl">
+                          <p className="text-3xl mb-2">💡</p>
+                          <p>אין שקפי קריאייטיב עדיין</p>
+                          <Button variant="outline" onClick={addCreativeSlide} className="mt-3">
+                            + הוסף שקף ראשון
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <hr className="border-gray-200" />
+
+                  {/* Quantities Summary */}
+                  <div>
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800">סיכום כמויות</h3>
+                      <p className="text-sm text-gray-500">כמויות משפיענים, תכנים ומשך הקמפיין</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">מספר משפיענים</label>
+                        <Input
+                          type="number"
+                          value={documentData.quantitiesSummary?.influencerCount || ''}
+                          onChange={e => updateQuantitiesField('influencerCount', parseInt(e.target.value) || 0)}
+                          placeholder="0"
+                          min={0}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">משך הקמפיין (חודשים)</label>
+                        <Input
+                          type="number"
+                          value={documentData.quantitiesSummary?.campaignDurationMonths || ''}
+                          onChange={e => updateQuantitiesField('campaignDurationMonths', parseInt(e.target.value) || 0)}
+                          placeholder="0"
+                          min={0}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Content Types */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="text-sm font-medium text-gray-700">סוגי תוכן</label>
+                        <Button variant="ghost" size="sm" onClick={addContentType}>
+                          + הוסף סוג תוכן
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        {(documentData.quantitiesSummary?.contentTypes || []).map((ct, index) => (
+                          <div key={index} className="flex items-center gap-3 bg-gray-50 border rounded-lg p-3">
+                            <div className="flex-1">
+                              <label className="text-xs text-gray-500">סוג</label>
+                              <Input
+                                value={ct.type || ''}
+                                onChange={e => updateContentType(index, 'type', e.target.value)}
+                                placeholder="סטורי / רילס / פוסט..."
+                              />
+                            </div>
+                            <div className="w-36">
+                              <label className="text-xs text-gray-500">כמות למשפיען</label>
+                              <Input
+                                type="number"
+                                value={ct.quantityPerInfluencer || ''}
+                                onChange={e => updateContentType(index, 'quantityPerInfluencer', parseInt(e.target.value) || 0)}
+                                placeholder="0"
+                                min={0}
+                              />
+                            </div>
+                            <div className="w-28">
+                              <label className="text-xs text-gray-500">סה&quot;כ</label>
+                              <div className="px-3 py-2 bg-gray-100 border rounded-lg text-sm text-gray-700 font-medium text-center">
+                                {ct.totalQuantity || 0}
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeContentType(index)}
+                              className="text-red-500 hover:text-red-700 mt-4"
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      {(documentData.quantitiesSummary?.contentTypes || []).length === 0 && (
+                        <div className="text-center py-6 text-gray-400 border-2 border-dashed rounded-xl">
+                          <p>אין סוגי תוכן עדיין</p>
+                          <Button variant="ghost" size="sm" onClick={addContentType} className="mt-2">
+                            + הוסף סוג תוכן
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Total Deliverables */}
+                    <div className="mt-4 p-4 bg-gradient-to-l from-blue-50 to-purple-50 rounded-xl border border-blue-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">סה&quot;כ תוצרים</span>
+                        <span className="text-2xl font-bold text-gray-900">
+                          {documentData.quantitiesSummary?.totalDeliverables || 0}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Images Tab */}
               {activeTab === 'images' && (
                 <div className="space-y-6">
@@ -739,4 +1076,5 @@ export default function EditPage() {
     </div>
   )
 }
+
 

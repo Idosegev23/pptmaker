@@ -343,7 +343,7 @@ function calculateInfluencerTiers(
   budget: number,
   totalCount: number
 ): { minFollowers: number; maxFollowers: number; count: number }[] {
-  // Budget allocation strategy
+  // Budget allocation strategy - minimum 10K followers for all tiers
   if (budget >= 100000) {
     return [
       { minFollowers: 100000, maxFollowers: 500000, count: Math.ceil(totalCount * 0.3) },
@@ -354,12 +354,13 @@ function calculateInfluencerTiers(
     return [
       { minFollowers: 50000, maxFollowers: 200000, count: Math.ceil(totalCount * 0.2) },
       { minFollowers: 20000, maxFollowers: 50000, count: Math.ceil(totalCount * 0.5) },
-      { minFollowers: 5000, maxFollowers: 20000, count: Math.ceil(totalCount * 0.3) },
+      { minFollowers: 10000, maxFollowers: 20000, count: Math.ceil(totalCount * 0.3) },
     ]
   } else {
+    // Even for low budgets, only show influencers with 10K+ followers
     return [
-      { minFollowers: 10000, maxFollowers: 50000, count: Math.ceil(totalCount * 0.4) },
-      { minFollowers: 3000, maxFollowers: 10000, count: Math.ceil(totalCount * 0.6) },
+      { minFollowers: 30000, maxFollowers: 100000, count: Math.ceil(totalCount * 0.3) },
+      { minFollowers: 10000, maxFollowers: 30000, count: Math.ceil(totalCount * 0.7) },
     ]
   }
 }

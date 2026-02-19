@@ -167,3 +167,4 @@ function getDefaultStrategy(brandResearch: BrandResearch): ImageStrategy {
 
 export { getDefaultStrategy }
 
+

@@ -1,0 +1,172 @@
+// Types for the proposal wizard flow
+
+export type WizardStepId =
+  | 'brief'
+  | 'goals'
+  | 'target_audience'
+  | 'key_insight'
+  | 'strategy'
+  | 'creative'
+  | 'deliverables'
+  | 'quantities'
+  | 'media_targets'
+  | 'influencers'
+
+export type StepStatus = 'pending' | 'active' | 'completed' | 'skipped'
+
+export interface WizardStepMeta {
+  id: WizardStepId
+  label: string
+  labelShort: string
+  description: string
+  required: boolean
+  order: number
+}
+
+// Step data types
+
+export interface BriefStepData {
+  brandName: string
+  brandBrief: string
+  brandPainPoints: string[]
+  brandObjective: string
+}
+
+export interface GoalsStepData {
+  goals: { title: string; description: string }[]
+  customGoals: string[]
+}
+
+export interface TargetAudienceStepData {
+  targetGender: string
+  targetAgeRange: string
+  targetDescription: string
+  targetBehavior: string
+  targetInsights: string[]
+  targetSecondary?: {
+    gender: string
+    ageRange: string
+    description: string
+  }
+}
+
+export interface KeyInsightStepData {
+  keyInsight: string
+  insightSource: string
+  insightData?: string
+}
+
+export interface StrategyStepData {
+  strategyHeadline: string
+  strategyDescription?: string
+  strategyPillars: { title: string; description: string }[]
+  strategyFlow?: {
+    steps: { label: string; description: string; icon?: string }[]
+  }
+}
+
+export interface CreativeStepData {
+  activityTitle: string
+  activityConcept: string
+  activityDescription: string
+  activityApproach: { title: string; description: string }[]
+  activityDifferentiator?: string
+  referenceImages: { url: string; caption?: string }[]
+}
+
+export interface DeliverablesStepData {
+  deliverables: {
+    type: string
+    quantity: number
+    description: string
+    purpose: string
+  }[]
+  deliverablesSummary?: string
+  referenceImages: { url: string; caption?: string }[]
+}
+
+export interface QuantitiesStepData {
+  influencerCount: number
+  contentTypes: {
+    type: string
+    quantityPerInfluencer: number
+    totalQuantity: number
+  }[]
+  campaignDurationMonths: number
+  totalDeliverables: number
+  formula?: string
+}
+
+export interface MediaTargetsStepData {
+  budget: number
+  currency: string
+  potentialReach: number
+  potentialEngagement: number
+  cpe: number
+  cpm?: number
+  estimatedImpressions?: number
+  metricsExplanation?: string
+}
+
+export interface InfluencerProfile {
+  name: string
+  username: string
+  profileUrl: string
+  profilePicUrl: string
+  categories: string[]
+  followers: number
+  avgStoryViews?: number
+  avgReelViews?: number
+  engagementRate: number
+  israeliAudiencePercent?: number
+  genderSplit?: { male: number; female: number }
+  ageSplit?: { range: string; percent: number }[]
+  bio?: string
+  isVerified?: boolean
+}
+
+export interface InfluencersStepData {
+  influencers: InfluencerProfile[]
+  influencerStrategy?: string
+  influencerCriteria?: string[]
+  influencerNote?: string
+}
+
+// Map step IDs to their data types
+export interface WizardStepDataMap {
+  brief: BriefStepData
+  goals: GoalsStepData
+  target_audience: TargetAudienceStepData
+  key_insight: KeyInsightStepData
+  strategy: StrategyStepData
+  creative: CreativeStepData
+  deliverables: DeliverablesStepData
+  quantities: QuantitiesStepData
+  media_targets: MediaTargetsStepData
+  influencers: InfluencersStepData
+}
+
+// Full wizard state (persisted to document.data._wizardState)
+export interface WizardState {
+  documentId: string | null
+  currentStep: WizardStepId
+  stepStatuses: Record<WizardStepId, StepStatus>
+  stepData: Partial<WizardStepDataMap>
+  extractedData: Partial<WizardStepDataMap>
+  isDirty: boolean
+  lastSavedAt: string | null
+}
+
+// Wizard reducer action types
+export type WizardAction =
+  | { type: 'GO_TO_STEP'; step: WizardStepId }
+  | { type: 'NEXT_STEP' }
+  | { type: 'PREV_STEP' }
+  | { type: 'SKIP_STEP' }
+  | { type: 'UPDATE_STEP_DATA'; step: WizardStepId; data: Partial<WizardStepDataMap[WizardStepId]> }
+  | { type: 'MARK_STEP_COMPLETE'; step: WizardStepId }
+  | { type: 'LOAD_STATE'; state: WizardState }
+  | { type: 'MARK_SAVED'; timestamp: string }
+  | { type: 'SET_DOCUMENT_ID'; id: string }
+  | { type: 'SET_EXTRACTED_DATA'; data: Partial<WizardStepDataMap> }
+  | { type: 'MARK_DIRTY' }

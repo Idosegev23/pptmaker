@@ -100,6 +100,27 @@ export interface ProposalContent {
   closingStatement: string
   nextSteps: string[]
   
+  // Strategy Flow (Wizard flow - optional)
+  strategyFlow?: {
+    steps: { label: string; description: string }[]
+  }
+
+  // Creative Slides (Wizard flow - optional)
+  creativeSlides?: {
+    title: string
+    description: string
+    conceptType?: string
+  }[]
+
+  // Quantities Summary (Wizard flow - optional)
+  quantitiesSummary?: {
+    influencerCount: number
+    contentTypes: { type: string; quantityPerInfluencer: number; totalQuantity: number }[]
+    campaignDurationMonths: number
+    totalDeliverables: number
+    formula?: string
+  }
+
   // Metadata
   toneUsed: string
   confidence: 'high' | 'medium' | 'low'
@@ -121,6 +142,11 @@ const PROPOSAL_SYSTEM_PROMPT = `אתה מנהל אסטרטגיה בכיר בסו
 - אסטרטגיית פעילות עם "רעיון גדול"
 - תוצרים עם הסבר למה כל אחד חשוב
 - מספרים עם הסבר לוגי
+
+## סעיפים אופציונליים (הוסף אותם כשיש מספיק מידע):
+1. **אסטרטגיה כ-flow chart** - אם יש לך מספיק מידע, צור שלבי אסטרטגיה (3-5 שלבים) כ-flow chart בשדה strategyFlow. כל שלב עם label קצר ו-description ברור.
+2. **כיווני קריאייטיב** - צור 2-3 כיווני קריאייטיב עם כותרת ותיאור לכל אחד בשדה creativeSlides. ציין את סוג הקונספט (וידאו, סטוריז, פוסט וכו').
+3. **פירוט כמויות** - חשב כמויות תוצרים: מספר משפיענים × כמות לכל אחד × חודשים בשדה quantitiesSummary. כלול נוסחה ברורה.
 
 ## כלל זהב:
 הלקוח צריך לקרוא את ההצעה ולהגיד "וואו, הם באמת מבינים אותי".
@@ -245,6 +271,68 @@ const proposalSchema = {
     contentGuidelines: { type: 'array', items: { type: 'string' } },
     closingStatement: { type: 'string' },
     nextSteps: { type: 'array', items: { type: 'string' } },
+    // NEW: Strategy Flow (wizard flow - optional)
+    strategyFlow: {
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', description: 'שם השלב - קצר וברור' },
+              description: { type: 'string', description: 'הסבר קצר על השלב' }
+            },
+            required: ['label', 'description'],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ['steps'],
+      additionalProperties: false,
+      description: 'שלבי אסטרטגיה כ-flow chart - 3-5 שלבים'
+    },
+    // NEW: Creative Slides (wizard flow - optional)
+    creativeSlides: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'כותרת כיוון הקריאייטיב' },
+          description: { type: 'string', description: 'תיאור מפורט של כיוון הקריאייטיב' },
+          conceptType: { type: 'string', description: 'סוג הקונספט - לדוגמה: וידאו, סטוריז, פוסט' }
+        },
+        required: ['title', 'description'],
+        additionalProperties: false
+      },
+      description: '2-3 כיווני קריאייטיב עם כותרת ותיאור'
+    },
+    // NEW: Quantities Summary (wizard flow - optional)
+    quantitiesSummary: {
+      type: 'object',
+      properties: {
+        influencerCount: { type: 'number', description: 'מספר המשפיענים' },
+        contentTypes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', description: 'סוג התוכן - רילז, סטוריז, פוסט וכו' },
+              quantityPerInfluencer: { type: 'number', description: 'כמות לכל משפיען' },
+              totalQuantity: { type: 'number', description: 'כמות כוללת' }
+            },
+            required: ['type', 'quantityPerInfluencer', 'totalQuantity'],
+            additionalProperties: false
+          }
+        },
+        campaignDurationMonths: { type: 'number', description: 'משך הקמפיין בחודשים' },
+        totalDeliverables: { type: 'number', description: 'סך כל התוצרים' },
+        formula: { type: 'string', description: 'נוסחת החישוב - לדוגמה: 5 משפיענים × 3 רילז × 2 חודשים = 30' }
+      },
+      required: ['influencerCount', 'contentTypes', 'campaignDurationMonths', 'totalDeliverables'],
+      additionalProperties: false,
+      description: 'פירוט כמויות תוצרים'
+    },
     toneUsed: { type: 'string' },
     confidence: { type: 'string', enum: ['high', 'medium', 'low'] }
   },
@@ -299,6 +387,11 @@ ${brandColors ? JSON.stringify(brandColors, null, 2) : 'לא זוהו'}
 3. התאם את הטון לאופי המותג
 4. המספרים צריכים להיות הגיוניים ביחס לתקציב
 5. CPE סביר: 1.5-5 ש"ח, CPM סביר: 10-30 ש"ח
+
+## שדות אופציונליים (הוסף אם יש מספיק מידע):
+6. strategyFlow - צור 3-5 שלבי אסטרטגיה עם label ו-description לכל שלב. לדוגמה: מחקר → תכנון → הפקה → הפצה → מדידה
+7. creativeSlides - צור 2-3 כיווני קריאייטיב, כל אחד עם title, description, ו-conceptType (סוג התוכן)
+8. quantitiesSummary - חשב כמויות על בסיס התקציב: כמה משפיענים, כמה תוצרים לכל אחד, כמה חודשים. כלול formula עם הנוסחה
 `
 
   try {
@@ -504,7 +597,33 @@ function getDefaultContent(
     
     closingStatement: "LET'S GET STARTED",
     nextSteps: ['אישור הצעה', 'בחירת משפיענים', 'תחילת עבודה'],
-    
+
+    // New wizard flow fields (defaults)
+    strategyFlow: {
+      steps: [
+        { label: 'מחקר', description: 'ניתוח המותג, הקהל והמתחרים' },
+        { label: 'תכנון', description: 'בחירת משפיענים והגדרת כיווני תוכן' },
+        { label: 'הפקה', description: 'יצירת תוכן בשיתוף המשפיענים' },
+        { label: 'הפצה', description: 'פרסום התוכן בפלטפורמות הנבחרות' },
+        { label: 'מדידה', description: 'ניתוח תוצאות ואופטימיזציה' },
+      ]
+    },
+    creativeSlides: [
+      { title: 'תוכן אותנטי יומיומי', description: 'משפיענים משלבים את המוצר בשגרה האמיתית שלהם, בצורה טבעית ולא מאולצת', conceptType: 'סטוריז + רילז' },
+      { title: 'סיפור חוויה אישית', description: 'כל משפיען מספר את הסיפור האישי שלו עם המותג - למה הוא בחר, מה השתנה', conceptType: 'רילז' },
+      { title: 'אתגר קהילתי', description: 'יצירת אתגר או טרנד שמעודד את העוקבים להשתתף וליצור תוכן משלהם', conceptType: 'רילז + פוסט' },
+    ],
+    quantitiesSummary: {
+      influencerCount: 4,
+      contentTypes: [
+        { type: 'רילז', quantityPerInfluencer: 2, totalQuantity: 8 },
+        { type: 'סטוריז', quantityPerInfluencer: 3, totalQuantity: 12 },
+      ],
+      campaignDurationMonths: 1,
+      totalDeliverables: 20,
+      formula: '4 משפיענים × (2 רילז + 3 סטוריז) × 1 חודש = 20 תוצרים',
+    },
+
     toneUsed: brandResearch.toneOfVoice || 'מקצועי',
     confidence: 'low',
   }

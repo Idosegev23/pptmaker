@@ -2,7 +2,7 @@
 const nextConfig = {
   // Enable experimental features for server components
   experimental: {
-    serverComponentsExternalPackages: ['puppeteer-core', '@sparticuz/chromium', 'pdf-lib'],
+    serverComponentsExternalPackages: ['puppeteer-core', '@sparticuz/chromium', 'pdf-lib', 'pdf-parse'],
   },
   
   // Image optimization

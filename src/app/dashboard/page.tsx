@@ -57,7 +57,30 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Auto Proposal - Featured */}
+      {/* Smart Proposal from Documents - Featured */}
+      <Link href="/create-proposal" className="group block mb-4">
+        <Card className="p-6 bg-gradient-to-l from-indigo-900 to-purple-800 border-0 text-white hover:from-indigo-800 hover:to-purple-700 transition-all duration-300 group-hover:-translate-y-1">
+          <div className="flex items-center gap-6">
+            <div className="p-4 rounded-2xl bg-white/10">
+              <DocUploadIcon className="w-10 h-10" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h3 className="text-2xl font-bold">הצעה מבוססת מסמכים</h3>
+                <span className="px-2 py-0.5 text-xs font-medium bg-white/20 rounded-full">חדש</span>
+              </div>
+              <p className="text-white/70 text-sm">
+                העלה בריף לקוח ומסמך התנעה, המערכת תחלץ את המידע ותבנה הצעה שלב אחר שלב עם wizard חכם
+              </p>
+            </div>
+            <span className="text-white/80 font-medium group-hover:text-white">
+              התחל &larr;
+            </span>
+          </div>
+        </Card>
+      </Link>
+
+      {/* Auto Proposal - Secondary */}
       <Link href="/create-auto" className="group block mb-8">
         <Card className="p-6 bg-gradient-to-l from-gray-900 to-gray-800 border-0 text-white hover:from-gray-800 hover:to-gray-700 transition-all duration-300 group-hover:-translate-y-1">
           <div className="flex items-center gap-6">
@@ -208,6 +231,14 @@ function DocumentEmptyIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>
+  )
+}
+
+function DocUploadIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
     </svg>
   )
 }
