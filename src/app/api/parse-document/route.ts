@@ -94,6 +94,16 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[Parse Document] Error:', error)
     const message = error instanceof Error ? error.message : 'Failed to parse document'
-    return NextResponse.json({ error: message }, { status: 500 })
+
+    // Return 400 for known/expected errors (not server failures)
+    const isExpectedError =
+      message.includes('Service Account not configured') ||
+      message.includes('Invalid Google Docs URL') ||
+      message.includes('Unsupported file format') ||
+      message.includes('File too large') ||
+      message.includes('אין גישה')
+    const status = isExpectedError ? 400 : 500
+
+    return NextResponse.json({ error: message }, { status })
   }
 }

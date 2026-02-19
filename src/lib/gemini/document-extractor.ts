@@ -25,7 +25,13 @@ export async function extractFromDocuments(
 
   const prompt = buildExtractionPrompt(clientBriefText, kickoffText)
 
+  // Validate inputs
+  if (!clientBriefText || clientBriefText.trim().length < 20) {
+    throw new Error('טקסט הבריף קצר מדי לניתוח. ודא שהמסמך נקרא בהצלחה.')
+  }
+
   try {
+    console.log(`[Document Extractor] Calling ${MODEL}...`)
     const response = await ai.models.generateContent({
       model: MODEL,
       contents: prompt,
@@ -38,16 +44,26 @@ export async function extractFromDocuments(
     const text = response.text || ''
     console.log(`[Document Extractor] Response: ${text.length} chars`)
 
+    if (!text) {
+      throw new Error('Gemini returned empty response')
+    }
+
     const extracted = parseGeminiJson<ExtractedBriefData>(text)
 
     // Validate and set defaults
     return validateAndNormalize(extracted, !!kickoffText)
   } catch (error) {
-    console.error('[Document Extractor] Extraction failed:', error)
+    const errMsg = error instanceof Error ? error.message : String(error)
+    console.error('[Document Extractor] Extraction failed:', errMsg)
 
-    // Try with less strict settings
+    // Don't retry if input validation failed
+    if (errMsg.includes('קצר מדי')) {
+      throw error
+    }
+
+    // Try with less strict settings (no JSON mime type constraint)
     try {
-      console.log('[Document Extractor] Retrying with fallback settings...')
+      console.log('[Document Extractor] Retrying without responseMimeType constraint...')
       const response = await ai.models.generateContent({
         model: MODEL,
         contents: prompt,
@@ -57,11 +73,18 @@ export async function extractFromDocuments(
       })
 
       const text = response.text || ''
+      console.log(`[Document Extractor] Retry response: ${text.length} chars`)
+
+      if (!text) {
+        throw new Error('Gemini returned empty response on retry')
+      }
+
       const extracted = parseGeminiJson<ExtractedBriefData>(text)
       return validateAndNormalize(extracted, !!kickoffText)
     } catch (retryError) {
-      console.error('[Document Extractor] Retry also failed:', retryError)
-      throw new Error('Failed to extract data from documents. Please check file quality and try again.')
+      const retryMsg = retryError instanceof Error ? retryError.message : String(retryError)
+      console.error('[Document Extractor] Retry also failed:', retryMsg)
+      throw new Error(`שגיאה בחילוץ מידע מהמסמכים: ${retryMsg}`)
     }
   }
 }

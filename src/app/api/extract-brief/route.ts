@@ -33,6 +33,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[Extract Brief] Error:', error)
     const message = error instanceof Error ? error.message : 'Failed to extract data from documents'
-    return NextResponse.json({ error: message }, { status: 500 })
+
+    // Return 400 for input validation errors, 500 for API/server errors
+    const isInputError = message.includes('קצר מדי') || message.includes('Missing')
+    const status = isInputError ? 400 : 500
+
+    return NextResponse.json({ error: message }, { status })
   }
 }

@@ -18,16 +18,20 @@ export default function CreateProposalPage() {
   const briefInputRef = useRef<HTMLInputElement>(null)
   const kickoffInputRef = useRef<HTMLInputElement>(null)
 
+  // Store actual File objects alongside metadata
   const [briefDoc, setBriefDoc] = useState<UploadedDocument | null>(null)
+  const [briefFile, setBriefFile] = useState<File | null>(null)
   const [kickoffDoc, setKickoffDoc] = useState<UploadedDocument | null>(null)
+  const [kickoffFile, setKickoffFile] = useState<File | null>(null)
   const [googleDocsUrl, setGoogleDocsUrl] = useState('')
   const [googleDocsType, setGoogleDocsType] = useState<'client_brief' | 'kickoff'>('client_brief')
   const [stage, setStage] = useState<ProcessingStage>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   const [progress, setProgress] = useState('')
 
   const handleFileSelect = useCallback(
-    async (file: File, docType: 'client_brief' | 'kickoff') => {
+    (file: File, docType: 'client_brief' | 'kickoff') => {
       if (file.size > MAX_FILE_SIZE) {
         setError('הקובץ גדול מדי. מקסימום 20MB.')
         return
@@ -43,8 +47,10 @@ export default function CreateProposalPage() {
 
       if (docType === 'client_brief') {
         setBriefDoc(doc)
+        setBriefFile(file)
       } else {
         setKickoffDoc(doc)
+        setKickoffFile(file)
       }
       setError(null)
     },
@@ -77,14 +83,16 @@ export default function CreateProposalPage() {
 
     if (googleDocsType === 'client_brief') {
       setBriefDoc(doc)
+      setBriefFile(null) // Clear file since this is a URL
     } else {
       setKickoffDoc(doc)
+      setKickoffFile(null)
     }
     setGoogleDocsUrl('')
     setError(null)
   }, [googleDocsUrl, googleDocsType])
 
-  const parseFile = async (file: File, docType: string): Promise<string> => {
+  const parseFileUpload = async (file: File, docType: string): Promise<string> => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('docType', docType)
@@ -96,7 +104,7 @@ export default function CreateProposalPage() {
     return data.parsedText
   }
 
-  const parseGoogleDoc = async (url: string, docType: string): Promise<string> => {
+  const parseGoogleDocUrl = async (url: string, docType: string): Promise<string> => {
     const res = await fetch('/api/parse-document', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -116,6 +124,7 @@ export default function CreateProposalPage() {
 
     setStage('parsing')
     setError(null)
+    setWarning(null)
 
     try {
       // Parse documents
@@ -123,32 +132,31 @@ export default function CreateProposalPage() {
       let briefText = ''
       let kickoffText = ''
 
-      // Parse brief
+      // Parse brief (required)
       if (briefDoc.format === 'google_docs' && briefDoc.googleDocsUrl) {
-        briefText = await parseGoogleDoc(briefDoc.googleDocsUrl, 'client_brief')
-      } else {
-        const briefInput = briefInputRef.current
-        const briefFile = briefInput?.files?.[0]
-        if (briefFile) {
-          briefText = await parseFile(briefFile, 'client_brief')
-        }
-      }
-
-      // Parse kickoff (if exists)
-      if (kickoffDoc) {
-        if (kickoffDoc.format === 'google_docs' && kickoffDoc.googleDocsUrl) {
-          kickoffText = await parseGoogleDoc(kickoffDoc.googleDocsUrl, 'kickoff')
-        } else {
-          const kickoffInput = kickoffInputRef.current
-          const kickoffFile = kickoffInput?.files?.[0]
-          if (kickoffFile) {
-            kickoffText = await parseFile(kickoffFile, 'kickoff')
-          }
-        }
+        briefText = await parseGoogleDocUrl(briefDoc.googleDocsUrl, 'client_brief')
+      } else if (briefFile) {
+        briefText = await parseFileUpload(briefFile, 'client_brief')
       }
 
       if (!briefText) {
-        throw new Error('לא הצלחנו לחלץ טקסט מהבריף. נסה פורמט אחר.')
+        throw new Error('לא הצלחנו לחלץ טקסט מהבריף. נסה לגרור את הקובץ מחדש או לבחור פורמט אחר.')
+      }
+
+      // Parse kickoff (optional - failure should not block the flow)
+      if (kickoffDoc) {
+        try {
+          if (kickoffDoc.format === 'google_docs' && kickoffDoc.googleDocsUrl) {
+            kickoffText = await parseGoogleDocUrl(kickoffDoc.googleDocsUrl, 'kickoff')
+          } else if (kickoffFile) {
+            kickoffText = await parseFileUpload(kickoffFile, 'kickoff')
+          }
+        } catch (kickoffErr) {
+          console.warn('[Create Proposal] Kickoff parsing failed, continuing without it:', kickoffErr)
+          setWarning(
+            `מסמך ההתנעה לא נקרא בהצלחה (${kickoffErr instanceof Error ? kickoffErr.message : 'שגיאה'}). ממשיכים עם הבריף בלבד.`
+          )
+        }
       }
 
       // Extract structured data
@@ -158,11 +166,11 @@ export default function CreateProposalPage() {
       const extractRes = await fetch('/api/extract-brief', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientBriefText: briefText, kickoffText }),
+        body: JSON.stringify({ clientBriefText: briefText, kickoffText: kickoffText || undefined }),
       })
       const extractData = await extractRes.json()
 
-      if (!extractRes.ok) throw new Error(extractData.error || 'Failed to extract data')
+      if (!extractRes.ok) throw new Error(extractData.error || 'שגיאה בחילוץ מידע מהמסמכים')
 
       // Create document in DB
       setStage('creating')
@@ -219,7 +227,7 @@ export default function CreateProposalPage() {
   const isProcessing = stage !== 'idle' && stage !== 'error'
 
   return (
-    <div className="min-h-screen bg-background">
+    <div dir="rtl" className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -263,6 +271,7 @@ export default function CreateProposalPage() {
                     className="text-sm text-muted-foreground underline mt-2"
                     onClick={() => {
                       setBriefDoc(null)
+                      setBriefFile(null)
                       if (briefInputRef.current) briefInputRef.current.value = ''
                     }}
                   >
@@ -324,6 +333,7 @@ export default function CreateProposalPage() {
                     className="text-sm text-muted-foreground underline mt-2"
                     onClick={() => {
                       setKickoffDoc(null)
+                      setKickoffFile(null)
                       if (kickoffInputRef.current) kickoffInputRef.current.value = ''
                     }}
                   >
@@ -382,7 +392,17 @@ export default function CreateProposalPage() {
               הוסף
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            דורש הגדרת חשבון שירות Google. אם לא מוגדר, ייצא את המסמך כ-PDF והעלה ידנית.
+          </p>
         </Card>
+
+        {/* Warning */}
+        {warning && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4 mb-6">
+            {warning}
+          </div>
+        )}
 
         {/* Error */}
         {error && (
