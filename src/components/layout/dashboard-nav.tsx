@@ -29,8 +29,9 @@ export function DashboardNav({ user }: DashboardNavProps) {
 
   const handleLogout = async () => {
     const supabase = createClient()
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: 'global' })
     router.push('/login')
+    router.refresh()
   }
 
   return (
