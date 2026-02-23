@@ -160,7 +160,7 @@ export default function StepTargetAudience({
             <div key={index} className="flex items-center gap-2">
               <Input
                 placeholder={`תובנה ${index + 1}`}
-                value={insight}
+                value={typeof insight === 'string' ? insight : (insight as {title?: string; name?: string})?.title || (insight as {name?: string})?.name || ''}
                 onChange={(e) => updateInsight(index, e.target.value)}
               />
               <Button

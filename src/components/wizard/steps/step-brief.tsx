@@ -102,7 +102,7 @@ export default function StepBrief({ data, extractedData, onChange, errors }: Ste
               JSON.stringify(extractedData.brandPainPoints) !== JSON.stringify(brandPainPoints) && (
                 <p className="text-sm text-amber-700">
                   <span className="font-semibold">נקודות כאב:</span>{' '}
-                  {extractedData.brandPainPoints.join(', ')}
+                  {extractedData.brandPainPoints.map((p: unknown) => typeof p === 'string' ? p : ((p as {title?: string})?.title || '')).join(', ')}
                 </p>
               )}
             <Button
@@ -161,7 +161,7 @@ export default function StepBrief({ data, extractedData, onChange, errors }: Ste
           <div key={index} className="flex items-center gap-2">
             <Input
               placeholder={`נקודת כאב ${index + 1}`}
-              value={point}
+              value={typeof point === 'string' ? point : (point as {title?: string})?.title || ''}
               onChange={(e) => updatePainPoint(index, e.target.value)}
             />
             <Button

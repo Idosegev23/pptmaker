@@ -201,8 +201,9 @@ export async function POST(request: NextRequest) {
 
       // Upload images to Supabase Storage
       const timestamp = Date.now()
+      // Supabase storage keys must be ASCII-only
       const brandPrefix = brandName
-        .replace(/[^a-zA-Z0-9\u0590-\u05FF]/g, '')
+        .replace(/[^a-zA-Z0-9]/g, '')
         .slice(0, 20) || `brand_${timestamp}`
 
       const { legacyMapping, images: allSmartImages } = smartImageSet

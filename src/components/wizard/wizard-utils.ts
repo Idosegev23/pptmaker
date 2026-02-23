@@ -2,6 +2,25 @@ import type { WizardStepDataMap, WizardStepId } from '@/types/wizard'
 import type { ExtractedBriefData } from '@/types/brief'
 
 /**
+ * Safely convert an array of unknown items to string[].
+ * Handles objects with title/name/description fields that Gemini may return
+ * instead of plain strings.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toStringArray(arr: any[]): string[] {
+  if (!Array.isArray(arr)) return []
+  return arr
+    .map((item) => {
+      if (typeof item === 'string') return item
+      if (item && typeof item === 'object') {
+        return item.title || item.name || item.text || item.description || JSON.stringify(item)
+      }
+      return String(item)
+    })
+    .filter(Boolean)
+}
+
+/**
  * Convert extracted brief data to wizard step data (pre-populate steps)
  */
 export function extractedDataToStepData(
@@ -215,7 +234,7 @@ export function enrichStepData(
         result.brief = { ...result.brief, brandBrief: brandResearch.companyDescription }
       }
       if ((!result.brief.brandPainPoints || result.brief.brandPainPoints.length === 0) && brandResearch.targetDemographics?.primaryAudience?.painPoints?.length) {
-        result.brief = { ...result.brief, brandPainPoints: brandResearch.targetDemographics.primaryAudience.painPoints }
+        result.brief = { ...result.brief, brandPainPoints: toStringArray(brandResearch.targetDemographics.primaryAudience.painPoints) }
       }
     }
 
@@ -228,7 +247,7 @@ export function enrichStepData(
         result.target_audience = { ...result.target_audience, targetBehavior: brandResearch.targetDemographics.behavior }
       }
       if ((!result.target_audience.targetInsights || result.target_audience.targetInsights.length === 0) && brandResearch.targetDemographics?.primaryAudience?.interests?.length) {
-        result.target_audience = { ...result.target_audience, targetInsights: brandResearch.targetDemographics.primaryAudience.interests }
+        result.target_audience = { ...result.target_audience, targetInsights: toStringArray(brandResearch.targetDemographics.primaryAudience.interests) }
       }
     }
 
@@ -237,7 +256,7 @@ export function enrichStepData(
       if ((!result.strategy.strategyPillars || result.strategy.strategyPillars.length === 0) && brandResearch.contentThemes?.length) {
         result.strategy = {
           ...result.strategy,
-          strategyPillars: brandResearch.contentThemes.slice(0, 3).map((theme: string) => ({
+          strategyPillars: toStringArray(brandResearch.contentThemes).slice(0, 3).map((theme: string) => ({
             title: theme,
             description: '',
           })),

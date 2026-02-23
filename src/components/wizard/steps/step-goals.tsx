@@ -168,7 +168,7 @@ export default function StepGoals({ data, extractedData, onChange, errors }: Ste
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     )}
-                    {goal}
+                    {typeof goal === 'string' ? goal : (goal as {title?: string})?.title || ''}
                   </button>
                   <button
                     type="button"

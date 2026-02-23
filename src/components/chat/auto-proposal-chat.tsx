@@ -558,7 +558,7 @@ export function AutoProposalChat({ onComplete }: AutoProposalChatProps) {
             <div className="flex flex-wrap gap-2">
               {research.recommendedGoals.slice(0, 4).map((goal, i) => (
                 <span key={i} className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs">
-                  {typeof goal === 'string' ? goal.split(' - ')[0] : goal}
+                  {typeof goal === 'string' ? goal.split(' - ')[0] : (goal as {title?: string; description?: string})?.title || JSON.stringify(goal)}
                 </span>
               ))}
             </div>
