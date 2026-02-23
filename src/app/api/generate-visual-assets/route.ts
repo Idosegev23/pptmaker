@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { extractColorsFromLogo, analyzeColorPalette } from '@/lib/gemini/color-extractor'
+import { extractColorsFromLogo, analyzeColorPalette, extractColorsByBrandName } from '@/lib/gemini/color-extractor'
 import type { BrandColors } from '@/lib/gemini/color-extractor'
 import { generateSmartImages } from '@/lib/gemini/israeli-image-generator'
 import type { BrandResearch } from '@/lib/gemini/brand-research'
@@ -9,10 +9,11 @@ import { createClient } from '@/lib/supabase/server'
  * POST /api/generate-visual-assets
  *
  * Generates visual assets for a proposal:
- * 1. Scrapes brand website → logo, images, colors
- * 2. Extracts brand color palette from logo/CSS
- * 3. Generates smart AI images using brand data
- * 4. Uploads everything to Supabase Storage
+ * 1. Gemini AI analyzes brand colors (PRIMARY - runs in parallel)
+ * 2. Scrapes brand website for logo & images (SECONDARY - runs in parallel)
+ * 3. Merges: Gemini colors + scraped logo/images
+ * 4. Generates smart AI images using brand data
+ * 5. Uploads everything to Supabase Storage
  *
  * Returns: { scraped, brandColors, generatedImages, imageStrategy }
  */
@@ -66,92 +67,117 @@ export async function POST(request: NextRequest) {
 
     const startTime = Date.now()
 
-    // ─── Step 1: Scrape brand website ───
-    console.log(`[Visual Assets][${requestId}] Step 1: Scraping brand website`)
+    // ─── Step 1: Gemini AI brand analysis + Website scrape (IN PARALLEL) ───
+    console.log(`[Visual Assets][${requestId}] Step 1: Gemini brand analysis + scrape (parallel)`)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let scrapedData: any = null
     let logoUrl: string | null = null
 
-    // Find website URL from: explicit param > brandResearch.website > guess
     const siteUrl = websiteUrl
       || brandResearch?.website
       || null
 
-    if (siteUrl) {
-      try {
+    // Run BOTH in parallel - Gemini is primary, scrape is for images/logo only
+    const [geminiResult, scrapeResult] = await Promise.allSettled([
+      // PRIMARY: Gemini brand analysis with Google Search
+      (async () => {
+        console.log(`[Visual Assets][${requestId}] [Gemini PRIMARY] Analyzing brand: ${brandName}`)
+        const colors = await extractColorsByBrandName(brandName) as BrandColors & { logoUrl?: string }
+        console.log(`[Visual Assets][${requestId}] [Gemini PRIMARY] Done: primary=${colors.primary}, accent=${colors.accent}`)
+        return colors
+      })(),
+      // SECONDARY: Website scrape for images/logo
+      (async () => {
+        if (!siteUrl) {
+          console.log(`[Visual Assets][${requestId}] [Scrape] No website URL - skipping`)
+          return null
+        }
+        console.log(`[Visual Assets][${requestId}] [Scrape] Fetching: ${siteUrl}`)
         const scrapeRes = await fetch(new URL('/api/scrape', request.url), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: siteUrl, enhanced: true }),
         })
         const scrapeJson = await scrapeRes.json()
-
         if (scrapeJson.success && scrapeJson.data) {
-          scrapedData = scrapeJson.data
-          logoUrl = scrapedData.logoUrl || null
-          console.log(`[Visual Assets][${requestId}] Scraped: logo=${!!logoUrl}, images=${scrapedData.allImages?.length || 0}, colors=${scrapedData.colorPalette?.length || 0}`)
+          console.log(`[Visual Assets][${requestId}] [Scrape] Done: logo=${!!scrapeJson.data.logoUrl}, images=${scrapeJson.data.allImages?.length || 0}`)
+          return scrapeJson.data
         }
-      } catch (scrapeErr) {
-        console.error(`[Visual Assets][${requestId}] Scrape failed:`, scrapeErr)
+        return null
+      })(),
+    ])
+
+    // ─── Step 2: Merge results - Gemini colors + scraped images ───
+    console.log(`[Visual Assets][${requestId}] Step 2: Merging results`)
+
+    // Extract Gemini colors (PRIMARY source)
+    let brandColors: BrandColors | null = null
+    let geminiLogoUrl: string | null = null
+
+    if (geminiResult.status === 'fulfilled' && geminiResult.value) {
+      const gc = geminiResult.value
+      // Accept if not default placeholder colors
+      if (gc.primary !== '#111111' || gc.accent !== '#E94560') {
+        brandColors = gc
+        geminiLogoUrl = gc.logoUrl || null
+        console.log(`[Visual Assets][${requestId}] Colors from Gemini (PRIMARY): primary=${brandColors.primary}, accent=${brandColors.accent}`)
+      } else {
+        console.log(`[Visual Assets][${requestId}] Gemini returned defaults - will try logo vision`)
       }
     } else {
-      console.log(`[Visual Assets][${requestId}] No website URL - skipping scrape`)
+      console.error(`[Visual Assets][${requestId}] Gemini brand analysis failed:`, geminiResult.status === 'rejected' ? geminiResult.reason : 'empty')
     }
 
-    // ─── Step 2: Extract brand colors ───
-    console.log(`[Visual Assets][${requestId}] Step 2: Extracting brand colors`)
+    // Extract scraped data (for images/logo only)
+    if (scrapeResult.status === 'fulfilled' && scrapeResult.value) {
+      scrapedData = scrapeResult.value
+      logoUrl = scrapedData.logoUrl || scrapedData.ogImage || scrapedData.favicon || null
+    }
 
-    let brandColors: BrandColors | null = null
+    // Use Gemini's logo URL if scraping didn't find one
+    if (!logoUrl && geminiLogoUrl) {
+      logoUrl = geminiLogoUrl
+      console.log(`[Visual Assets][${requestId}] Using Gemini logo URL: ${logoUrl}`)
+    }
 
-    // Try logo color extraction first
-    if (logoUrl) {
+    // ENHANCE: If Gemini failed but we have a logo, use vision to extract colors
+    if (!brandColors && logoUrl) {
       try {
+        console.log(`[Visual Assets][${requestId}] Gemini failed → trying logo vision: ${logoUrl}`)
         brandColors = await extractColorsFromLogo(logoUrl)
-        console.log(`[Visual Assets][${requestId}] Colors from logo: primary=${brandColors.primary}, accent=${brandColors.accent}`)
-      } catch (colorErr) {
-        console.error(`[Visual Assets][${requestId}] Logo color extraction failed:`, colorErr)
+        console.log(`[Visual Assets][${requestId}] Colors from logo vision: primary=${brandColors.primary}`)
+      } catch (logoErr) {
+        console.error(`[Visual Assets][${requestId}] Logo vision failed:`, logoErr)
       }
     }
 
-    // Fallback: CSS colors from website
-    const cssColors = scrapedData?.colorPalette || scrapedData?.dominantColors || scrapedData?.cssColors
-    if (!brandColors && cssColors?.length > 0) {
-      try {
-        brandColors = await analyzeColorPalette(cssColors)
-        console.log(`[Visual Assets][${requestId}] Colors from CSS: primary=${brandColors.primary}`)
-      } catch {
-        // continue to next fallback
+    // ENHANCE: If Gemini failed and logo failed, try CSS colors from scrape
+    if (!brandColors) {
+      const cssColors = scrapedData?.colorPalette || scrapedData?.dominantColors || scrapedData?.cssColors
+      if (cssColors?.length > 0) {
+        try {
+          brandColors = await analyzeColorPalette(cssColors)
+          console.log(`[Visual Assets][${requestId}] Colors from CSS fallback: primary=${brandColors.primary}`)
+        } catch {
+          // continue to defaults
+        }
       }
     }
 
-    // Fallback: website primary/secondary colors
-    if (!brandColors && scrapedData?.primaryColor) {
-      brandColors = {
-        primary: scrapedData.primaryColor,
-        secondary: scrapedData.secondaryColor || scrapedData.accentColor || '#666666',
-        accent: scrapedData.accentColor || scrapedData.primaryColor,
-        background: '#FFFFFF',
-        text: '#111111',
-        palette: [scrapedData.primaryColor, scrapedData.secondaryColor, scrapedData.accentColor].filter(Boolean),
-        style: 'minimal' as const,
-        mood: 'מקצועי',
-      }
-    }
-
-    // Default colors if all else failed
+    // Default colors if absolutely everything failed
     if (!brandColors) {
       brandColors = {
         primary: '#111111',
         secondary: '#666666',
-        accent: '#E94560',
+        accent: '#2563EB',
         background: '#FFFFFF',
         text: '#111111',
-        palette: ['#111111', '#666666', '#E94560'],
+        palette: ['#111111', '#666666', '#2563EB'],
         style: 'minimal' as const,
         mood: 'מודרני ומינימליסטי',
       }
-      console.log(`[Visual Assets][${requestId}] Using default colors`)
+      console.log(`[Visual Assets][${requestId}] Using default colors (all methods failed)`)
     }
 
     // ─── Step 3: Generate AI images ───
@@ -275,11 +301,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       scraped: scrapedData ? {
-        logoUrl: scrapedData.logoUrl || null,
+        logoUrl: scrapedData.logoUrl || logoUrl || null,
         logoAlternatives: scrapedData.logoAlternatives || [],
         heroImages: scrapedData.heroImages || [],
         productImages: scrapedData.productImages || [],
         lifestyleImages: scrapedData.lifestyleImages || [],
+      } : logoUrl ? {
+        logoUrl,
+        logoAlternatives: [],
+        heroImages: [],
+        productImages: [],
+        lifestyleImages: [],
       } : null,
       brandColors,
       generatedImages: imageUrls,

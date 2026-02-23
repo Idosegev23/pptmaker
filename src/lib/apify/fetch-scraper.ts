@@ -178,70 +178,98 @@ function extractFavicon(html: string, baseUrl: string): string | null {
 }
 
 function extractLogo(html: string, baseUrl: string): string | null {
-  // Priority-ordered selectors
+  // Priority-ordered selectors - comprehensive patterns
   const patterns = [
-    // img with logo in class/id
-    /<img[^>]+(?:class|id)=["'][^"']*logo[^"']*["'][^>]+src=["']([^"']+)["']/i,
-    // img inside element with logo class
-    /<(?:a|div|span|header)[^>]+(?:class|id)=["'][^"']*logo[^"']*["'][^>]*>\s*<img[^>]+src=["']([^"']+)["']/i,
-    // img with src containing "logo"
-    /<img[^>]+src=["']([^"']*logo[^"']+)["']/i,
-    // img with alt containing "logo"
-    /<img[^>]+alt=["'][^"']*logo[^"']*["'][^>]+src=["']([^"']+)["']/i,
-    // First image inside <header>
-    /<header[^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i,
-    // SVG with logo class
-    /<svg[^>]+(?:class|id)=["'][^"']*logo[^"']*["']/i,
+    // img with logo in class/id (handle both src before and after class)
+    /<img[^>]+(?:class|id)=["'][^"']*logo[^"']*["'][^>]+(?:src|data-src|data-lazy-src)=["']([^"']+)["']/i,
+    /<img[^>]+(?:src|data-src)=["']([^"']+)["'][^>]+(?:class|id)=["'][^"']*logo[^"']*["']/i,
+    // img inside element with logo class (nested)
+    /<(?:a|div|span|header|li)[^>]+(?:class|id)=["'][^"']*logo[^"']*["'][^>]*>[\s\S]*?<img[^>]+(?:src|data-src)=["']([^"']+)["']/i,
+    // img with src/filename containing "logo"
+    /<img[^>]+(?:src|data-src)=["']([^"']*logo[^"']+)["']/i,
+    // img with alt containing "logo" or brand name
+    /<img[^>]+alt=["'][^"']*logo[^"']*["'][^>]+(?:src|data-src)=["']([^"']+)["']/i,
+    /<img[^>]+(?:src|data-src)=["']([^"']+)["'][^>]+alt=["'][^"']*logo[^"']*["']/i,
+    // img inside navbar/header
+    /<(?:header|nav)[^>]*>[\s\S]*?<img[^>]+(?:src|data-src)=["']([^"']+)["']/i,
+    // img with brand/site-logo class
+    /<img[^>]+(?:class|id)=["'][^"']*(?:brand|site-logo|navbar-brand|company)[^"']*["'][^>]+(?:src|data-src)=["']([^"']+)["']/i,
+    // Link tag with rel=icon (favicon as last resort for logo)
+    /<link[^>]+rel=["'](?:icon|apple-touch-icon)["'][^>]+href=["']([^"']+)["']/i,
   ]
 
   for (const pattern of patterns) {
     const m = pattern.exec(html)
     if (m?.[1]) {
       const src = m[1]
-      if (src.startsWith('data:')) continue
+      if (src.startsWith('data:') || src.includes('placeholder') || src.includes('pixel')) continue
       try { return new URL(src, baseUrl).href } catch { continue }
     }
   }
 
-  // Also try og:image as a fallback logo source for some sites
+  // Fallback: og:image (many brand sites use their logo/product as og:image)
+  const ogImage = extractMetaProperty(html, 'og:image', baseUrl)
+  if (ogImage) return ogImage
+
   return null
 }
 
 function extractImages(html: string, baseUrl: string): string[] {
   const images = new Set<string>()
+  const skipWords = ['placeholder', 'pixel', 'spacer', 'blank', 'transparent', 'tracking', '.gif']
 
-  // Standard img tags
-  const imgPattern = /<img[^>]+src=["']([^"']+)["']/gi
-  let m
-  while ((m = imgPattern.exec(html)) !== null) {
-    const src = m[1]
-    if (!src || src.startsWith('data:') || src.includes('placeholder') || src.includes('pixel') || src.includes('spacer')) continue
-    // Skip tiny tracking pixels
-    const widthMatch = html.slice(Math.max(0, m.index - 200), m.index + m[0].length + 100).match(/width=["']?(\d+)/)
-    if (widthMatch && parseInt(widthMatch[1]) < 10) continue
-
+  function addImage(src: string) {
+    if (!src || src.startsWith('data:')) return
+    if (skipWords.some(w => src.toLowerCase().includes(w))) return
     try { images.add(new URL(src, baseUrl).href) } catch { /* skip */ }
   }
 
-  // srcset images
+  // Standard img tags - src and data-src variants
+  const imgPatterns = [
+    /<img[^>]+src=["']([^"']+)["']/gi,
+    /<img[^>]+data-src=["']([^"']+)["']/gi,
+    /<img[^>]+data-lazy-src=["']([^"']+)["']/gi,
+    /<img[^>]+data-original=["']([^"']+)["']/gi,
+  ]
+
+  for (const pattern of imgPatterns) {
+    let m
+    while ((m = pattern.exec(html)) !== null) {
+      // Skip tiny tracking pixels
+      const context = html.slice(Math.max(0, m.index - 200), m.index + m[0].length + 100)
+      const widthMatch = context.match(/width=["']?(\d+)/)
+      if (widthMatch && parseInt(widthMatch[1]) < 10) continue
+      addImage(m[1])
+    }
+  }
+
+  // srcset images - pick the largest
   const srcsetPattern = /srcset=["']([^"']+)["']/gi
+  let m
   while ((m = srcsetPattern.exec(html)) !== null) {
     const sources = m[1].split(',')
     for (const s of sources) {
       const src = s.trim().split(/\s+/)[0]
-      if (src && !src.startsWith('data:')) {
-        try { images.add(new URL(src, baseUrl).href) } catch { /* skip */ }
-      }
+      addImage(src)
     }
   }
 
   // CSS background-image
   const bgPattern = /background(?:-image)?\s*:\s*url\(["']?([^"')]+)["']?\)/gi
   while ((m = bgPattern.exec(html)) !== null) {
-    const src = m[1]
-    if (src && !src.startsWith('data:')) {
-      try { images.add(new URL(src, baseUrl).href) } catch { /* skip */ }
-    }
+    addImage(m[1])
+  }
+
+  // picture/source elements
+  const sourcePattern = /<source[^>]+srcset=["']([^"'\s]+)/gi
+  while ((m = sourcePattern.exec(html)) !== null) {
+    addImage(m[1])
+  }
+
+  // og:image and twitter:image meta tags
+  const ogImagePattern = /<meta[^>]+(?:property=["']og:image["']|name=["']twitter:image["'])[^>]+content=["']([^"']+)["']/gi
+  while ((m = ogImagePattern.exec(html)) !== null) {
+    addImage(m[1])
   }
 
   return Array.from(images).slice(0, 50)
@@ -284,43 +312,75 @@ function extractColorsFromHTML(html: string): {
 } {
   const colorCounts = new Map<string, number>()
 
-  // Hex colors
-  const hexPattern = /#([0-9A-Fa-f]{3,6})\b/g
-  let m
-  while ((m = hexPattern.exec(html)) !== null) {
-    let hex = m[0].toLowerCase()
+  function addColor(hex: string, boost: number = 1) {
+    hex = hex.toLowerCase()
     if (hex.length === 4) {
       hex = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
     }
     if (hex.length === 7 && !isBoringColor(hex)) {
-      colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1)
+      colorCounts.set(hex, (colorCounts.get(hex) || 0) + boost)
     }
+  }
+
+  // Hex colors
+  const hexPattern = /#([0-9A-Fa-f]{3,6})\b/g
+  let m
+  while ((m = hexPattern.exec(html)) !== null) {
+    addColor(m[0])
   }
 
   // RGB colors
   const rgbPattern = /rgba?\s*\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/g
   while ((m = rgbPattern.exec(html)) !== null) {
-    const r = parseInt(m[1])
-    const g = parseInt(m[2])
-    const b = parseInt(m[3])
+    const r = parseInt(m[1]), g = parseInt(m[2]), b = parseInt(m[3])
     if (r <= 255 && g <= 255 && b <= 255) {
-      const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-      if (!isBoringColor(hex)) {
-        colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1)
-      }
+      addColor(`#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`)
     }
   }
 
-  // CSS custom properties with color values
-  const varPattern = /--[^:]+:\s*(#[0-9A-Fa-f]{3,6})\b/g
+  // HSL colors → convert to hex
+  const hslPattern = /hsla?\s*\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%/g
+  while ((m = hslPattern.exec(html)) !== null) {
+    const hex = hslToHex(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]))
+    if (hex) addColor(hex)
+  }
+
+  // CSS custom properties (high priority - brand colors)
+  const varPattern = /--(?:primary|brand|main|accent|theme|color)[^:]*:\s*(#[0-9A-Fa-f]{3,6})\b/g
   while ((m = varPattern.exec(html)) !== null) {
-    let hex = m[1].toLowerCase()
-    if (hex.length === 4) {
-      hex = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
-    }
-    if (hex.length === 7 && !isBoringColor(hex)) {
-      colorCounts.set(hex, (colorCounts.get(hex) || 0) + 3) // Boost CSS vars
-    }
+    addColor(m[1], 10) // Strong boost for named brand vars
+  }
+
+  // All CSS vars with colors
+  const allVarPattern = /--[^:]+:\s*(#[0-9A-Fa-f]{3,6})\b/g
+  while ((m = allVarPattern.exec(html)) !== null) {
+    addColor(m[1], 3)
+  }
+
+  // Inline style colors (elements with brand styling)
+  const inlinePattern = /style=["'][^"']*(?:background(?:-color)?|color|border-color)\s*:\s*(#[0-9A-Fa-f]{3,6})/gi
+  while ((m = inlinePattern.exec(html)) !== null) {
+    addColor(m[1], 2)
+  }
+
+  // data-color attributes
+  const dataColorPattern = /data-(?:color|bg|theme)=["'](#[0-9A-Fa-f]{3,6})["']/gi
+  while ((m = dataColorPattern.exec(html)) !== null) {
+    addColor(m[1], 5)
+  }
+
+  // theme-color meta tag (mobile brand color)
+  const themeColorPattern = /<meta[^>]+name=["']theme-color["'][^>]+content=["'](#[0-9A-Fa-f]{3,6})["']/i
+  const themeMatch = themeColorPattern.exec(html)
+  if (themeMatch) {
+    addColor(themeMatch[1], 15) // Highest priority - explicit brand color
+  }
+
+  // msapplication-TileColor meta tag
+  const tilePattern = /<meta[^>]+name=["']msapplication-TileColor["'][^>]+content=["'](#[0-9A-Fa-f]{3,6})["']/i
+  const tileMatch = tilePattern.exec(html)
+  if (tileMatch) {
+    addColor(tileMatch[1], 12)
   }
 
   const sorted = Array.from(colorCounts.entries())
@@ -333,6 +393,19 @@ function extractColorsFromHTML(html: string): {
     accent: sorted[2] || null,
     palette: sorted.slice(0, 10),
   }
+}
+
+function hslToHex(h: number, s: number, l: number): string | null {
+  try {
+    s /= 100; l /= 100
+    const a = s * Math.min(l, 1 - l)
+    const f = (n: number) => {
+      const k = (n + h / 30) % 12
+      const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)
+      return Math.round(255 * color).toString(16).padStart(2, '0')
+    }
+    return `#${f(0)}${f(8)}${f(4)}`
+  } catch { return null }
 }
 
 function isBoringColor(hex: string): boolean {

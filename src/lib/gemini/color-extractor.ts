@@ -245,6 +245,97 @@ async function fetchImageAsBase64(url: string): Promise<string> {
 }
 
 /**
+ * Extract brand colors by brand name using Gemini's knowledge
+ * Fallback when website scraping fails to extract colors
+ */
+export async function extractColorsByBrandName(brandName: string): Promise<BrandColors> {
+  console.log(`[Gemini Colors] Analyzing brand by name: ${brandName}`)
+
+  const prompt = `
+אתה מומחה מיתוג. ניתן לך שם מותג ואתה צריך לזהות את פלטת הצבעים הרשמית שלו.
+
+שם המותג: ${brandName}
+
+השתמש בידע שלך על מותגים, לוגואים ועיצוב. אם אתה מכיר את המותג הספציפי, החזר את הצבעים האמיתיים שלו.
+אם לא, נסה להסיק מהתעשייה ומהשם מהם הצבעים הצפויים.
+
+החזר JSON בפורמט הבא:
+\`\`\`json
+{
+  "primary": "#XXXXXX",
+  "secondary": "#XXXXXX",
+  "accent": "#XXXXXX",
+  "background": "#FFFFFF",
+  "text": "#111111",
+  "palette": ["#XXXXXX", "#XXXXXX", "#XXXXXX"],
+  "style": "minimal/bold/elegant/playful/corporate",
+  "mood": "תיאור קצר של האווירה",
+  "confidence": "high/medium/low",
+  "logoUrl": "URL של הלוגו הרשמי של המותג אם ידוע לך (או null)"
+}
+\`\`\`
+
+חשוב מאוד:
+- הצבעים חייבים להיות מדויקים ככל האפשר
+- primary = הצבע הדומיננטי של המותג
+- אל תחזיר צבעים כלליים אם אתה מכיר את המותג
+`
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+      }
+    })
+
+    const text = response.text || ''
+    console.log('[Gemini Colors] Brand analysis received')
+
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[1])
+      const result: BrandColors & { logoUrl?: string } = {
+        primary: parsed.primary || '#111111',
+        secondary: parsed.secondary || '#666666',
+        accent: parsed.accent || parsed.primary || '#E94560',
+        background: parsed.background || '#FFFFFF',
+        text: parsed.text || '#111111',
+        palette: parsed.palette || [parsed.primary, parsed.secondary, parsed.accent].filter(Boolean),
+        style: parsed.style || 'corporate',
+        mood: parsed.mood || 'מקצועי',
+        logoUrl: parsed.logoUrl || undefined,
+      }
+      console.log(`[Gemini Colors] Brand "${brandName}" → primary=${result.primary}, accent=${result.accent}, confidence=${parsed.confidence || 'unknown'}`)
+      return result
+    }
+
+    // Try without code blocks
+    const jsonStart = text.indexOf('{')
+    const jsonEnd = text.lastIndexOf('}')
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
+      const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
+      return {
+        primary: parsed.primary || '#111111',
+        secondary: parsed.secondary || '#666666',
+        accent: parsed.accent || parsed.primary || '#E94560',
+        background: parsed.background || '#FFFFFF',
+        text: parsed.text || '#111111',
+        palette: parsed.palette || [],
+        style: parsed.style || 'corporate',
+        mood: parsed.mood || 'מקצועי',
+      }
+    }
+
+    throw new Error('No JSON in response')
+  } catch (error) {
+    console.error('[Gemini Colors] Brand name analysis error:', error)
+    return getDefaultColors()
+  }
+}
+
+/**
  * Get default colors for fallback
  */
 function getDefaultColors(): BrandColors {

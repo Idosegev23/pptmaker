@@ -1,9 +1,10 @@
 /**
  * Influencer Profile Scraper
- * Uses Apify to scrape real influencer profiles from Instagram
+ * Uses ScrapeCreators API (primary) or Apify (fallback) for Instagram profiles
  */
 
 import { ApifyClient } from 'apify-client'
+import { getInstagramProfile as scGetProfile, getMultipleProfiles as scGetMultiple, isScrapeCreatorsAvailable } from './scrapecreators-scraper'
 
 const client = new ApifyClient({
   token: process.env.APIFY_TOKEN,
@@ -108,25 +109,59 @@ export async function searchInfluencers(
 
 /**
  * Scrape a single Instagram profile
+ * Uses ScrapeCreators API first, falls back to Apify
  */
 export async function scrapeInstagramProfile(username: string): Promise<ScrapedInfluencer | null> {
   console.log(`[Influencer Scrape] Scraping @${username}`)
-  
+
+  // Try ScrapeCreators first
+  if (isScrapeCreatorsAvailable()) {
+    try {
+      const scProfile = await scGetProfile(username)
+      if (scProfile) {
+        const categories = detectCategories(scProfile.biography || '', [])
+        return {
+          username: scProfile.username,
+          fullName: scProfile.fullName,
+          profileUrl: `https://instagram.com/${scProfile.username}`,
+          profilePicUrl: scProfile.profilePicUrl,
+          bio: scProfile.biography,
+          followers: scProfile.followersCount,
+          following: scProfile.followingCount,
+          posts: scProfile.postsCount,
+          avgLikes: 0,
+          avgComments: 0,
+          engagementRate: 0,
+          recentPosts: [],
+          categories,
+          hashtags: [],
+          email: scProfile.businessEmail,
+          website: scProfile.externalUrl,
+          isVerified: scProfile.isVerified,
+          isBusinessAccount: scProfile.isBusinessAccount,
+        }
+      }
+    } catch (scErr) {
+      console.log(`[Influencer Scrape] ScrapeCreators failed for @${username}, trying Apify:`, scErr)
+    }
+  }
+
+  // Fallback: Apify
   try {
     const run = await client.actor('apify/instagram-profile-scraper').call({
       usernames: [username],
-      resultsLimit: 12, // Get recent posts
+      resultsLimit: 12,
     }, {
       timeout: 120,
     })
-    
+
     const { items } = await client.dataset(run.defaultDatasetId).listItems()
-    
+
     if (items.length === 0) {
       console.log(`[Influencer Scrape] No data for @${username}`)
       return null
     }
-    
+
     const profile = items[0] as {
       username?: string
       fullName?: string
@@ -147,43 +182,36 @@ export async function scrapeInstagramProfile(username: string): Promise<ScrapedI
         timestamp?: string
       }>
     }
-    
-    // Calculate engagement from recent posts
+
     const posts = profile.latestPosts || []
     const totalLikes = posts.reduce((sum, p) => sum + (p.likesCount || 0), 0)
     const totalComments = posts.reduce((sum, p) => sum + (p.commentsCount || 0), 0)
     const avgLikes = posts.length > 0 ? Math.round(totalLikes / posts.length) : 0
     const avgComments = posts.length > 0 ? Math.round(totalComments / posts.length) : 0
-    const engagementRate = profile.followersCount 
-      ? ((avgLikes + avgComments) / profile.followersCount) * 100 
+    const engagementRate = profile.followersCount
+      ? ((avgLikes + avgComments) / profile.followersCount) * 100
       : 0
-    
-    // Extract hashtags from recent posts
+
     const allHashtags: string[] = []
     posts.forEach(p => {
       const matches = (p.caption || '').match(/#[\u0590-\u05FFa-zA-Z0-9_]+/g)
       if (matches) allHashtags.push(...matches)
     })
     const topHashtags = getTopItems(allHashtags, 10)
-    
-    // Detect categories from bio and hashtags
     const categories = detectCategories(profile.biography || '', topHashtags)
-    
+
     return {
       username: profile.username || username,
       fullName: profile.fullName || '',
       profileUrl: `https://instagram.com/${username}`,
       profilePicUrl: profile.profilePicUrl || '',
       bio: profile.biography || '',
-      
       followers: profile.followersCount || 0,
       following: profile.followsCount || 0,
       posts: profile.postsCount || 0,
-      
       avgLikes,
       avgComments,
       engagementRate: Math.round(engagementRate * 100) / 100,
-      
       recentPosts: posts.slice(0, 6).map(p => ({
         imageUrl: p.displayUrl || '',
         caption: (p.caption || '').slice(0, 200),
@@ -191,13 +219,10 @@ export async function scrapeInstagramProfile(username: string): Promise<ScrapedI
         comments: p.commentsCount || 0,
         timestamp: p.timestamp || '',
       })),
-      
       categories,
       hashtags: topHashtags,
-      
       email: profile.businessEmail,
       website: profile.externalUrl,
-      
       isVerified: profile.isVerified || false,
       isBusinessAccount: profile.isBusinessAccount || false,
     }
@@ -209,31 +234,63 @@ export async function scrapeInstagramProfile(username: string): Promise<ScrapedI
 
 /**
  * Scrape multiple influencer profiles
+ * Uses ScrapeCreators batch when available
  */
 export async function scrapeMultipleInfluencers(
   usernames: string[]
 ): Promise<ScrapedInfluencer[]> {
   console.log(`[Influencer Scrape] Scraping ${usernames.length} profiles`)
-  
+
+  // Try ScrapeCreators batch first
+  if (isScrapeCreatorsAvailable()) {
+    try {
+      const scProfiles = await scGetMultiple(usernames)
+      if (scProfiles.length > 0) {
+        console.log(`[Influencer Scrape] ScrapeCreators returned ${scProfiles.length}/${usernames.length} profiles`)
+        return scProfiles.map(p => {
+          const categories = detectCategories(p.biography || '', [])
+          return {
+            username: p.username,
+            fullName: p.fullName,
+            profileUrl: `https://instagram.com/${p.username}`,
+            profilePicUrl: p.profilePicUrl,
+            bio: p.biography,
+            followers: p.followersCount,
+            following: p.followingCount,
+            posts: p.postsCount,
+            avgLikes: 0,
+            avgComments: 0,
+            engagementRate: 0,
+            recentPosts: [],
+            categories,
+            hashtags: [],
+            email: p.businessEmail,
+            website: p.externalUrl,
+            isVerified: p.isVerified,
+            isBusinessAccount: p.isBusinessAccount,
+          }
+        })
+      }
+    } catch (scErr) {
+      console.log('[Influencer Scrape] ScrapeCreators batch failed, trying Apify:', scErr)
+    }
+  }
+
+  // Fallback: Apify one by one
   const results: ScrapedInfluencer[] = []
-  
-  // Process in batches of 3 to avoid rate limits
   for (let i = 0; i < usernames.length; i += 3) {
     const batch = usernames.slice(i, i + 3)
     const batchResults = await Promise.all(
       batch.map(username => scrapeInstagramProfile(username))
     )
-    
     for (const result of batchResults) {
       if (result) results.push(result)
     }
-    
-    // Small delay between batches
     if (i + 3 < usernames.length) {
       await new Promise(resolve => setTimeout(resolve, 2000))
     }
   }
-  
+
   console.log(`[Influencer Scrape] Successfully scraped ${results.length}/${usernames.length} profiles`)
   return results
 }

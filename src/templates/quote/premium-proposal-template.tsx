@@ -301,7 +301,7 @@ export function generatePremiumProposalSlides(
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap');
       @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700;800&display=swap');
-      
+
       :root {
         /* Brand Colors */
         --primary: ${primary};
@@ -309,58 +309,59 @@ export function generatePremiumProposalSlides(
         --accent: ${accent};
         --accent-light: ${accentLight};
         --accent-dark: ${accentDark};
-        
+
         /* Leaders Brand */
-        --leaders-gray: #2D3436;
+        --leaders-gray: #1A1A2E;
         --leaders-gray-light: #636E72;
-        
+
         /* Text Colors */
-        --text: #111111;
-        --text-light: #4A4A4A;
-        --muted: #888888;
-        
+        --text: #0F0F0F;
+        --text-light: #3D3D3D;
+        --muted: #8A8A8A;
+
         /* Backgrounds - using brand colors */
-        --light: ${primary}08;
-        --light-secondary: ${secondary}10;
-        --line: ${primary}20;
+        --light: ${primary}06;
+        --light-secondary: ${secondary}0A;
+        --line: ${primary}15;
         --white: #FFFFFF;
-        --bg: #FFFFFF;
-        --bg-gradient: linear-gradient(135deg, #FFFFFF 0%, ${primary}05 100%);
-        
-        --h1: 60px;
-        --h2: 48px;
-        --h3: 36px;
-        --body: 28px;
-        --small: 18px;
+        --bg: #FAFAFA;
+        --bg-gradient: linear-gradient(160deg, #FFFFFF 0%, ${primary}04 50%, ${secondary}03 100%);
+
+        --h1: 58px;
+        --h2: 46px;
+        --h3: 34px;
+        --body: 26px;
+        --small: 17px;
         --tiny: 14px;
       }
-      
+
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
-      
+
       body {
         font-family: 'Heebo', sans-serif;
         background: var(--white);
         color: var(--text);
         direction: rtl;
+        -webkit-font-smoothing: antialiased;
       }
-      
+
       /* Fix brackets in RTL */
       .ltr-nums {
         direction: ltr;
         unicode-bidi: isolate;
         display: inline-block;
       }
-      
+
       /* Numbers and punctuation should stay LTR */
       .metric-value, .stat-number, .price, .percentage {
         direction: ltr;
         unicode-bidi: embed;
       }
-      
+
       .slide {
         width: 1920px;
         height: 1080px;
@@ -369,61 +370,67 @@ export function generatePremiumProposalSlides(
         page-break-after: always;
         background: var(--bg-gradient);
       }
-      
+
       .slide-content {
-        padding: 80px;
+        padding: 80px 90px;
         height: 100%;
         display: flex;
         flex-direction: column;
         position: relative;
         z-index: 10;
       }
-      
+
       /* Brand watermark */
       .brand-watermark {
         position: absolute;
         bottom: 40px;
         left: 40px;
-        opacity: 0.08;
+        opacity: 0.05;
         max-width: 300px;
         max-height: 150px;
         z-index: 1;
       }
-      
+
       /* Accent shape decorations - using brand colors */
       .accent-shape {
         position: absolute;
         z-index: 1;
       }
-      
+
       .accent-shape.corner-top-right {
-        top: -100px;
-        right: -100px;
-        width: 400px;
-        height: 400px;
-        background: radial-gradient(circle, var(--primary) 0%, var(--secondary) 100%);
-        border-radius: 50%;
-        opacity: 0.12;
-      }
-      
-      .accent-shape.corner-bottom-left {
-        bottom: -150px;
-        left: -150px;
+        top: -120px;
+        right: -120px;
         width: 500px;
         height: 500px;
-        background: radial-gradient(circle, var(--secondary) 0%, var(--primary) 100%);
+        background: radial-gradient(circle, ${primary}18 0%, ${secondary}08 60%, transparent 100%);
         border-radius: 50%;
-        opacity: 0.08;
       }
-      
+
+      .accent-shape.corner-bottom-left {
+        bottom: -180px;
+        left: -180px;
+        width: 600px;
+        height: 600px;
+        background: radial-gradient(circle, ${secondary}10 0%, ${primary}05 50%, transparent 100%);
+        border-radius: 50%;
+      }
+
       .accent-shape.stripe {
         top: 0;
         right: 0;
-        width: 12px;
+        width: 6px;
         height: 100%;
-        background: linear-gradient(180deg, var(--primary) 0%, var(--secondary) 50%, var(--primary) 100%);
+        background: linear-gradient(180deg, ${primary} 0%, ${accent} 50%, ${secondary} 100%);
       }
-      
+
+      /* Geometric decoration */
+      .accent-shape.geo-dots {
+        width: 200px;
+        height: 200px;
+        background-image: radial-gradient(circle, ${primary}15 2px, transparent 2px);
+        background-size: 20px 20px;
+      }
+
       /* Brand color accent line at bottom of slides */
       .slide::before {
         content: '';
@@ -431,8 +438,8 @@ export function generatePremiumProposalSlides(
         bottom: 0;
         left: 0;
         right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 50%, var(--accent) 100%);
+        height: 5px;
+        background: linear-gradient(90deg, ${primary} 0%, ${accent} 40%, ${secondary} 100%);
         z-index: 100;
       }
       
@@ -478,41 +485,40 @@ export function generatePremiumProposalSlides(
       }
       
       /* Typography */
-      .h1 { font-size: var(--h1); font-weight: 800; line-height: 1.1; color: var(--text); }
+      .h1 { font-size: var(--h1); font-weight: 800; line-height: 1.15; color: var(--text); letter-spacing: -0.5px; }
       .h2 { font-size: var(--h2); font-weight: 700; line-height: 1.2; color: var(--text); }
       .h3 { font-size: var(--h3); font-weight: 600; line-height: 1.3; color: var(--text); }
-      .body { font-size: var(--body); font-weight: 400; line-height: 1.6; color: var(--text-light); }
+      .body { font-size: var(--body); font-weight: 400; line-height: 1.7; color: var(--text-light); }
       .small { font-size: var(--small); color: var(--muted); }
-      
-      .accent-text { color: var(--accent); }
-      .accent-bg { background: var(--accent); color: white; }
+
+      .accent-text { color: ${primary}; }
+      .accent-bg { background: linear-gradient(135deg, ${primary}, ${accent}); color: white; }
       
       /* Cards - with brand color accents */
       .card {
-        background: linear-gradient(145deg, var(--white) 0%, var(--light) 100%);
-        border-radius: 24px;
+        background: linear-gradient(160deg, #FFFFFF 0%, ${primary}04 100%);
+        border-radius: 20px;
         padding: 40px;
-        border: 1px solid var(--line);
-        box-shadow: 0 4px 20px ${primary}10;
+        border: 1px solid ${primary}12;
+        box-shadow: 0 2px 12px ${primary}08, 0 0 0 1px ${primary}04;
         position: relative;
       }
-      
+
       .card::after {
         content: '';
         position: absolute;
-        bottom: 0;
-        left: 20%;
-        right: 20%;
-        height: 3px;
-        background: linear-gradient(90deg, transparent, var(--primary), transparent);
-        border-radius: 2px;
-        opacity: 0.5;
+        top: 0;
+        right: 0;
+        width: 4px;
+        height: 60%;
+        background: linear-gradient(180deg, ${primary}, ${accent}, transparent);
+        border-radius: 0 20px 0 0;
       }
-      
+
       .card-accent {
-        background: var(--accent);
+        background: linear-gradient(135deg, ${primary} 0%, ${accentDark} 100%);
         color: white;
-        border-radius: 24px;
+        border-radius: 20px;
         padding: 40px;
       }
       
@@ -523,28 +529,42 @@ export function generatePremiumProposalSlides(
       
       /* Metrics */
       .metric-box {
-        background: linear-gradient(145deg, var(--white) 0%, var(--light) 100%);
-        padding: 40px;
+        background: #FFFFFF;
+        padding: 44px 36px;
         border-radius: 20px;
-        border: 1px solid var(--line);
+        border: 1px solid ${primary}10;
         position: relative;
         overflow: hidden;
         text-align: center;
+        box-shadow: 0 4px 24px ${primary}08;
       }
-      
+
+      .metric-box::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, ${primary}, ${accent});
+      }
+
       .metric-value {
-        font-size: 56px;
+        font-size: 52px;
         font-weight: 800;
-        color: var(--accent);
+        background: linear-gradient(135deg, ${primary}, ${accent});
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         line-height: 1;
       }
-      
+
       .metric-label {
         font-size: var(--small);
         color: var(--muted);
-        margin-top: 12px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+        margin-top: 14px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
       }
       
       /* Bullet lists */
@@ -552,27 +572,27 @@ export function generatePremiumProposalSlides(
         list-style: none;
         padding: 0;
       }
-      
+
       .bullet-list li {
         font-size: var(--body);
-        padding: 16px 0;
-        border-bottom: 1px solid var(--line);
+        padding: 18px 0;
+        border-bottom: 1px solid ${primary}08;
         display: flex;
         align-items: flex-start;
-        gap: 16px;
+        gap: 18px;
       }
-      
+
       .bullet-list li:last-child {
         border-bottom: none;
       }
-      
+
       .bullet-marker {
-        width: 12px;
-        height: 12px;
-        background: var(--accent);
+        width: 10px;
+        height: 10px;
+        background: linear-gradient(135deg, ${primary}, ${accent});
         border-radius: 50%;
         flex-shrink: 0;
-        margin-top: 8px;
+        margin-top: 10px;
       }
       
       /* Image containers */
@@ -614,23 +634,26 @@ export function generatePremiumProposalSlides(
       
       /* Influencer grid */
       .influencer-card {
-        background: var(--white);
-        border: 1px solid var(--line);
+        background: #FFFFFF;
+        border: 1px solid ${primary}10;
         border-radius: 20px;
         padding: 30px;
         text-align: center;
+        box-shadow: 0 2px 16px ${primary}06;
+        transition: all 0.3s ease;
       }
-      
+
       .influencer-image {
         width: 100px;
         height: 100px;
         border-radius: 50%;
         margin: 0 auto 20px;
         overflow: hidden;
-        background: var(--light);
-        border: 4px solid var(--accent);
+        background: ${primary}08;
+        border: 3px solid ${primary};
+        box-shadow: 0 0 0 4px ${primary}15;
       }
-      
+
       .influencer-image img {
         width: 100%;
         height: 100%;
@@ -825,22 +848,22 @@ export function generatePremiumProposalSlides(
       display: flex;
       align-items: center;
       gap: 20px;
-      padding: 24px 30px;
+      padding: 22px 28px;
       background: white;
       border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-      border-right: 4px solid var(--accent);
+      box-shadow: 0 2px 16px ${primary}08;
+      border-right: 4px solid ${primary};
     }
     .slide-brief .pain-icon {
-      width: 48px;
-      height: 48px;
-      background: var(--accent);
+      width: 46px;
+      height: 46px;
+      background: linear-gradient(135deg, ${primary}, ${accent});
       border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
       color: white;
-      font-size: 24px;
+      font-size: 22px;
       flex-shrink: 0;
     }
     .slide-brief .pain-text {
@@ -876,7 +899,7 @@ export function generatePremiumProposalSlides(
         <div class="text-side">
           <div class="section-label">הבריף</div>
           <h1 class="h1">למה התכנסנו?</h1>
-          ${briefText ? `<div class="brief-text">${briefText.slice(0, 300)}</div>` : ''}
+          ${briefText ? `<div class="brief-text">${briefText}</div>` : ''}
           
           ${painPoints.length > 0 ? `
           <div class="pain-points">
@@ -937,39 +960,52 @@ export function generatePremiumProposalSlides(
       margin-top: 60px;
     }
     .slide-goals .goal-card {
-      background: linear-gradient(180deg, var(--white) 0%, var(--light) 100%);
+      background: #FFFFFF;
       padding: 50px 40px;
-      border-radius: 24px;
+      border-radius: 20px;
       text-align: center;
-      border-top: 5px solid var(--accent);
-      box-shadow: 0 8px 30px rgba(0,0,0,0.04);
-      transition: transform 0.3s ease;
+      border-top: 4px solid ${primary};
+      box-shadow: 0 4px 24px ${primary}08;
+      position: relative;
+    }
+    .slide-goals .goal-card::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: linear-gradient(180deg, ${primary}05, transparent);
     }
     .slide-goals .goal-number {
-      width: 60px;
-      height: 60px;
-      background: var(--accent);
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, ${primary}, ${accent});
       color: white;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 700;
       margin: 0 auto 24px;
+      position: relative;
+      z-index: 1;
     }
     .slide-goals .goal-title {
-      font-size: 32px;
+      font-size: 30px;
       font-weight: 700;
       color: var(--text);
       margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
     }
     .slide-goals .goal-desc {
       font-size: 18px;
       color: var(--text-light);
-      line-height: 1.5;
-      max-height: 80px;
-      overflow: hidden;
+      line-height: 1.6;
+      position: relative;
+      z-index: 1;
     }
   </style>
 </head>
@@ -984,7 +1020,7 @@ export function generatePremiumProposalSlides(
           <div class="goal-card">
             <div class="goal-number">${i + 1}</div>
             <div class="goal-title">${typeof g === 'string' ? g : g.title}</div>
-            ${typeof g !== 'string' && g.description ? `<div class="goal-desc">${g.description.slice(0, 80)}${g.description.length > 80 ? '...' : ''}</div>` : ''}
+            ${typeof g !== 'string' && g.description ? `<div class="goal-desc">${g.description}</div>` : ''}
           </div>
           `).join('')}
         </div>
@@ -1193,11 +1229,10 @@ export function generatePremiumProposalSlides(
       border-radius: 30px;
     }
     .slide-insight .insight-text {
-      font-size: 52px;
+      font-size: 42px;
       font-weight: 700;
       color: white;
       line-height: 1.4;
-      /* Removed text-shadow to avoid gray box appearance in PDF */
       text-wrap: balance;
     }
     .slide-insight .insight-source {
@@ -1229,7 +1264,7 @@ export function generatePremiumProposalSlides(
     <div class="slide-content">
       <div class="main-content">
         <div class="section-label">התובנה המרכזית</div>
-        <div class="insight-text">${insightText.slice(0, 200)}</div>
+        <div class="insight-text">${insightText}</div>
         ${data.insightSource ? `<div class="insight-source">מקור: ${data.insightSource}</div>` : ''}
       </div>
     </div>
@@ -1321,7 +1356,7 @@ export function generatePremiumProposalSlides(
       <div class="main-content">
         <div class="strategy-header">
           <h1 class="h1">האסטרטגיה</h1>
-          ${strategyHeadline ? `<p class="strategy-desc">${strategyHeadline.slice(0, 200)}</p>` : ''}
+          ${strategyHeadline ? `<p class="strategy-desc">${strategyHeadline}</p>` : ''}
         </div>
         
         ${data.strategyFlow?.steps?.length ? `
@@ -1341,7 +1376,7 @@ export function generatePremiumProposalSlides(
           <div class="pillar-card">
             <div class="pillar-number">${i + 1}</div>
             <div class="pillar-title">${p.title}</div>
-            <div class="pillar-desc">${(p.description || '').slice(0, 120)}</div>
+            <div class="pillar-desc">${p.description || ''}</div>
           </div>
           `).join('')}
         </div>

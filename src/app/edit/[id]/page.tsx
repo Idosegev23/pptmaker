@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 export default function SlideViewerPage() {
-  const router = useRouter()
   const params = useParams()
   const [slides, setSlides] = useState<string[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
@@ -105,14 +104,14 @@ export default function SlideViewerPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
         <div className="text-center">
-          <div className="relative w-20 h-20 mx-auto mb-6">
+          <div className="relative w-16 h-16 mx-auto mb-6">
             <div className="absolute inset-0 rounded-full border-2 border-gray-800"></div>
             <div className="absolute inset-0 rounded-full border-2 border-t-white animate-spin"></div>
           </div>
-          <p className="text-gray-400 text-lg">מייצר תצוגה מקדימה...</p>
-          <p className="text-gray-600 text-sm mt-2">מעבד את שקפי המצגת</p>
+          <p className="text-gray-400 text-base">טוען מצגת...</p>
+          <p className="text-gray-600 text-xs mt-1">מעבד את השקפים</p>
         </div>
       </div>
     )
@@ -121,21 +120,21 @@ export default function SlideViewerPage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
         <div className="text-center max-w-md">
-          <div className="text-5xl mb-4">!</div>
-          <h2 className="text-xl font-bold text-white mb-2">שגיאה בטעינה</h2>
-          <p className="text-gray-400 mb-6">{error}</p>
+          <div className="text-4xl mb-4 text-red-400">!</div>
+          <h2 className="text-lg font-bold text-white mb-2">שגיאה בטעינה</h2>
+          <p className="text-gray-400 mb-6 text-sm">{error}</p>
           <div className="flex gap-3 justify-center">
             <button
               onClick={() => { setError(null); setIsLoading(true); loadSlides() }}
-              className="px-5 py-2.5 bg-white text-gray-900 rounded-lg font-medium hover:bg-gray-100 transition-colors"
+              className="px-5 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
             >
               נסה שוב
             </button>
             <Link
               href="/documents"
-              className="px-5 py-2.5 bg-gray-800 text-gray-300 rounded-lg font-medium hover:bg-gray-700 transition-colors"
+              className="px-5 py-2 bg-gray-800 text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
             >
               חזרה לרשימה
             </Link>
@@ -147,12 +146,12 @@ export default function SlideViewerPage() {
 
   if (slides.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-400 text-lg mb-4">לא נמצאו שקפים</p>
+          <p className="text-gray-400 text-base mb-4">לא נמצאו שקפים</p>
           <Link
             href={`/wizard/${params.id}`}
-            className="px-5 py-2.5 bg-white text-gray-900 rounded-lg font-medium hover:bg-gray-100 transition-colors"
+            className="px-5 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
           >
             חזרה ל-Wizard
           </Link>
@@ -162,107 +161,81 @@ export default function SlideViewerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col" dir="rtl">
-      {/* Header */}
-      <header className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
-        <div className="max-w-[1600px] mx-auto px-6 py-3">
+    <div className="h-screen bg-[#0a0a0f] flex flex-col overflow-hidden" dir="rtl">
+      {/* Compact Header */}
+      <header className="bg-[#0f0f18]/90 backdrop-blur-md border-b border-white/5 z-50 flex-shrink-0">
+        <div className="max-w-[1800px] mx-auto px-5 py-2.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/documents"
-                className="text-gray-400 hover:text-white transition-colors text-sm"
-              >
-                &larr; חזרה
-              </Link>
-              <div className="h-5 w-px bg-gray-700"></div>
-              <div>
-                <h1 className="text-white font-semibold">{brandName || 'הצעת מחיר'}</h1>
-                <p className="text-gray-500 text-xs">{slides.length} שקפים</p>
-              </div>
-            </div>
-
             <div className="flex items-center gap-3">
               <Link
-                href={`/wizard/${params.id}`}
-                className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+                href="/documents"
+                className="text-gray-500 hover:text-white transition-colors text-xs flex items-center gap-1"
               >
-                עריכה ב-Wizard
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                חזרה
+              </Link>
+              <div className="h-4 w-px bg-white/10"></div>
+              <h1 className="text-white/90 font-medium text-sm">{brandName || 'הצעת מחיר'}</h1>
+              <span className="text-gray-600 text-xs bg-white/5 px-2 py-0.5 rounded">{slides.length} שקפים</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Slide counter */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-lg">
+                <button
+                  onClick={() => setCurrentSlide(prev => Math.max(0, prev - 1))}
+                  disabled={currentSlide === 0}
+                  className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <span className="text-white/70 text-xs font-medium tabular-nums min-w-[40px] text-center">
+                  {currentSlide + 1} / {slides.length}
+                </span>
+                <button
+                  onClick={() => setCurrentSlide(prev => Math.min(slides.length - 1, prev + 1))}
+                  disabled={currentSlide === slides.length - 1}
+                  className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+              </div>
+
+              <Link
+                href={`/wizard/${params.id}`}
+                className="px-3 py-1.5 text-xs font-medium text-gray-400 bg-white/5 rounded-lg hover:bg-white/10 hover:text-white transition-colors"
+              >
+                עריכה
               </Link>
               <button
                 onClick={downloadPdf}
                 disabled={isGeneratingPdf}
-                className="px-4 py-2 text-sm font-medium text-gray-900 bg-white rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-1.5 text-xs font-medium text-black bg-white rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isGeneratingPdf ? 'מייצר PDF...' : 'הורד PDF'}
+                {isGeneratingPdf ? 'מייצר...' : 'הורד PDF'}
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Slide */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
-        <div className="w-full max-w-[1200px]">
-          {/* Slide container with 16:9 aspect ratio */}
-          <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-            <iframe
-              key={currentSlide}
-              srcDoc={slides[currentSlide]}
-              className="absolute inset-0 w-full h-full rounded-lg shadow-2xl shadow-black/50 border border-gray-800"
-              sandbox="allow-same-origin"
-              title={`שקף ${currentSlide + 1}`}
-              style={{ background: '#fff' }}
-            />
-          </div>
-
-          {/* Navigation controls */}
-          <div className="flex items-center justify-between mt-4">
-            <button
-              onClick={() => setCurrentSlide(prev => Math.max(0, prev - 1))}
-              disabled={currentSlide === 0}
-              className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-            </button>
-
-            <div className="flex items-center gap-3">
-              <span className="text-gray-400 text-sm font-medium tabular-nums">
-                {currentSlide + 1} / {slides.length}
-              </span>
-            </div>
-
-            <button
-              onClick={() => setCurrentSlide(prev => Math.min(slides.length - 1, prev + 1))}
-              disabled={currentSlide === slides.length - 1}
-              className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6"></polyline>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Thumbnail strip */}
-      <div className="bg-gray-900/80 border-t border-gray-800 px-6 py-4">
-        <div
+      {/* Main content area */}
+      <div className="flex-1 flex min-h-0">
+        {/* Thumbnails sidebar */}
+        <div className="w-[180px] flex-shrink-0 bg-[#0f0f18]/50 border-l border-white/5 overflow-y-auto py-3 px-3"
           ref={thumbnailsRef}
-          className="flex gap-3 overflow-x-auto pb-2 max-w-[1600px] mx-auto scrollbar-thin"
-          style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}
+          style={{ scrollbarWidth: 'thin', scrollbarColor: '#222 transparent' }}
         >
           {slides.map((slideHtml, index) => (
             <button
               key={index}
               onClick={() => setCurrentSlide(index)}
-              className={`flex-shrink-0 relative rounded-md overflow-hidden transition-all ${
+              className={`w-full mb-2 relative rounded-lg overflow-hidden transition-all ${
                 index === currentSlide
-                  ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900 scale-105'
-                  : 'opacity-60 hover:opacity-90'
+                  ? 'ring-2 ring-white/80 ring-offset-1 ring-offset-[#0a0a0f] shadow-lg shadow-white/5'
+                  : 'opacity-50 hover:opacity-80'
               }`}
-              style={{ width: '160px', height: '90px' }}
+              style={{ aspectRatio: '16/9' }}
             >
               <iframe
                 srcDoc={slideHtml}
@@ -272,16 +245,32 @@ export default function SlideViewerPage() {
                 sandbox="allow-same-origin"
                 loading="lazy"
                 style={{
-                  transform: 'scale(0.0833)',
+                  transform: 'scale(0.0802)',
                   transformOrigin: 'top left',
                   background: '#fff',
                 }}
               />
-              <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5 text-center">
-                <span className="text-[10px] text-white font-medium">{index + 1}</span>
+              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent pt-3 pb-1 text-center">
+                <span className="text-[9px] text-white/80 font-medium">{index + 1}</span>
               </div>
             </button>
           ))}
+        </div>
+
+        {/* Main slide area */}
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-[1100px]">
+            <div className="relative w-full rounded-xl overflow-hidden shadow-2xl shadow-black/60" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                key={currentSlide}
+                srcDoc={slides[currentSlide]}
+                className="absolute inset-0 w-full h-full"
+                sandbox="allow-same-origin"
+                title={`שקף ${currentSlide + 1}`}
+                style={{ background: '#fff' }}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
