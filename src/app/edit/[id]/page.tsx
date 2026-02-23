@@ -14,6 +14,8 @@ export default function SlideViewerPage() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [documentTitle, setDocumentTitle] = useState('')
   const thumbnailsRef = useRef<HTMLDivElement>(null)
+  const slideContainerRef = useRef<HTMLDivElement>(null)
+  const [slideScale, setSlideScale] = useState(0.5)
 
   // Load slides from API
   useEffect(() => {
@@ -59,6 +61,27 @@ export default function SlideViewerPage() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [slides.length])
+
+  // Calculate slide scale to fit container
+  useEffect(() => {
+    const container = slideContainerRef.current
+    if (!container) return
+
+    const updateScale = () => {
+      const rect = container.getBoundingClientRect()
+      // Available space minus padding (24px each side)
+      const availW = rect.width - 48
+      const availH = rect.height - 48
+      const scaleX = availW / 1920
+      const scaleY = availH / 1080
+      setSlideScale(Math.min(scaleX, scaleY))
+    }
+
+    updateScale()
+    const observer = new ResizeObserver(updateScale)
+    observer.observe(container)
+    return () => observer.disconnect()
   }, [slides.length])
 
   // Scroll thumbnail into view
@@ -258,18 +281,28 @@ export default function SlideViewerPage() {
         </div>
 
         {/* Main slide area */}
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="w-full max-w-[1100px]">
-            <div className="relative w-full rounded-xl overflow-hidden shadow-2xl shadow-black/60" style={{ paddingBottom: '56.25%' }}>
-              <iframe
-                key={currentSlide}
-                srcDoc={slides[currentSlide]}
-                className="absolute inset-0 w-full h-full"
-                sandbox="allow-same-origin"
-                title={`שקף ${currentSlide + 1}`}
-                style={{ background: '#fff' }}
-              />
-            </div>
+        <div ref={slideContainerRef} className="flex-1 flex items-center justify-center p-6 overflow-hidden">
+          <div
+            className="rounded-xl overflow-hidden shadow-2xl shadow-black/60"
+            style={{
+              width: Math.round(1920 * slideScale),
+              height: Math.round(1080 * slideScale),
+            }}
+          >
+            <iframe
+              key={currentSlide}
+              srcDoc={slides[currentSlide]}
+              className="border-0"
+              sandbox="allow-same-origin"
+              title={`שקף ${currentSlide + 1}`}
+              style={{
+                width: 1920,
+                height: 1080,
+                transform: `scale(${slideScale})`,
+                transformOrigin: 'top left',
+                background: '#fff',
+              }}
+            />
           </div>
         </div>
       </div>
