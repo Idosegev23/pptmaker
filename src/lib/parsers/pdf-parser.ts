@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai'
 import type { ParsedDocument } from '@/types/brief'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const MODEL = 'gemini-2.0-flash-exp'
+const MODEL = 'gemini-3.1-pro-preview'
 
 /**
  * Parse PDF document - extract text with fallback to Gemini Vision for scanned PDFs
@@ -68,7 +68,7 @@ async function parsePdfWithVision(buffer: Buffer): Promise<ParsedDocument> {
         ],
       },
     ],
-    config: { temperature: 0.1 },
+    config: {},
   })
 
   const text = response.text || ''

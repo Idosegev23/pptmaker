@@ -3,12 +3,12 @@
  * Uses Gemini to extract structured proposal data from client brief + kickoff documents
  */
 
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '../utils/json-cleanup'
 import type { ExtractedBriefData } from '@/types/brief'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const MODEL = 'gemini-3-pro-preview'
+const MODEL = 'gemini-3.1-pro-preview'
 
 /**
  * Extract structured data from uploaded documents
@@ -37,7 +37,7 @@ export async function extractFromDocuments(
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
-        temperature: 0.1,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       },
     })
 
@@ -67,9 +67,7 @@ export async function extractFromDocuments(
       const response = await ai.models.generateContent({
         model: MODEL,
         contents: prompt,
-        config: {
-          temperature: 0.2,
-        },
+        config: {},
       })
 
       const text = response.text || ''

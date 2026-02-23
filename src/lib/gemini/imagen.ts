@@ -10,7 +10,7 @@ import type { BrandColors } from './color-extractor'
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
 // Model for image generation
-const IMAGE_MODEL = 'gemini-2.0-flash-exp' // Will use imagen-3 when available
+const IMAGE_MODEL = 'gemini-3-pro-image-preview'
 
 export interface GeneratedImage {
   base64: string

@@ -3,14 +3,14 @@
  * Uses Gemini to recommend relevant influencers for a brand
  */
 
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { BrandResearch } from './brand-research'
 import { parseGeminiJson } from '../utils/json-cleanup'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
 // Use Gemini 3 Pro for best influencer research quality
-const MODEL = 'gemini-3-pro-preview'
+const MODEL = 'gemini-3.1-pro-preview'
 
 export interface InfluencerRecommendation {
   name: string
@@ -224,8 +224,8 @@ export async function researchInfluencers(
       model: MODEL,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.4,
+        tools: [{ googleSearch: {} }, { urlContext: {} }],
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       }
     })
 
@@ -280,8 +280,8 @@ export async function getQuickInfluencerSuggestions(
       model: MODEL,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.5,
+        tools: [{ googleSearch: {} }, { urlContext: {} }],
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       }
     })
 

@@ -3,13 +3,13 @@
  * Comprehensive brand research with Google Search grounding
  */
 
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '../utils/json-cleanup'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-// Use Gemini 3 Pro for best research quality
-const MODEL = 'gemini-3-pro-preview'
+// Use Gemini 3.1 Pro for best research quality
+const MODEL = 'gemini-3.1-pro-preview'
 
 export interface BrandResearch {
   // Basic Info
@@ -343,8 +343,8 @@ ${websiteContext}
       model: MODEL,
       contents: researchPrompt,
       config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.2, // Low temperature for factual research
+        tools: [{ googleSearch: {} }, { urlContext: {} }],
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       }
     })
 
@@ -456,8 +456,8 @@ export async function quickBrandSummary(brandName: string): Promise<{
       model: MODEL,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.3,
+        tools: [{ googleSearch: {} }, { urlContext: {} }],
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       }
     })
 

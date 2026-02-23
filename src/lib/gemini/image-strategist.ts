@@ -4,14 +4,14 @@
  * Instead of fixed templates, this creates a custom strategy for each brand
  */
 
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { BrandResearch } from './brand-research'
 import type { BrandColors } from './color-extractor'
 import type { ProposalContent } from '../openai/proposal-writer'
 import { parseGeminiJson } from '../utils/json-cleanup'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const TEXT_MODEL = 'gemini-3-pro-preview'
+const TEXT_MODEL = 'gemini-3.1-pro-preview'
 
 export interface ImagePlan {
   id: string
@@ -103,6 +103,7 @@ ${proposalContent?.goals?.map(g => `- ${g.title}: ${g.description}`).join('\n') 
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       },
     })
 

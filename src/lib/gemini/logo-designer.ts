@@ -10,7 +10,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 // Model for image generation - Nano Banana Pro
 const IMAGE_MODEL = 'gemini-3-pro-image-preview'
 // Model for analysis - Gemini 3 Pro
-const ANALYSIS_MODEL = 'gemini-3-pro-preview'
+const ANALYSIS_MODEL = 'gemini-3.1-pro-preview'
 
 export interface LogoDesign {
   type: 'watermark' | 'pattern' | 'hero-background' | 'color-extraction' | 'decorative'

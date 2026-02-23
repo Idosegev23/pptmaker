@@ -7,7 +7,7 @@ import { GoogleGenAI } from '@google/genai'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-const MODEL = 'gemini-2.0-flash-exp' // Will be 'gemini-3-pro' when available
+const MODEL = 'gemini-3.1-pro-preview'
 
 export interface BrandColors {
   primary: string       // Main brand color (HEX)
@@ -85,9 +85,7 @@ export async function extractColorsFromLogo(imageUrl: string): Promise<BrandColo
           ]
         }
       ],
-      config: {
-        temperature: 0.2,
-      }
+      config: {}
     })
 
     const text = response.text || ''
@@ -144,9 +142,7 @@ ${cssColors.join(', ')}
     const response = await ai.models.generateContent({
       model: MODEL,
       contents: prompt,
-      config: {
-        temperature: 0.2,
-      }
+      config: {}
     })
 
     const text = response.text || ''
@@ -154,7 +150,7 @@ ${cssColors.join(', ')}
     if (jsonMatch) {
       return JSON.parse(jsonMatch[1]) as BrandColors
     }
-    
+
     throw new Error('No JSON in response')
   } catch (error) {
     console.error('[Gemini] Color analysis error:', error)
@@ -209,9 +205,7 @@ export async function analyzeDesignStyle(imageUrl: string): Promise<DesignStyle>
           ]
         }
       ],
-      config: {
-        temperature: 0.3,
-      }
+      config: {}
     })
 
     const text = response.text || ''

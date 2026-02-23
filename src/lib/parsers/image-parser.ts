@@ -2,7 +2,7 @@ import { GoogleGenAI } from '@google/genai'
 import type { ParsedDocument } from '@/types/brief'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const MODEL = 'gemini-2.0-flash-exp'
+const MODEL = 'gemini-3.1-pro-preview'
 
 /**
  * Parse document images (screenshots, photos of docs) using Gemini Vision OCR
@@ -28,7 +28,7 @@ export async function parseImage(buffer: Buffer, mimeType: string): Promise<Pars
         ],
       },
     ],
-    config: { temperature: 0.1 },
+    config: {},
   })
 
   const text = response.text || ''

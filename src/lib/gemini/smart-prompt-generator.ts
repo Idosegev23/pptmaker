@@ -4,14 +4,14 @@
  * Based on the image strategy, creates specific, creative prompts
  */
 
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { BrandResearch } from './brand-research'
 import type { BrandColors } from './color-extractor'
 import type { ImageStrategy, ImagePlan } from './image-strategist'
 import { parseGeminiJson } from '../utils/json-cleanup'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const TEXT_MODEL = 'gemini-3-pro-preview'
+const TEXT_MODEL = 'gemini-3.1-pro-preview'
 
 export interface SmartImagePrompt {
   imageId: string
@@ -130,6 +130,7 @@ ${imagePlans}
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
+        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       },
     })
 
