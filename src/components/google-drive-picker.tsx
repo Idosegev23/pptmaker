@@ -122,6 +122,7 @@ export default function GoogleDrivePicker({ onFilePicked, disabled, label }: Goo
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: 'https://www.googleapis.com/auth/drive.readonly',
+      include_granted_scopes: false,
       callback: async (response) => {
         if (response.error || !response.access_token) {
           console.error('[Google Drive Picker] Auth error:', response.error)

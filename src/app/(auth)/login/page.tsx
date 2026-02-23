@@ -34,7 +34,7 @@ function LoginContent() {
           scopes: 'openid email profile https://www.googleapis.com/auth/drive.readonly',
           queryParams: {
             access_type: 'offline',
-            prompt: 'consent',
+            prompt: 'select_account consent',
           },
         },
       })
