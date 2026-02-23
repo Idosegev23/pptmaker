@@ -4,8 +4,8 @@ import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import GoogleDrivePicker from '@/components/google-drive-picker'
 import type { UploadedDocument } from '@/types/brief'
 
 type ProcessingStage = 'idle' | 'uploading' | 'parsing' | 'extracting' | 'creating' | 'done' | 'error'
@@ -23,8 +23,7 @@ export default function CreateProposalPage() {
   const [briefFile, setBriefFile] = useState<File | null>(null)
   const [kickoffDoc, setKickoffDoc] = useState<UploadedDocument | null>(null)
   const [kickoffFile, setKickoffFile] = useState<File | null>(null)
-  const [googleDocsUrl, setGoogleDocsUrl] = useState('')
-  const [googleDocsType, setGoogleDocsType] = useState<'client_brief' | 'kickoff'>('client_brief')
+  const [driveDocType, setDriveDocType] = useState<'client_brief' | 'kickoff'>('client_brief')
   const [stage, setStage] = useState<ProcessingStage>('idle')
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
@@ -66,31 +65,12 @@ export default function CreateProposalPage() {
     [handleFileSelect]
   )
 
-  const handleGoogleDocsAdd = useCallback(() => {
-    if (!googleDocsUrl.includes('docs.google.com/document')) {
-      setError('כתובת לא תקינה. צריך להיות קישור ל-Google Docs.')
-      return
-    }
-
-    const doc: UploadedDocument = {
-      id: `${googleDocsType}-${Date.now()}`,
-      type: googleDocsType,
-      format: 'google_docs',
-      status: 'pending',
-      fileName: 'Google Docs',
-      googleDocsUrl,
-    }
-
-    if (googleDocsType === 'client_brief') {
-      setBriefDoc(doc)
-      setBriefFile(null) // Clear file since this is a URL
-    } else {
-      setKickoffDoc(doc)
-      setKickoffFile(null)
-    }
-    setGoogleDocsUrl('')
-    setError(null)
-  }, [googleDocsUrl, googleDocsType])
+  const handleDriveFilePicked = useCallback(
+    (file: File) => {
+      handleFileSelect(file, driveDocType)
+    },
+    [driveDocType, handleFileSelect]
+  )
 
   const parseFileUpload = async (file: File, docType: string): Promise<string> => {
     const formData = new FormData()
@@ -101,18 +81,6 @@ export default function CreateProposalPage() {
     const data = await res.json()
 
     if (!res.ok) throw new Error(data.error || 'Failed to parse document')
-    return data.parsedText
-  }
-
-  const parseGoogleDocUrl = async (url: string, docType: string): Promise<string> => {
-    const res = await fetch('/api/parse-document', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ googleDocsUrl: url, docType }),
-    })
-    const data = await res.json()
-
-    if (!res.ok) throw new Error(data.error || 'Failed to parse Google Doc')
     return data.parsedText
   }
 
@@ -133,9 +101,7 @@ export default function CreateProposalPage() {
       let kickoffText = ''
 
       // Parse brief (required)
-      if (briefDoc.format === 'google_docs' && briefDoc.googleDocsUrl) {
-        briefText = await parseGoogleDocUrl(briefDoc.googleDocsUrl, 'client_brief')
-      } else if (briefFile) {
+      if (briefFile) {
         briefText = await parseFileUpload(briefFile, 'client_brief')
       }
 
@@ -144,13 +110,9 @@ export default function CreateProposalPage() {
       }
 
       // Parse kickoff (optional - failure should not block the flow)
-      if (kickoffDoc) {
+      if (kickoffDoc && kickoffFile) {
         try {
-          if (kickoffDoc.format === 'google_docs' && kickoffDoc.googleDocsUrl) {
-            kickoffText = await parseGoogleDocUrl(kickoffDoc.googleDocsUrl, 'kickoff')
-          } else if (kickoffFile) {
-            kickoffText = await parseFileUpload(kickoffFile, 'kickoff')
-          }
+          kickoffText = await parseFileUpload(kickoffFile, 'kickoff')
         } catch (kickoffErr) {
           console.warn('[Create Proposal] Kickoff parsing failed, continuing without it:', kickoffErr)
           setWarning(
@@ -281,14 +243,20 @@ export default function CreateProposalPage() {
               ) : (
                 <div>
                   <p className="text-muted-foreground mb-4">גרור קובץ לכאן או לחץ לבחירה</p>
-                  <Button
-                    variant="outline"
-                    onClick={() => briefInputRef.current?.click()}
-                  >
-                    בחר קובץ
-                  </Button>
+                  <div className="flex gap-2 justify-center">
+                    <Button
+                      variant="outline"
+                      onClick={() => briefInputRef.current?.click()}
+                    >
+                      בחר קובץ
+                    </Button>
+                    <GoogleDrivePicker
+                      onFilePicked={(file) => handleFileSelect(file, 'client_brief')}
+                      disabled={isProcessing}
+                    />
+                  </div>
                   <p className="text-xs text-muted-foreground mt-3">
-                    PDF, Word, תמונה (עד 20MB)
+                    PDF, Word, Google Docs, תמונה (עד 20MB)
                   </p>
                 </div>
               )}
@@ -343,14 +311,20 @@ export default function CreateProposalPage() {
               ) : (
                 <div>
                   <p className="text-muted-foreground mb-4">גרור קובץ לכאן או לחץ לבחירה</p>
-                  <Button
-                    variant="outline"
-                    onClick={() => kickoffInputRef.current?.click()}
-                  >
-                    בחר קובץ
-                  </Button>
+                  <div className="flex gap-2 justify-center">
+                    <Button
+                      variant="outline"
+                      onClick={() => kickoffInputRef.current?.click()}
+                    >
+                      בחר קובץ
+                    </Button>
+                    <GoogleDrivePicker
+                      onFilePicked={(file) => handleFileSelect(file, 'kickoff')}
+                      disabled={isProcessing}
+                    />
+                  </div>
                   <p className="text-xs text-muted-foreground mt-3">
-                    PDF, Word, תמונה (עד 20MB)
+                    PDF, Word, Google Docs, תמונה (עד 20MB)
                   </p>
                 </div>
               )}
@@ -368,34 +342,6 @@ export default function CreateProposalPage() {
             />
           </Card>
         </div>
-
-        {/* Google Docs Option */}
-        <Card className="p-6 mb-8">
-          <h3 className="font-semibold mb-3">או הדבק קישור ל-Google Docs</h3>
-          <div className="flex gap-3">
-            <select
-              className="border rounded-lg px-3 py-2 text-sm bg-background"
-              value={googleDocsType}
-              onChange={(e) => setGoogleDocsType(e.target.value as 'client_brief' | 'kickoff')}
-            >
-              <option value="client_brief">בריף לקוח</option>
-              <option value="kickoff">מסמך התנעה</option>
-            </select>
-            <Input
-              dir="ltr"
-              placeholder="https://docs.google.com/document/d/..."
-              value={googleDocsUrl}
-              onChange={(e) => setGoogleDocsUrl(e.target.value)}
-              className="flex-1"
-            />
-            <Button variant="outline" onClick={handleGoogleDocsAdd} disabled={!googleDocsUrl}>
-              הוסף
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            דורש הגדרת חשבון שירות Google. אם לא מוגדר, ייצא את המסמך כ-PDF והעלה ידנית.
-          </p>
-        </Card>
 
         {/* Warning */}
         {warning && (
