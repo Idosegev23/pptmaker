@@ -4,7 +4,36 @@
  * Uses plain fetch + regex HTML parsing — no external dependencies.
  */
 
-import type { EnhancedScrapeResult } from './enhanced-scraper'
+export interface EnhancedScrapeResult {
+  url: string
+  title: string
+  description: string
+  screenshot: string | null
+  logoUrl: string | null
+  logoAlternatives: string[]
+  favicon: string | null
+  ogImage: string | null
+  heroImages: string[]
+  productImages: string[]
+  lifestyleImages: string[]
+  allImages: string[]
+  primaryColor: string | null
+  secondaryColor: string | null
+  accentColor: string | null
+  colorPalette: string[]
+  headings: { h1: string[]; h2: string[]; h3: string[] }
+  paragraphs: string[]
+  tagline: string | null
+  aboutText: string | null
+  socialLinks: Record<string, string>
+  emails: string[]
+  phones: string[]
+  address: string | null
+  metaKeywords: string[]
+  metaDescription: string
+  dominantColors?: string[]
+  cssColors?: string[]
+}
 
 /**
  * Scrape a website using plain fetch (no Apify).

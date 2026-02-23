@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { generateMultiPagePdf } from '@/lib/playwright/pdf'
 import { renderProposalToHtml } from '@/templates/quote/proposal-template'
 import { generatePremiumProposalSlides } from '@/templates/quote/premium-proposal-template'
+import { generateAISlides } from '@/lib/gemini/slide-designer'
 import { generateProposalImages } from '@/lib/gemini/proposal-images'
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 
@@ -109,19 +110,28 @@ export async function POST(request: NextRequest) {
       imageStrategy: imageStrategy?.conceptSummary || 'none',
     })
     
-    // Render proposal slides - use premium template for auto-proposals
+    // Render proposal slides
     let htmlPages: string[]
-    
+
     if (isAutoProposal) {
-      console.log('[PDF] Using premium template for auto-proposal')
-      htmlPages = generatePremiumProposalSlides(documentData, {
+      const templateConfig = {
         accentColor: brandColors?.primary || '#E94560',
         brandLogoUrl: documentData.brandLogoFile as string | undefined,
         clientLogoUrl: scrapedAssets?.logoUrl,
         images: finalImages,
         extraImages: extraImages,
         imageStrategy: imageStrategy,
-      })
+      }
+
+      // Try AI-designed slides first, fallback to premium template
+      try {
+        console.log('[PDF] Generating AI-designed slides')
+        htmlPages = await generateAISlides(documentData, templateConfig)
+        console.log(`[PDF] AI generated ${htmlPages.length} slides`)
+      } catch (aiError) {
+        console.error('[PDF] AI slide generation failed, using premium template:', aiError)
+        htmlPages = generatePremiumProposalSlides(documentData, templateConfig)
+      }
     } else {
       console.log('[PDF] Using standard template')
       htmlPages = renderProposalToHtml(documentData, {

@@ -3,7 +3,7 @@ import { generateProposalContent } from '@/lib/openai/proposal-writer'
 import type { ProposalContent } from '@/lib/openai/proposal-writer'
 import { researchInfluencers } from '@/lib/gemini/influencer-research'
 import type { InfluencerStrategy } from '@/lib/gemini/influencer-research'
-import { discoverAndScrapeInfluencers, scrapeMultipleInfluencers } from '@/lib/apify/influencer-scraper'
+import { scrapeMultipleInfluencers } from '@/lib/apify/influencer-scraper'
 import type { ScrapedInfluencer } from '@/lib/apify/influencer-scraper'
 import { generateBrandAssetsFromLogo } from '@/lib/gemini/logo-designer'
 import { generateSmartImages, generateIsraeliProposalImages } from '@/lib/gemini/israeli-image-generator'
@@ -565,20 +565,8 @@ export async function POST(request: NextRequest) {
       // 2. AI influencer research
       researchInfluencers(brandResearch!, effectiveBudget, effectiveGoals),
 
-      // 3. Real influencer scraping
-      discoverAndScrapeInfluencers(
-        brandResearch!.industry || 'lifestyle',
-        {
-          gender: brandResearch!.targetDemographics?.primaryAudience?.gender,
-          ageRange: brandResearch!.targetDemographics?.primaryAudience?.ageRange,
-          interests: brandResearch!.targetDemographics?.primaryAudience?.interests,
-        },
-        effectiveBudget,
-        6
-      ).catch(err => {
-        console.error('[API Generate] Influencer scraping failed:', err)
-        return []
-      }),
+      // 3. Influencer scraping handled after AI research provides usernames
+      Promise.resolve([] as ScrapedInfluencer[]),
 
       // 4. Generate brand assets from logo
       logoUrl ? generateBrandAssetsFromLogo(logoUrl, brandResearch!.brandName, brandResearch!.industry || 'lifestyle').catch(err => {

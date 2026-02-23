@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { renderProposalToHtml } from '@/templates/quote/proposal-template'
 import { generatePremiumProposalSlides } from '@/templates/quote/premium-proposal-template'
+import { generateAISlides } from '@/lib/gemini/slide-designer'
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 
 /**
@@ -72,14 +73,24 @@ export async function POST(request: NextRequest) {
     let htmlPages: string[]
 
     if (isAutoProposal) {
-      htmlPages = generatePremiumProposalSlides(documentData, {
+      const templateConfig = {
         accentColor: brandColors?.primary || '#E94560',
         brandLogoUrl: documentData.brandLogoFile as string | undefined,
         clientLogoUrl: scrapedAssets?.logoUrl,
         images: finalImages,
         extraImages,
         imageStrategy,
-      })
+      }
+
+      // Try AI-designed slides first, fallback to premium template
+      try {
+        console.log('[Preview Slides] Generating AI-designed slides')
+        htmlPages = await generateAISlides(documentData, templateConfig)
+        console.log(`[Preview Slides] AI generated ${htmlPages.length} slides`)
+      } catch (aiError) {
+        console.error('[Preview Slides] AI slide generation failed, using premium template:', aiError)
+        htmlPages = generatePremiumProposalSlides(documentData, templateConfig)
+      }
     } else {
       htmlPages = renderProposalToHtml(documentData, {
         accentColor: '#E94560',

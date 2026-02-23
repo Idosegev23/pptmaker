@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { discoverAndScrapeInfluencers, scrapeMultipleInfluencers } from '@/lib/apify/influencer-scraper'
+import { scrapeMultipleInfluencers } from '@/lib/apify/influencer-scraper'
 import { researchInfluencers } from '@/lib/gemini/influencer-research'
 import type { BrandResearch } from '@/lib/gemini/brand-research'
 
@@ -50,37 +50,28 @@ export async function POST(request: NextRequest) {
       })
     }
     
-    // Mode: Full discovery - AI research + real scraping
+    // Mode: Full discovery - AI research + scrape recommended profiles
     if (mode === 'discover' && brandResearch && budget && goals) {
-      console.log('[API Influencers] Full discovery mode')
-      
+      console.log('[API Influencers] Full discovery mode (AI research + profile scraping)')
+
       // Step 1: Get AI recommendations
       const strategy = await researchInfluencers(brandResearch, budget, goals)
       console.log(`[API Influencers] AI recommended ${strategy.recommendations?.length || 0} influencers`)
-      
-      // Step 2: Try to scrape real profiles based on industry
-      const industry = brandResearch.industry || 'lifestyle'
-      const audience = {
-        gender: brandResearch.targetDemographics?.primaryAudience?.gender,
-        ageRange: brandResearch.targetDemographics?.primaryAudience?.ageRange,
-        interests: brandResearch.targetDemographics?.primaryAudience?.interests,
+
+      // Step 2: Scrape profiles from AI recommendations
+      const handles = (strategy.recommendations || [])
+        .slice(0, 8)
+        .map((rec: { handle?: string }) => rec.handle?.replace('@', '').trim())
+        .filter(Boolean) as string[]
+
+      let scrapedInfluencers: Awaited<ReturnType<typeof scrapeMultipleInfluencers>> = []
+      if (handles.length > 0) {
+        scrapedInfluencers = await scrapeMultipleInfluencers(handles)
+        console.log(`[API Influencers] Scraped ${scrapedInfluencers.length} profiles from AI recommendations`)
       }
-      
-      // Scrape real influencers
-      const scrapedInfluencers = await discoverAndScrapeInfluencers(
-        industry,
-        audience,
-        budget,
-        6 // Get 6 real influencers
-      )
-      
-      console.log(`[API Influencers] Scraped ${scrapedInfluencers.length} real profiles`)
-      
-      // Filter: Only include influencers with 10K+ followers
+
       const filteredScraped = scrapedInfluencers.filter(inf => inf.followers >= 10000)
-      console.log(`[API Influencers] Filtered to ${filteredScraped.length} influencers with 10K+ followers`)
-      
-      // Combine AI strategy with real scraped data
+
       return NextResponse.json({
         success: true,
         strategy,

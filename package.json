@@ -14,7 +14,6 @@
     "@sparticuz/chromium": "^143.0.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.2",
-    "apify-client": "^2.21.0",
     "clsx": "^2.1.1",
     "googleapis": "^144.0.0",
     "mammoth": "^1.11.0",
