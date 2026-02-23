@@ -29,7 +29,7 @@ declare global {
         PickerBuilder: new () => GooglePickerBuilder
         ViewId: { DOCS: string }
         Action: { PICKED: string; CANCEL: string }
-        DocsView: new (viewId: string) => { setMimeTypes: (types: string) => unknown }
+        DocsView: new (viewId: string) => { setMimeTypes: (types: string) => unknown; setIncludeFolders: (v: boolean) => unknown; setEnableDrives: (v: boolean) => unknown }
       }
     }
     gapi?: {
@@ -40,6 +40,7 @@ declare global {
 
 interface GooglePickerBuilder {
   addView: (view: unknown) => GooglePickerBuilder
+  enableFeature: (feature: unknown) => GooglePickerBuilder
   setOAuthToken: (token: string) => GooglePickerBuilder
   setDeveloperKey: (key: string) => GooglePickerBuilder
   setCallback: (callback: (data: GooglePickerCallbackData) => void) => GooglePickerBuilder
@@ -120,11 +121,21 @@ export default function GoogleDrivePicker({ onFilePicked, disabled, label }: Goo
 
       // Build and show the picker
       const google = window.google!
-      const docsView = new google.picker!.DocsView(google.picker!.ViewId.DOCS)
-      docsView.setMimeTypes(PICKER_MIME_TYPES)
+
+      // My Drive view
+      const myDriveView = new google.picker!.DocsView(google.picker!.ViewId.DOCS)
+      myDriveView.setMimeTypes(PICKER_MIME_TYPES)
+      myDriveView.setIncludeFolders(true)
+
+      // Shared Drives view
+      const sharedDriveView = new google.picker!.DocsView(google.picker!.ViewId.DOCS)
+      sharedDriveView.setMimeTypes(PICKER_MIME_TYPES)
+      sharedDriveView.setEnableDrives(true)
+      sharedDriveView.setIncludeFolders(true)
 
       const picker = new google.picker!.PickerBuilder()
-        .addView(docsView)
+        .addView(myDriveView)
+        .addView(sharedDriveView)
         .setOAuthToken(accessToken)
         .setDeveloperKey(GOOGLE_API_KEY)
         .setCallback(async (data: GooglePickerCallbackData) => {
