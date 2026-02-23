@@ -153,38 +153,26 @@ ${imagePlans}
 }
 
 /**
- * Convert SmartImagePrompt to a text prompt for Nano Banana Pro
+ * Convert SmartImagePrompt to a narrative-style text prompt for Nano Banana Pro
+ *
+ * Uses narrative descriptions instead of tag lists, following Gemini image
+ * generation best practices:
+ * - Descriptive sentences > keyword tags
+ * - Photographic vocabulary (aperture, focal length, lighting setup)
+ * - Specific composition instructions
+ * - Semantic negatives woven into the description
  */
 export function smartPromptToText(smartPrompt: SmartImagePrompt): string {
   const p = smartPrompt.prompt
-  
-  return `Create a professional commercial photograph.
 
-SUBJECT: ${p.subject}
+  // Build a cohesive narrative prompt
+  const colorMention = p.colors.slice(0, 3).join(', ')
 
-SCENE: ${p.scene}
+  return `A premium commercial photograph of ${p.subject}, set in ${p.scene}. The atmosphere is ${p.mood}, with a color palette dominated by ${colorMention}. ${p.israeliElements}.
 
-MOOD & ATMOSPHERE: ${p.mood}
+Shot with a professional DSLR camera, ${p.lighting}. The composition features ${p.composition}. The overall style is ${p.style} — sharp focus on the main subject with a shallow depth of field creating a soft bokeh background. High-end advertising quality at ${smartPrompt.aspectRatio} aspect ratio.
 
-COLORS: ${p.colors.join(', ')}
-
-COMPOSITION: ${p.composition}
-
-LIGHTING: ${p.lighting}
-
-STYLE: ${p.style}
-
-ISRAELI ELEMENTS: ${p.israeliElements}
-
-CRITICAL REQUIREMENTS:
-- Generate ONLY a visual/photographic image
-- Do NOT include ANY text, letters, words, logos, typography, or brand names
-- The image must be purely visual - no writing of any kind
-- High resolution, commercial quality
-- Aspect ratio: ${smartPrompt.aspectRatio}
-- Photorealistic, high-end advertising quality
-
-AVOID: generic stock photo feel, American/European aesthetics, cold lighting, text of any kind`
+The image is purely photographic with absolutely no text, no letters, no words, no logos, no watermarks, and no typography of any kind. No generic stock photo aesthetics — instead, authentic and specific, avoiding cold or sterile lighting.`
 }
 
 /**
