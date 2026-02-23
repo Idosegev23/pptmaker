@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -8,6 +8,34 @@ import GoogleDrivePicker from '@/components/google-drive-picker'
 import type { UploadedDocument, ExtractedBriefData } from '@/types/brief'
 
 type ProcessingStage = 'idle' | 'parsing' | 'processing' | 'researching' | 'creating' | 'done' | 'error'
+
+// ---------- Professional tips shown during processing ----------
+const PROCESSING_TIPS = [
+  'הצעת מחיר מנצחת מתחילה בהבנה עמוקה של הלקוח - לא רק מה הוא מבקש, אלא למה',
+  'משפיענים עם מעורבות גבוהה (3%+) מניבים ROI גבוה יותר ממשפיענים עם עוקבים רבים ומעורבות נמוכה',
+  'קמפיין משפיענים ממוצע מחזיר $5.78 על כל דולר שמושקע',
+  'שילוב בין Macro ו-Micro משפיענים מייצר גם חשיפה רחבה וגם אמינות ממוקדת',
+  'תוכן שנוצר על ידי משפיענים מקבל מעורבות גבוהה פי 8 מתוכן ממותג רגיל',
+  'הגדרת KPIs ברורים מראש מאפשרת מדידה אמיתית של הצלחת הקמפיין',
+  'בריף ממוקד ותמציתי למשפיען מניב תוכן אותנטי יותר מבריף מפורט מדי',
+  'קהלי יעד מוגדרים היטב מעלים את אחוזי ההמרה ב-73% בממוצע',
+  'הזמן הממוצע לסגירת עסקה עם הצעה מעוצבת ומקצועית קצר ב-40%',
+  'שקיפות בתמחור בונה אמון - תמיד הסבירו מאחורי המספרים',
+  'רילס וסטוריז הם הפורמטים עם הצמיחה המהירה ביותר בשיווק משפיענים',
+  'קמפיינים עם נרטיב מרכזי אחד חזק מצליחים יותר מקמפיינים מפוזרים',
+  '92% מהצרכנים סומכים על המלצה ממשפיען יותר מפרסומת מסורתית',
+  'תכנון timeline ריאלי עם buffers מונע לחצים ומשפר את איכות התוכן',
+  'שלב תמיד אלמנט של UGC (תוכן גולשים) כמכפיל ערך לקמפיין',
+  'הצגת case studies דומים מעלה את שיעור הסגירה ב-25%',
+  'ניתוח מתחרים לפני בניית ההצעה מאפשר מיצוב ייחודי ומדויק',
+  'שילוב בין אורגני לממומן מייצר אפקט סינרגטי שמכפיל תוצאות',
+  'CPE (Cost Per Engagement) ממוצע בישראל נע בין 1.5-4 שקלים',
+  'הצעה עם תובנה אסטרטגית מבוססת מחקר מרשימה יותר מהצעה טכנית בלבד',
+  'הכנת 3 חלופות תקציב (בסיס, מורחב, פרימיום) מעלה את שווי העסקה ב-30%',
+  'משפיענים שעובדים עם מותג לטווח ארוך מייצרים תוצאות טובות פי 2 מקמפיין חד-פעמי',
+  'הוספת metrics מצופים (reach, impressions, engagement) מראה מקצועיות ובונה אמון',
+  'תוכן video מניב מעורבות גבוהה פי 3 מתמונות סטטיות ברשתות החברתיות',
+]
 
 interface LogEntry {
   id: string
@@ -351,11 +379,41 @@ export default function CreateProposalPage() {
     }
   }
 
+  // Rotate tips during processing (slow - 7 seconds each)
+  const [tipIndex, setTipIndex] = useState(0)
+  const [tipVisible, setTipVisible] = useState(true)
+
+  useEffect(() => {
+    if (stage === 'idle' || stage === 'error') return
+    const interval = setInterval(() => {
+      setTipVisible(false)
+      setTimeout(() => {
+        setTipIndex(prev => (prev + 1) % PROCESSING_TIPS.length)
+        setTipVisible(true)
+      }, 500) // fade out, then change + fade in
+    }, 7000)
+    return () => clearInterval(interval)
+  }, [stage])
+
   // Rotate brand facts
   const factToShow = brandFacts.length > 0 ? brandFacts[currentFact % brandFacts.length] : null
   if (brandFacts.length > 1) {
-    setTimeout(() => setCurrentFact(prev => prev + 1), 4000)
+    setTimeout(() => setCurrentFact(prev => prev + 1), 5000)
   }
+
+  // Elapsed time counter
+  const [elapsed, setElapsed] = useState(0)
+  const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (stage !== 'idle' && stage !== 'error' && stage !== 'done') {
+      setElapsed(0)
+      elapsedRef.current = setInterval(() => setElapsed(prev => prev + 1), 1000)
+    } else if (elapsedRef.current) {
+      clearInterval(elapsedRef.current)
+    }
+    return () => { if (elapsedRef.current) clearInterval(elapsedRef.current) }
+  }, [stage])
 
   const isProcessing = stage !== 'idle' && stage !== 'error'
 
@@ -531,72 +589,183 @@ export default function CreateProposalPage() {
           </div>
         )}
 
-        {/* Processing Panel */}
+        {/* Processing Panel - Premium Design */}
         {isProcessing && (
-          <div className="space-y-4 mb-8">
-            {/* Progress Steps */}
-            <Card className="p-6">
-              <div className="flex items-center gap-4 mb-6 flex-wrap">
-                <StepIndicator label="קריאת מסמכים" status={getStepStatus('parsing', stage)} />
-                <div className="flex-1 h-px bg-border min-w-4" />
-                <StepIndicator label="עיבוד AI" status={getStepStatus('processing', stage)} />
-                <div className="flex-1 h-px bg-border min-w-4" />
-                <StepIndicator label="מחקר" status={getStepStatus('researching', stage)} />
-                <div className="flex-1 h-px bg-border min-w-4" />
-                <StepIndicator label="יצירת מסמך" status={getStepStatus('creating', stage)} />
+          <div className="space-y-6 mb-8">
+            {/* Main Processing Card with gradient */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-purple-950 text-white p-8 shadow-2xl">
+              {/* Animated background orbs */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl animate-pulse" />
+                <div className="absolute -bottom-32 -left-20 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '4s' }} />
               </div>
 
-              {/* Brand card - shown once brand is identified */}
-              {brandInfo?.brand?.name && (
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-lg">
-                      {brandInfo.brand.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-bold text-lg">{brandInfo.brand.name}</p>
-                      {brandInfo.brand.industry && (
-                        <p className="text-sm text-muted-foreground">{brandInfo.brand.industry}</p>
-                      )}
-                    </div>
-                    {brandInfo.budget?.amount ? (
-                      <div className="mr-auto text-left">
-                        <p className="text-sm text-muted-foreground">תקציב</p>
-                        <p className="font-bold">{brandInfo.budget.currency}{brandInfo.budget.amount.toLocaleString()}</p>
-                      </div>
-                    ) : null}
-                  </div>
-                  {factToShow && (
-                    <p className="text-sm text-muted-foreground mt-3 pt-3 border-t border-primary/10 animate-pulse">
-                      {factToShow}
+              <div className="relative z-10">
+                {/* Header with timer */}
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h2 className="text-2xl font-bold mb-1">
+                      {stage === 'done' ? 'ההצעה מוכנה!' : 'בונה את ההצעה שלך...'}
+                    </h2>
+                    <p className="text-white/60 text-sm">
+                      {stage === 'parsing' && 'קורא ומנתח את המסמכים שהעלית'}
+                      {stage === 'processing' && 'הסוכן מנתח, מצליב, ומייצר הצעה מלאה'}
+                      {stage === 'researching' && 'מריץ מחקר שוק ומשפיענים ברקע'}
+                      {stage === 'creating' && 'שומר את ההצעה במערכת'}
+                      {stage === 'done' && 'מעביר אותך לעורך ההצעה'}
                     </p>
+                  </div>
+                  {stage !== 'done' && (
+                    <div className="text-left">
+                      <div className="text-3xl font-mono font-bold tabular-nums">
+                        {Math.floor(elapsed / 60).toString().padStart(2, '0')}:{(elapsed % 60).toString().padStart(2, '0')}
+                      </div>
+                      <p className="text-white/40 text-xs">זמן עיבוד</p>
+                    </div>
                   )}
                 </div>
-              )}
 
-              {/* Live log */}
-              <div className="bg-muted/50 rounded-lg p-4 max-h-64 overflow-y-auto font-mono text-sm space-y-1">
-                {logs.map((log) => (
-                  <div key={log.id} className="flex gap-2 items-start">
-                    <span className="text-muted-foreground text-xs mt-0.5 shrink-0">
-                      {log.timestamp.toLocaleTimeString('he-IL')}
-                    </span>
-                    <span className={getLogColor(log.type)}>
-                      {getLogIcon(log.type)}
-                    </span>
-                    <span className={log.type === 'detail' ? 'text-muted-foreground' : ''}>
-                      {log.message}
-                    </span>
-                  </div>
-                ))}
-                {stage !== 'done' && (
-                  <div className="flex gap-2 items-center text-muted-foreground">
-                    <span className="text-xs mt-0.5 shrink-0">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
-                    <span className="animate-pulse">...</span>
+                {/* Progress Steps - Premium style */}
+                <div className="flex items-center gap-3 mb-8">
+                  {[
+                    { key: 'parsing', label: 'סריקה', icon: '1' },
+                    { key: 'processing', label: 'ניתוח AI', icon: '2' },
+                    { key: 'researching', label: 'מחקר', icon: '3' },
+                    { key: 'creating', label: 'יצירה', icon: '4' },
+                  ].map((step, i) => {
+                    const status = getStepStatus(step.key, stage)
+                    return (
+                      <div key={step.key} className="flex items-center gap-3 flex-1">
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 ${
+                            status === 'done'
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                              : status === 'active'
+                              ? 'bg-white text-indigo-900 shadow-lg shadow-white/20 scale-110'
+                              : 'bg-white/10 text-white/40'
+                          }`}>
+                            {status === 'done' ? (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : status === 'active' ? (
+                              <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-ping" />
+                            ) : step.icon}
+                          </div>
+                          <span className={`text-sm hidden sm:inline ${
+                            status === 'done' ? 'text-emerald-400' :
+                            status === 'active' ? 'text-white font-medium' :
+                            'text-white/40'
+                          }`}>{step.label}</span>
+                        </div>
+                        {i < 3 && (
+                          <div className="flex-1 h-px relative">
+                            <div className="absolute inset-0 bg-white/10" />
+                            <div className={`absolute inset-y-0 right-0 bg-gradient-to-l from-emerald-500 to-emerald-400 transition-all duration-700 ${
+                              status === 'done' ? 'left-0' : 'left-full'
+                            }`} />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Brand card - shown once brand is identified */}
+                {brandInfo?.brand?.name && (
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-400 text-white flex items-center justify-center font-bold text-xl shadow-lg">
+                        {brandInfo.brand.name.charAt(0)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold text-lg">{brandInfo.brand.name}</p>
+                        {brandInfo.brand.industry && (
+                          <p className="text-white/50 text-sm">{brandInfo.brand.industry}</p>
+                        )}
+                      </div>
+                      {brandInfo.budget?.amount ? (
+                        <div className="text-left bg-white/5 rounded-lg px-4 py-2">
+                          <p className="text-white/40 text-xs">תקציב</p>
+                          <p className="font-bold text-lg">{brandInfo.budget.currency}{brandInfo.budget.amount.toLocaleString()}</p>
+                        </div>
+                      ) : null}
+                    </div>
+                    {factToShow && (
+                      <p className="text-white/50 text-sm mt-4 pt-4 border-t border-white/5">
+                        {factToShow}
+                      </p>
+                    )}
                   </div>
                 )}
+
+                {/* Tip Card - large, prominent */}
+                <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 mb-6">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM4 11a1 1 0 100-2H3a1 1 0 000 2h1zM10 18a1 1 0 001-1v-1a1 1 0 10-2 0v1a1 1 0 001 1z" />
+                        <path fillRule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-h-[3rem]">
+                      <p className="text-xs text-amber-400/70 font-medium mb-1">
+                        טיפ מקצועי #{tipIndex + 1}
+                      </p>
+                      <p className={`text-white/80 text-sm leading-relaxed transition-opacity duration-500 ${
+                        tipVisible ? 'opacity-100' : 'opacity-0'
+                      }`}>
+                        {PROCESSING_TIPS[tipIndex]}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Tip progress dots */}
+                  <div className="flex justify-center gap-1 mt-4">
+                    {Array.from({ length: Math.min(PROCESSING_TIPS.length, 24) }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                          i === tipIndex ? 'bg-amber-400 w-3' : 'bg-white/15'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
-            </Card>
+            </div>
+
+            {/* Live Log - Separate card, collapsible */}
+            <details className="group" open>
+              <summary className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors mb-2 select-none">
+                <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                </svg>
+                לוג עיבוד ({logs.length} רשומות)
+              </summary>
+              <Card className="p-4">
+                <div className="bg-slate-950 rounded-lg p-4 max-h-56 overflow-y-auto font-mono text-xs space-y-1 direction-ltr text-left" dir="ltr">
+                  {logs.map((log) => (
+                    <div key={log.id} className="flex gap-2 items-start">
+                      <span className="text-slate-600 shrink-0">
+                        {log.timestamp.toLocaleTimeString('he-IL')}
+                      </span>
+                      <span className={getLogColorDark(log.type)}>
+                        {getLogIcon(log.type)}
+                      </span>
+                      <span className={log.type === 'detail' ? 'text-slate-500' : 'text-slate-300'}>
+                        {log.message}
+                      </span>
+                    </div>
+                  ))}
+                  {stage !== 'done' && (
+                    <div className="text-slate-600 animate-pulse">
+                      &gt; waiting...
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </details>
           </div>
         )}
 
@@ -614,25 +783,6 @@ export default function CreateProposalPage() {
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-// === Helper Components ===
-
-function StepIndicator({ label, status }: { label: string; status: 'pending' | 'active' | 'done' }) {
-  return (
-    <div className="flex items-center gap-2 shrink-0">
-      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-        status === 'done' ? 'bg-green-500 text-white' :
-        status === 'active' ? 'bg-primary text-white animate-pulse' :
-        'bg-muted text-muted-foreground'
-      }`}>
-        {status === 'done' ? '✓' : status === 'active' ? '●' : '○'}
-      </div>
-      <span className={`text-sm ${status === 'active' ? 'font-medium' : status === 'done' ? 'text-green-600' : 'text-muted-foreground'}`}>
-        {label}
-      </span>
     </div>
   )
 }
@@ -655,6 +805,16 @@ function getLogColor(type: LogEntry['type']): string {
     case 'error': return 'text-red-600'
     case 'detail': return 'text-muted-foreground'
     default: return 'text-blue-600'
+  }
+}
+
+function getLogColorDark(type: LogEntry['type']): string {
+  switch (type) {
+    case 'success': return 'text-emerald-400'
+    case 'warning': return 'text-amber-400'
+    case 'error': return 'text-red-400'
+    case 'detail': return 'text-slate-600'
+    default: return 'text-blue-400'
   }
 }
 
