@@ -47,15 +47,24 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  // Helper: create a redirect that preserves session cookies
+  function redirectWithSession(url: URL): NextResponse {
+    const redirect = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirect.cookies.set(cookie.name, cookie.value, cookie)
+    })
+    return redirect
+  }
+
   // Protected routes
   const protectedPaths = ['/dashboard', '/admin', '/create', '/documents', '/preview', '/create-proposal', '/wizard']
-  const isProtectedPath = protectedPaths.some(path => 
+  const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )
 
   // Admin-only routes
   const adminPaths = ['/admin']
-  const isAdminPath = adminPaths.some(path => 
+  const isAdminPath = adminPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )
 
@@ -64,7 +73,7 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('redirect', request.nextUrl.pathname)
-    return NextResponse.redirect(url)
+    return redirectWithSession(url)
   }
 
   if (isAdminPath && user) {
@@ -79,7 +88,7 @@ export async function updateSession(request: NextRequest) {
       // Redirect non-admins to dashboard
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
+      return redirectWithSession(url)
     }
   }
 
@@ -87,7 +96,7 @@ export async function updateSession(request: NextRequest) {
   if (request.nextUrl.pathname === '/login' && user) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+    return redirectWithSession(url)
   }
 
   return supabaseResponse
