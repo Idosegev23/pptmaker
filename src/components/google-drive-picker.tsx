@@ -74,28 +74,44 @@ function loadScript(src: string, id: string): Promise<void> {
   })
 }
 
-export default function GoogleDrivePicker({ onFilePicked, disabled, label }: GoogleDrivePickerProps) {
-  const [loading, setLoading] = useState(false)
-  const [scriptsLoaded, setScriptsLoaded] = useState(false)
+// Shared state across all picker instances
+let pickerReady = false
+const pickerReadyCallbacks: (() => void)[] = []
 
-  // Check if picker is configured
-  const isConfigured = Boolean(GOOGLE_API_KEY)
-
-  useEffect(() => {
-    if (!isConfigured) return
-
-    // Only need Picker API script (no GIS needed - we use Supabase token)
+function ensurePickerLoaded(callback: () => void) {
+  if (pickerReady) {
+    callback()
+    return
+  }
+  pickerReadyCallbacks.push(callback)
+  // Only load once
+  if (pickerReadyCallbacks.length === 1) {
     loadScript('https://apis.google.com/js/api.js', 'google-api')
       .then(() => {
         if (window.gapi) {
           window.gapi.load('picker', () => {
-            setScriptsLoaded(true)
+            pickerReady = true
+            pickerReadyCallbacks.forEach(cb => cb())
+            pickerReadyCallbacks.length = 0
           })
         }
       })
       .catch((err) => {
         console.error('[Google Drive Picker] Failed to load scripts:', err)
       })
+  }
+}
+
+export default function GoogleDrivePicker({ onFilePicked, disabled, label }: GoogleDrivePickerProps) {
+  const [loading, setLoading] = useState(false)
+  const [scriptsLoaded, setScriptsLoaded] = useState(pickerReady)
+
+  // Check if picker is configured
+  const isConfigured = Boolean(GOOGLE_API_KEY)
+
+  useEffect(() => {
+    if (!isConfigured) return
+    ensurePickerLoaded(() => setScriptsLoaded(true))
   }, [isConfigured])
 
   const openPicker = useCallback(async () => {
