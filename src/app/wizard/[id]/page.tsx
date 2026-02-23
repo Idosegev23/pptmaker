@@ -27,7 +27,7 @@ export default function WizardPage() {
         }
 
         const doc = await res.json()
-        setDocumentData(doc.data || {})
+        setDocumentData(doc.document?.data || {})
       } catch (err) {
         console.error('[Wizard] Load error:', err)
         setError(err instanceof Error ? err.message : 'שגיאה בטעינת המסמך')

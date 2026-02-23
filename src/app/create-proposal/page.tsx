@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import GoogleDrivePicker from '@/components/google-drive-picker'
 import type { UploadedDocument, ExtractedBriefData } from '@/types/brief'
 
-type ProcessingStage = 'idle' | 'parsing' | 'extracting' | 'creating' | 'done' | 'error'
+type ProcessingStage = 'idle' | 'parsing' | 'processing' | 'researching' | 'creating' | 'done' | 'error'
 
 interface LogEntry {
   id: string
@@ -164,32 +164,31 @@ export default function CreateProposalPage() {
         addLog('detail', 'לא הועלה מסמך התנעה - ממשיכים עם הבריף בלבד')
       }
 
-      // === STEP 2: AI Extraction ===
-      setStage('extracting')
-      addLog('info', 'שולח ל-AI לחילוץ מידע מובנה (Gemini Pro)...')
+      // === STEP 2: AI Processing (Extract + Generate full proposal) ===
+      setStage('processing')
+      addLog('info', 'סוכן AI מעבד את המסמכים ומייצר הצעה מלאה...')
       addLog('detail', `סך הכל ${(briefText.length + kickoffText.length).toLocaleString()} תווים לניתוח`)
 
-      const extractStart = Date.now()
-      const extractRes = await fetch('/api/extract-brief', {
+      const processStart = Date.now()
+      const processRes = await fetch('/api/process-proposal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientBriefText: briefText, kickoffText: kickoffText || undefined }),
       })
-      const extractData = await extractRes.json()
-      const extractElapsed = ((Date.now() - extractStart) / 1000).toFixed(1)
+      const processData = await processRes.json()
+      const processElapsed = ((Date.now() - processStart) / 1000).toFixed(1)
 
-      if (!extractRes.ok) throw new Error(extractData.error || 'שגיאה בחילוץ מידע מהמסמכים')
+      if (!processRes.ok) throw new Error(processData.error || 'שגיאה בעיבוד המסמכים')
 
-      const extracted: ExtractedBriefData = extractData.data
+      const extracted: ExtractedBriefData = processData.extracted
+      const stepData = processData.stepData
       setBrandInfo(extracted)
 
-      // Log extraction results
-      addLog('success', `חילוץ AI הושלם (${extractElapsed}s) - רמת ביטחון: ${extracted._meta?.confidence || 'N/A'}`)
+      // Log processing results
+      addLog('success', `עיבוד AI הושלם (${processElapsed}s) - רמת ביטחון: ${extracted._meta?.confidence || 'N/A'}`)
 
       if (extracted.brand?.name) {
         addLog('success', `מותג זוהה: ${extracted.brand.name}${extracted.brand.industry ? ` (${extracted.brand.industry})` : ''}`)
-        // Start background brand research
-        fetchBrandFacts(extracted.brand.name)
       } else {
         addLog('warning', 'שם המותג לא זוהה - נדרש קלט ידני')
       }
@@ -198,20 +197,100 @@ export default function CreateProposalPage() {
         addLog('detail', `תקציב: ${extracted.budget.currency}${extracted.budget.amount.toLocaleString()}`)
       }
 
-      if (extracted.campaignGoals?.length) {
-        addLog('detail', `מטרות: ${extracted.campaignGoals.join(', ')}`)
+      if (stepData?.key_insight?.keyInsight) {
+        addLog('detail', `תובנה: ${stepData.key_insight.keyInsight.slice(0, 80)}...`)
       }
-
-      if (extracted.targetAudience?.primary?.gender) {
-        const ta = extracted.targetAudience.primary
-        addLog('detail', `קהל יעד: ${ta.gender}${ta.ageRange ? `, גילאי ${ta.ageRange}` : ''}`)
+      if (stepData?.strategy?.strategyHeadline) {
+        addLog('detail', `אסטרטגיה: ${stepData.strategy.strategyHeadline}`)
+      }
+      if (stepData?.strategy?.strategyPillars?.length) {
+        addLog('detail', `עמודי אסטרטגיה: ${stepData.strategy.strategyPillars.length}`)
+      }
+      if (stepData?.creative?.activityTitle) {
+        addLog('detail', `קריאייטיב: ${stepData.creative.activityTitle}`)
+      }
+      if (stepData?.quantities?.totalDeliverables) {
+        addLog('detail', `תוצרים: ${stepData.quantities.totalDeliverables} סה"כ`)
+      }
+      if (stepData?.influencers?.influencers?.length) {
+        addLog('detail', `משפיענים מוצעים: ${stepData.influencers.influencers.length}`)
       }
 
       if (extracted._meta?.warnings?.length) {
-        extracted._meta.warnings.forEach(w => addLog('warning', w))
+        extracted._meta.warnings.forEach((w: string) => addLog('warning', w))
       }
 
-      // === STEP 3: Create Document ===
+      // === STEP 3: Background Research (parallel, non-blocking) ===
+      setStage('researching')
+      addLog('info', 'מריץ מחקר מותג ומשפיענים ברקע...')
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let brandResearch: any = null
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let influencerData: any = null
+
+      if (extracted.brand?.name) {
+        // Start brand facts in background
+        fetchBrandFacts(extracted.brand.name)
+
+        // Run research + influencer suggestions in parallel
+        const researchPromises = await Promise.allSettled([
+          // Brand research
+          fetch('/api/research', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brandName: extracted.brand.name }),
+          }).then(async (res) => {
+            if (!res.ok) throw new Error('Research failed')
+            return res.json()
+          }),
+          // Influencer suggestions
+          fetch('/api/influencers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: 'research',
+              brandResearch: {
+                brandName: extracted.brand.name,
+                industry: extracted.brand.industry || '',
+                targetDemographics: {
+                  primaryAudience: {
+                    gender: extracted.targetAudience?.primary?.gender || '',
+                    ageRange: extracted.targetAudience?.primary?.ageRange || '',
+                    interests: extracted.targetAudience?.primary?.interests || [],
+                  },
+                },
+              },
+              budget: extracted.budget?.amount || 0,
+              goals: extracted.campaignGoals || [],
+            }),
+          }).then(async (res) => {
+            if (!res.ok) throw new Error('Influencer research failed')
+            return res.json()
+          }),
+        ])
+
+        // Handle brand research result
+        if (researchPromises[0].status === 'fulfilled') {
+          brandResearch = researchPromises[0].value.research
+          addLog('success', 'מחקר מותג הושלם בהצלחה')
+        } else {
+          addLog('warning', 'מחקר מותג לא הצליח - ממשיכים בלעדיו')
+        }
+
+        // Handle influencer result
+        if (researchPromises[1].status === 'fulfilled') {
+          influencerData = researchPromises[1].value
+          const recCount = influencerData?.strategy?.recommendations?.length || influencerData?.recommendations?.length || 0
+          addLog('success', `המלצות משפיענים: ${recCount} פרופילים`)
+        } else {
+          addLog('warning', 'מחקר משפיענים לא הצליח - ממשיכים בלעדיו')
+        }
+      } else {
+        addLog('detail', 'דילוג על מחקר - שם מותג לא זוהה')
+      }
+
+      // === STEP 4: Create Document ===
       setStage('creating')
       addLog('info', 'יוצר מסמך חדש במערכת...')
 
@@ -226,6 +305,9 @@ export default function CreateProposalPage() {
           data: {
             brandName: extracted.brand?.name || '',
             _extractedData: extracted,
+            _stepData: stepData,
+            _brandResearch: brandResearch || undefined,
+            _influencerStrategy: influencerData?.strategy || undefined,
             _wizardState: {
               currentStep: 'brief',
               stepStatuses: {
@@ -454,11 +536,13 @@ export default function CreateProposalPage() {
           <div className="space-y-4 mb-8">
             {/* Progress Steps */}
             <Card className="p-6">
-              <div className="flex items-center gap-6 mb-6">
+              <div className="flex items-center gap-4 mb-6 flex-wrap">
                 <StepIndicator label="קריאת מסמכים" status={getStepStatus('parsing', stage)} />
-                <div className="flex-1 h-px bg-border" />
-                <StepIndicator label="חילוץ AI" status={getStepStatus('extracting', stage)} />
-                <div className="flex-1 h-px bg-border" />
+                <div className="flex-1 h-px bg-border min-w-4" />
+                <StepIndicator label="עיבוד AI" status={getStepStatus('processing', stage)} />
+                <div className="flex-1 h-px bg-border min-w-4" />
+                <StepIndicator label="מחקר" status={getStepStatus('researching', stage)} />
+                <div className="flex-1 h-px bg-border min-w-4" />
                 <StepIndicator label="יצירת מסמך" status={getStepStatus('creating', stage)} />
               </div>
 
@@ -556,7 +640,7 @@ function StepIndicator({ label, status }: { label: string; status: 'pending' | '
 // === Helper Functions ===
 
 function getStepStatus(step: string, currentStage: ProcessingStage): 'pending' | 'active' | 'done' {
-  const order = ['parsing', 'extracting', 'creating', 'done']
+  const order = ['parsing', 'processing', 'researching', 'creating', 'done']
   const stepIdx = order.indexOf(step)
   const currentIdx = order.indexOf(currentStage)
   if (currentIdx > stepIdx) return 'done'

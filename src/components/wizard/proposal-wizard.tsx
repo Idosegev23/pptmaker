@@ -24,6 +24,7 @@ import {
 } from './wizard-constants'
 import {
   extractedDataToStepData,
+  enrichStepData,
   wizardDataToProposalData,
   validateStep,
 } from './wizard-utils'
@@ -114,8 +115,8 @@ export default function ProposalWizard({
     const base = getInitialWizardState()
     base.documentId = documentId
 
-    // Restore persisted wizard state if available
-    if (initialData._wizardState) {
+    // Restore persisted wizard state if available (returning user)
+    if (initialData._wizardState && (initialData._wizardState as WizardState).lastSavedAt) {
       const saved = initialData._wizardState as WizardState
       return {
         ...saved,
@@ -124,8 +125,21 @@ export default function ProposalWizard({
       }
     }
 
-    // Convert extracted data to step data if available
-    if (initialData._extractedData) {
+    // New flow: proposal agent generated step data directly
+    if (initialData._stepData) {
+      let stepData = initialData._stepData as Partial<WizardStepDataMap>
+
+      // Enrich with research data if available
+      stepData = enrichStepData(
+        stepData,
+        initialData._brandResearch,
+        initialData._influencerStrategy,
+      )
+
+      base.stepData = stepData
+      base.extractedData = stepData
+    } else if (initialData._extractedData) {
+      // Legacy flow: old extraction format
       const extracted = initialData._extractedData as Record<string, unknown>
       const stepData = extractedDataToStepData(
         extracted as unknown as Parameters<typeof extractedDataToStepData>[0]

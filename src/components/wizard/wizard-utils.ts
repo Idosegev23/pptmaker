@@ -192,6 +192,126 @@ export function wizardDataToProposalData(
 }
 
 /**
+ * Enrich step data with brand research and influencer strategy.
+ * Iron rule: base step data (from documents) always takes priority.
+ * Research only fills gaps.
+ */
+export function enrichStepData(
+  baseStepData: Partial<WizardStepDataMap>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  brandResearch?: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  influencerStrategy?: any,
+): Partial<WizardStepDataMap> {
+  if (!brandResearch && !influencerStrategy) return baseStepData
+
+  const result = { ...baseStepData }
+
+  // Enrich with brand research
+  if (brandResearch) {
+    // Brief: enrich brand background if too short
+    if (result.brief) {
+      if ((!result.brief.brandBrief || result.brief.brandBrief.length < 50) && brandResearch.companyDescription) {
+        result.brief = { ...result.brief, brandBrief: brandResearch.companyDescription }
+      }
+      if ((!result.brief.brandPainPoints || result.brief.brandPainPoints.length === 0) && brandResearch.targetDemographics?.primaryAudience?.painPoints?.length) {
+        result.brief = { ...result.brief, brandPainPoints: brandResearch.targetDemographics.primaryAudience.painPoints }
+      }
+    }
+
+    // Target audience: fill gaps from research
+    if (result.target_audience) {
+      if (!result.target_audience.targetDescription && brandResearch.targetDemographics?.primaryAudience?.lifestyle) {
+        result.target_audience = { ...result.target_audience, targetDescription: brandResearch.targetDemographics.primaryAudience.lifestyle }
+      }
+      if (!result.target_audience.targetBehavior && brandResearch.targetDemographics?.behavior) {
+        result.target_audience = { ...result.target_audience, targetBehavior: brandResearch.targetDemographics.behavior }
+      }
+      if ((!result.target_audience.targetInsights || result.target_audience.targetInsights.length === 0) && brandResearch.targetDemographics?.primaryAudience?.interests?.length) {
+        result.target_audience = { ...result.target_audience, targetInsights: brandResearch.targetDemographics.primaryAudience.interests }
+      }
+    }
+
+    // Strategy: add pillars from research if missing
+    if (result.strategy) {
+      if ((!result.strategy.strategyPillars || result.strategy.strategyPillars.length === 0) && brandResearch.contentThemes?.length) {
+        result.strategy = {
+          ...result.strategy,
+          strategyPillars: brandResearch.contentThemes.slice(0, 3).map((theme: string) => ({
+            title: theme,
+            description: '',
+          })),
+        }
+      }
+    }
+  }
+
+  // Enrich with influencer strategy
+  if (influencerStrategy) {
+    // Influencers: add real recommendations if we only have AI-generated ones
+    if (result.influencers) {
+      if (influencerStrategy.recommendations?.length && (!result.influencers.influencers || result.influencers.influencers.length === 0)) {
+        result.influencers = {
+          ...result.influencers,
+          influencers: influencerStrategy.recommendations.slice(0, 6).map((rec: { name?: string; handle?: string; category?: string; followers?: string; engagement?: string; whyRelevant?: string; contentStyle?: string }) => ({
+            name: rec.name || '',
+            username: rec.handle?.replace('@', '') || '',
+            profileUrl: rec.handle ? `https://instagram.com/${rec.handle.replace('@', '')}` : '',
+            profilePicUrl: '',
+            categories: rec.category ? [rec.category] : [],
+            followers: parseFollowerCount(rec.followers || '0'),
+            engagementRate: parseFloat(rec.engagement?.replace('%', '') || '0'),
+            bio: rec.whyRelevant || '',
+          })),
+        }
+      }
+      if (!result.influencers.influencerStrategy && influencerStrategy.strategySummary) {
+        result.influencers = { ...result.influencers, influencerStrategy: influencerStrategy.strategySummary }
+      }
+    }
+
+    // Quantities: fill from influencer strategy tiers
+    if (result.quantities && influencerStrategy.tiers?.length) {
+      const totalFromTiers = influencerStrategy.tiers.reduce((sum: number, t: { count?: number }) => sum + (t.count || 0), 0)
+      if (!result.quantities.influencerCount && totalFromTiers > 0) {
+        result.quantities = { ...result.quantities, influencerCount: totalFromTiers }
+      }
+    }
+
+    // Media targets: enrich with KPIs from strategy
+    if (result.media_targets && influencerStrategy.expectedKPIs?.length) {
+      for (const kpi of influencerStrategy.expectedKPIs) {
+        if (kpi.metric === 'Reach' && !result.media_targets.potentialReach && kpi.target) {
+          result.media_targets = { ...result.media_targets, potentialReach: parseNumericTarget(kpi.target) }
+        }
+        if (kpi.metric === 'Engagement' && !result.media_targets.potentialEngagement && kpi.target) {
+          result.media_targets = { ...result.media_targets, potentialEngagement: parseNumericTarget(kpi.target) }
+        }
+        if (kpi.metric === 'CPE' && !result.media_targets.cpe && kpi.target) {
+          result.media_targets = { ...result.media_targets, cpe: parseFloat(kpi.target) || 0 }
+        }
+      }
+    }
+  }
+
+  return result
+}
+
+function parseFollowerCount(str: string): number {
+  const clean = str.replace(/[,\s]/g, '').toLowerCase()
+  if (clean.endsWith('m')) return parseFloat(clean) * 1_000_000
+  if (clean.endsWith('k')) return parseFloat(clean) * 1_000
+  return parseInt(clean) || 0
+}
+
+function parseNumericTarget(str: string): number {
+  const clean = str.replace(/[,\s]/g, '').toLowerCase()
+  if (clean.endsWith('m')) return parseFloat(clean) * 1_000_000
+  if (clean.endsWith('k')) return parseFloat(clean) * 1_000
+  return parseInt(clean) || 0
+}
+
+/**
  * Validate step data - returns errors or null
  */
 export function validateStep(
