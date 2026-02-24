@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ interface StepKeyInsightProps {
   extractedData: Partial<KeyInsightStepData>
   onChange: (data: Partial<KeyInsightStepData>) => void
   errors: Record<string, string> | null
+  briefContext?: string
 }
 
 export default function StepKeyInsight({
@@ -19,10 +20,46 @@ export default function StepKeyInsight({
   extractedData,
   onChange,
   errors,
+  briefContext,
 }: StepKeyInsightProps) {
   const keyInsight = data.keyInsight ?? ''
   const insightSource = data.insightSource ?? ''
   const insightData = data.insightData ?? ''
+  const [isRefining, setIsRefining] = useState(false)
+
+  const handleRefineWithAI = useCallback(async () => {
+    setIsRefining(true)
+    try {
+      const res = await fetch('/api/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'refine_insight',
+          currentInsight: keyInsight,
+          briefContext: briefContext || '',
+          audienceContext: '',
+        }),
+      })
+      if (res.ok) {
+        const result = await res.json()
+        if (result.keyInsight) {
+          onChange({
+            ...data,
+            keyInsight: result.keyInsight,
+            insightSource: result.insightSource || insightSource,
+            insightData: result.supportingResearch?.map(
+              (r: { statistic: string; source: string; year?: string }) =>
+                `${r.statistic} (${r.source}${r.year ? `, ${r.year}` : ''})`
+            ).join('\n') || insightData,
+          })
+        }
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setIsRefining(false)
+    }
+  }, [keyInsight, briefContext, data, onChange, insightSource, insightData])
 
   const hasExtractedInsight =
     extractedData?.keyInsight && extractedData.keyInsight !== keyInsight
@@ -68,10 +105,37 @@ export default function StepKeyInsight({
         </Card>
       )}
 
+      {/* Creative connection hint */}
+      <Card className="border-purple-200 bg-purple-50">
+        <CardContent className="py-3 px-4">
+          <p className="text-sm text-purple-700">
+            <span className="font-semibold">טיפ:</span> התובנה צריכה להסביר <strong>למה</strong> הגישה הקריאייטיבית שנציע היא הנכונה. חשבו על זה כגשר לוגי בין הכאב של הקהל לפתרון שנציע.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Key Insight */}
       <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium text-foreground">התובנה המרכזית</label>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefineWithAI}
+            disabled={isRefining}
+            className="text-primary border-primary/30 hover:bg-primary/5"
+          >
+            {isRefining ? (
+              <>
+                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin ml-1.5" />
+                מחדד עם AI...
+              </>
+            ) : (
+              'חדד עם AI + מחקר'
+            )}
+          </Button>
+        </div>
         <Textarea
-          label="התובנה המרכזית"
           placeholder="מהי התובנה שמבססת את כל הפעילות?"
           value={keyInsight}
           onChange={(e) => onChange({ ...data, keyInsight: e.target.value })}

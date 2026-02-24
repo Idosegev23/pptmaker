@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchScrape } from '@/lib/apify/fetch-scraper'
 
+export const maxDuration = 600
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateProposalContent } from '@/lib/openai/proposal-writer'
+
+export const maxDuration = 600
 import type { ProposalContent } from '@/lib/openai/proposal-writer'
 import { researchInfluencers } from '@/lib/gemini/influencer-research'
 import type { InfluencerStrategy } from '@/lib/gemini/influencer-research'

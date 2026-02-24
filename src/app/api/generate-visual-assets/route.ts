@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractColorsFromLogo, analyzeColorPalette, extractColorsByBrandName } from '@/lib/gemini/color-extractor'
+
+export const maxDuration = 600
 import type { BrandColors } from '@/lib/gemini/color-extractor'
 import { generateSmartImages } from '@/lib/gemini/israeli-image-generator'
 import type { BrandResearch } from '@/lib/gemini/brand-research'

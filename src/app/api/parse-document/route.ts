@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { parseDocument, parseGoogleDoc } from '@/lib/parsers'
 
-export const maxDuration = 120
+export const maxDuration = 600
 
 export async function POST(request: NextRequest) {
   const requestId = `parse-${Date.now()}`

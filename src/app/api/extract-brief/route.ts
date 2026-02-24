@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractFromDocuments } from '@/lib/gemini/document-extractor'
 
-export const maxDuration = 120
+export const maxDuration = 600
 
 export async function POST(request: NextRequest) {
   const requestId = `extract-${Date.now()}`

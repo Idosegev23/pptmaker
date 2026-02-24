@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
@@ -11,12 +11,41 @@ interface StepStrategyProps {
   extractedData: Partial<StrategyStepData>
   onChange: (data: Partial<StrategyStepData>) => void
   errors: Record<string, string> | null
+  briefContext?: string
 }
 
-export default function StepStrategy({ data, extractedData, onChange, errors }: StepStrategyProps) {
+export default function StepStrategy({ data, extractedData, onChange, errors, briefContext }: StepStrategyProps) {
   const strategyHeadline = data.strategyHeadline ?? ''
   const strategyDescription = data.strategyDescription ?? ''
   const strategyPillars = data.strategyPillars ?? []
+  const strategyFlow = data.strategyFlow ?? { steps: [] }
+  const [isGeneratingFlow, setIsGeneratingFlow] = useState(false)
+
+  const handleGenerateFlow = useCallback(async () => {
+    setIsGeneratingFlow(true)
+    try {
+      const res = await fetch('/api/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate_strategy_flow',
+          strategyHeadline,
+          strategyPillars: strategyPillars.map(p => `${p.title}: ${p.description}`).join(', '),
+          briefContext: briefContext || '',
+        }),
+      })
+      if (res.ok) {
+        const result = await res.json()
+        if (result.steps?.length) {
+          onChange({ ...data, strategyFlow: { steps: result.steps } })
+        }
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setIsGeneratingFlow(false)
+    }
+  }, [strategyHeadline, strategyPillars, briefContext, data, onChange])
 
   const addPillar = useCallback(() => {
     onChange({
@@ -132,6 +161,54 @@ export default function StepStrategy({ data, extractedData, onChange, errors }: 
             />
           </div>
         ))}
+      </div>
+
+      {/* Strategy Flow Visualization */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium text-foreground">
+            תהליך עבודה (Flow)
+          </label>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGenerateFlow}
+            disabled={isGeneratingFlow || !strategyHeadline}
+            className="text-primary border-primary/30 hover:bg-primary/5"
+          >
+            {isGeneratingFlow ? (
+              <>
+                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin ml-1.5" />
+                מייצר Flow...
+              </>
+            ) : (
+              'ייצר Flow עם AI'
+            )}
+          </Button>
+        </div>
+
+        {strategyFlow.steps.length > 0 ? (
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 px-1">
+            {strategyFlow.steps.map((step, index) => (
+              <React.Fragment key={index}>
+                <div className="flex-shrink-0 w-40 rounded-xl border border-primary/20 bg-primary/5 p-3 text-center">
+                  <div className="text-2xl mb-1">{step.icon || '🔹'}</div>
+                  <p className="text-sm font-bold text-foreground">{step.label}</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-tight">{step.description}</p>
+                </div>
+                {index < strategyFlow.steps.length - 1 && (
+                  <svg className="w-5 h-5 text-primary/30 flex-shrink-0 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            לחצו &quot;ייצר Flow עם AI&quot; כדי ליצור תהליך עבודה ויזואלי מהאסטרטגיה
+          </p>
+        )}
       </div>
     </div>
   )

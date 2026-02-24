@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateMultiPagePdf } from '@/lib/playwright/pdf'
+
+export const maxDuration = 600
 import { renderProposalToHtml } from '@/templates/quote/proposal-template'
 import { generatePremiumProposalSlides } from '@/templates/quote/premium-proposal-template'
 import { generateAISlides } from '@/lib/gemini/slide-designer'

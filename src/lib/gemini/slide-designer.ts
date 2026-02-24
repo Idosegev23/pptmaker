@@ -1,14 +1,14 @@
 /**
  * Gemini AI Premium Slide Designer
- * Generates ultra-premium, magazine-style editorial presentation designs.
+ * Generates premium, structured presentation designs with rigid grid composition.
  * Heavily optimized for high-end PDF export (No shadows/blur, YES to clip-paths/gradients).
  *
  * 2-Step process:
- * 1. generateDesignSystem() → Unique CSS for the brand
- * 2. generateSlidesBatch() → HTML slides using that CSS
+ * 1. generateDesignSystem() → Unique CSS for the brand (includes grid + safe-zone)
+ * 2. generateSlidesBatch() → HTML slides using that CSS (strict layout rules)
  */
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai'
+import { GoogleGenAI } from '@google/genai'
 import { parseGeminiJson } from '@/lib/utils/json-cleanup'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
@@ -54,11 +54,11 @@ async function generateDesignSystem(
   const requestId = `ds-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Generating design system for: ${brand.brandName}`)
 
-  const prompt = `אתה Art Director ומנהל קריאייטיב ראשי בסוכנות מיתוג עולמית (בסגנון Apple, Nike, Pentagram).
-עליך ליצור מערכת עיצוב CSS למצגת שהיא ברמת מסטרפיס - "WOW effect" מוחלט - עבור המותג "${brand.brandName}".
-המצגת תיוצא ל-PDF, ולכן עליה להיראות כמו מגזין אופנה / פרימיום טק (Editorial Design).
+  const prompt = `אתה Art Director ומנהל קריאייטיב ראשי בסוכנות מיתוג עולמית (בסגנון Apple, McKinsey, Pentagram).
+עליך ליצור מערכת עיצוב CSS למצגת פרימיום מקצועית - יוקרתית, מסודרת, עם קומפוזיציה מושלמת - עבור המותג "${brand.brandName}".
+המצגת תיוצא ל-PDF, ולכן עליה להיראות כמו מצגת אסטרטגית של סוכנות מובילה.
 
-מידע על המותג ההשראה שלך:
+מידע על המותג:
 - תעשייה: ${brand.industry || 'לא ידוע'}
 - אישיות: ${brand.brandPersonality?.join(', ') || 'מקצועי'}
 - צבע ראשי: ${brand.brandColors.primary}
@@ -66,31 +66,101 @@ async function generateDesignSystem(
 - צבע הדגשה: ${brand.brandColors.accent}
 - אווירה: ${brand.brandColors.mood || 'יוקרתי ומקצועי'}
 
-דרישות טכניות קשיחות (חובה ל-PDF!):
-- גודל: 1920px × 1080px (פורמט ענק).
-- RTL מובנה.
-- פונט: Heebo.
-- 🚫 איסור מוחלט על box-shadow: זה קורס ב-PDF! צור עומק בעזרת מסגרות (borders) כפולות, צבעי רקע מדורגים (gradients), ו-offset borders מוחלטים.
-- 🚫 איסור מוחלט על backdrop-filter (blur): זה לא נתמך. צור אפקט של חצי-שקיפות בעזרת rgba עם גרדיאנט.
+## דרישות טכניות קשיחות (חובה ל-PDF!):
+- קנבס: 1920px × 1080px
+- RTL מובנה
+- פונט: Heebo
+- 🚫 איסור מוחלט על box-shadow (קורס ב-PDF). צור עומק עם borders כפולות, gradients, offset borders.
+- 🚫 איסור מוחלט על backdrop-filter (לא נתמך). השתמש ב-rgba עם gradient.
+
+## ⚠️ חובה: מערכת גריד קשיחה עם שוליים (RIGID GRID SYSTEM)
+
+זהו הכלל הכי חשוב: **כל תוכן חייב לשבת בתוך Safe Zone קשיח.**
+
+\`\`\`
+Canvas: 1920 × 1080
+Margins: 80px מכל ארבעת הכיוונים (top, right, bottom, left)
+Safe content area: 1760 × 920 (ממורכז)
+Logo footer zone: 60px תחתון (שמור ללוגואים)
+\`\`\`
+
+ה-CSS **חייב** לכלול את המחלקות הבאות (בדיוק כמו שהן):
+
+\`\`\`css
+/* === MANDATORY: Safe Zone + Grid System === */
+.safe-zone {
+  position: absolute;
+  top: 80px; right: 80px; bottom: 80px; left: 80px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.content-grid {
+  display: grid;
+  gap: 30px;
+  flex: 1;
+  align-content: start;
+}
+
+.content-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.content-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.content-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+.section-label {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin-bottom: 8px;
+}
+
+.slide-title {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 32px;
+}
+
+.card {
+  padding: 28px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.slide-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.slide-footer img { height: 32px; width: auto; }
+\`\`\`
+
+## מה ה-CSS **נוסף** חייב לכלול (מעבר למחלקות החובה):
+
+1. **טיפוגרפיה פרימיום:** מחלקות לכותרות, תתי-כותרות, body text. גדלים: כותרת 48-56px, תת-כותרת 28-32px, body 18-20px. השתמש ב-letter-spacing ו-line-height מדויקים.
+2. **רקעים יוקרתיים:** linear-gradient ו-radial-gradient עדינים, לא צבע אחיד. שמור על נקיות - gradient עדין, לא אגרסיבי.
+3. **כרטיסיות (Cards):** \`.premium-card\` עם border עדין (1px solid), רקע gradient קל, padding פנימי של 24-28px מינימום. כל הכרטיסיות באותו גובה בשורה.
+4. **Watermark עדין:** \`.massive-watermark\` לטקסט רקע עם opacity 3-5%.
+5. **אלמנטים דקורטיביים:** קווים דקים (1px solid), עיגולי accent, אבל **בתוך ה-safe-zone בלבד**.
+6. **תגיות ומדדים:** \`.badge\`, \`.metric-value\` (מספר גדול בולט), \`.metric-label\` (הסבר קטן מתחת).
+7. **תמונות מעוגלות:** \`.avatar-circle\` עם border-radius: 50% ו-overflow: hidden.
+8. **כפתורי CTA:** \`.cta-button\` מסוגנן.
+
+**חשוב: אל תוסיף CSS שיגרום לאלמנטים לצאת מה-safe-zone. אין position: absolute על תוכן (רק על watermarks דקורטיביים).**
 
 החזר JSON בלבד:
 \`\`\`json
 {
-  "designDirection": "פסקה מרתקת על הקונספט הויזואלי (למשל: 'עיצוב ברוטליסטי עם חיתוכים אלכסוניים וטייפוגרפיה ענקית')",
-  "css": "ה-CSS השלם כאן"
+  "designDirection": "פסקה קצרה על הקונספט הויזואלי",
+  "css": "ה-CSS השלם כאן (כולל המחלקות החובה למעלה + התוספות שלך)"
 }
-\`\`\`
-
-מה ה-CSS חייב לכלול כדי להיות WOW:
-1. **טיפוגרפיה אדירה (Editorial Typography):** הגדר מחלקות לכותרות ענק שחותכות את המסך. השתמש ב-letter-spacing, line-height צפוף לכותרות פאנצ'יות. הגדר מחלקת \`.text-stroke\` ליצירת טקסט שקוף עם קו מתאר (webkit-text-stroke).
-2. **רקעים נועזים:** אל תעשה רקעים בצבע אחיד! השתמש ב-linear-gradient, radial-gradient, רשתות (css patterns) או ענני צבע.
-3. **שבירת גריד (clip-path):** צור מחלקות כמו \`.angled-section\`, \`.cutout-image\` המשתמשות ב-clip-path: polygon() כדי לשבור את הריבועים המשעממים.
-4. **Watermarks ענקיים:** מחלקה \`.massive-watermark\` לטקסט רקע עצום (200px+) בזווית עם 3% אטימות (opacity).
-5. **אלמנטים דקורטיביים פרימיום:** קווים דקים מפרידים (1px solid), עיגולי אקסנט צבעוניים, מסגרות אסימטריות (\`.premium-card\`).
-6. **מודולריות מגזין:** .split-screen (50/50), .grid-asymmetric, .magazine-layout (תמונה גדולה עם חפיפה של קופסת טקסט).
-7. **כפתורים ותגיות פאנצ'יים:** \`.badge\`, \`.metric-value\` (מספר ענק בגוון גרדיאנט - \`background-clip: text; color: transparent\`).
-
-תהיה מטורף, תהיה א방גרד. זה חייב להיות העיצוב הכי יפה שהלקוח ראה בחיים שלו.`
+\`\`\``
 
   try {
     const response = await ai.models.generateContent({
@@ -136,7 +206,7 @@ async function generateSlidesBatch(
     const contentJson = JSON.stringify(slide.content, null, 2)
     return `
 ### שקף ${i + 1}: ${slide.title} (סוג: ${slide.slideType})
-${slide.imageUrl ? `תמונה זמינה: ${slide.imageUrl}` : 'אין תמונה - השתמש בטיפוגרפיה קיצונית ורקעי CSS'}
+${slide.imageUrl ? `תמונה זמינה: ${slide.imageUrl}` : 'אין תמונה - השתמש בטיפוגרפיה חזקה ורקעי CSS gradient'}
 תוכן (JSON):
 \`\`\`json
 ${contentJson}
@@ -144,34 +214,109 @@ ${contentJson}
 `
   }).join('\n')
 
-  const prompt = `אתה מעצב Layout בכיר במגזין. המשימה שלך היא לייצר קוד HTML למצגת PDF של המותג "${brandName}".
+  const prompt = `אתה מעצב מצגות בכיר. המשימה: לייצר קוד HTML למצגת PDF של המותג "${brandName}" עם קומפוזיציה מסודרת ומקצועית.
 
 ## ה-CSS שלך (כבר מוטמע ב-HEAD):
 \`\`\`css
 ${designCSS}
 \`\`\`
 
-## לוגואים זמינים (השתמש רק איפה שהגיוני ויוקרתי, אל תדביק סתם בפינה):
+## לוגואים זמינים:
 ${logoUrl ? `- לוגו לקוח: ${logoUrl}` : '- אין לוגו לקוח'}
 ${leadersLogoUrl ? `- לוגו סוכנות (Leaders): ${leadersLogoUrl}` : ''}
 
 ## מידע לשקפים:
 ${slidesDescription}
 
-## חוקי ברזל להפקת לייאאוט ברמת WOW (Editorial Design):
-1. **שבור את התבנית (No boring slides):** אף שקף לא נראה כמו פאוורפוינט עם כותרת ובולטים. השתמש בלייאאוט א-סימטרי (לדוגמה: תמונה ענקית תופסת 70% מסך מצד ימין וטקסט צף מצד שמאל).
-2. **טקסט כאלמנט עיצובי:** השתמש בחלקי תוכן מסוימים באותיות ענק שחותכות את השוליים. הוסף שכבות של טקסט רקע חלש מאוד כ-Watermark בכל שקף כדי לתת עומק.
-3. **שילוב תמונות (Image Integration):** תמונות חייבות לקבל יחס יוקרתי - עטוף אותן בדיבים (divs), השתמש ב-overflow:hidden ובמסגרות או פילטרים דרך CSS. הוסף גרדיאנט מעל תמונות רקע כדי שהטקסט יבלוט בצורה מושלמת.
-4. **משפיענים/כרטיסיות:** אל תעשה סתם "ריבועים". השתמש ב-offset borders (קווים שיוצאים מהמסגרת), רקעים מדורגים, ותמונות פרופיל במבנים מעניינים (למשל צורות אובליות לא סימטריות במקום סתם עיגול מושלם).
-5. **מספרים וסטטיסטיקות:** הבלט אותם! נתון של "500K" צריך לקבל פונט מטורף בגודלו עם צבע בולט. פסקאות הטקסט שמתחת יהיו קטנות, נקיות, בסגנון מגזין אלגנטי.
-6. **מבנה HTML סגור וקפדני:** הקוד חייב להיות תקין (RTL, שפה). אסור לדלג על שום מידע תוכן שנשלח אליך ב-JSON.
+## ⚠️ חוקי ברזל - קומפוזיציה קשיחה (MANDATORY):
+
+### 1. שוליים קשיחים (Sacred Margins):
+- **כל תוכן** חייב לשבת בתוך \`.safe-zone\` (80px margins מכל כיוון).
+- **חריגה יחידה**: תמונת רקע full-bleed בשקף שער בלבד.
+- אסור לשום טקסט או אלמנט תוכני לגעת בקצוות השקף.
+
+### 2. מבנה HTML קפדני - כל שקף חייב להיות:
+\`\`\`html
+<div class="slide" style="background:...">
+  <!-- Watermark decorative only -->
+  <div class="massive-watermark">BRAND</div>
+
+  <!-- All content inside safe-zone -->
+  <div class="safe-zone">
+    <div class="section-label">סוג השקף</div>
+    <h2 class="slide-title">כותרת</h2>
+
+    <div class="content-grid cols-N">
+      <!-- Cards/content here -->
+    </div>
+
+    <div class="slide-footer">
+      <!-- logos -->
+    </div>
+  </div>
+</div>
+\`\`\`
+
+### 3. השתמש ב-CSS Grid לכל לייאאוט כרטיסיות:
+- \`content-grid cols-2\` לשני עמודות
+- \`content-grid cols-3\` לשלוש עמודות
+- \`content-grid cols-4\` לארבע עמודות
+- **אסור** למקם כרטיסיות עם position: absolute. רק CSS Grid.
+
+### 4. היררכיה אנכית קבועה (כל שקף):
+section-label (קטן, uppercase) → slide-title (גדול) → content-grid → slide-footer
+תמיד בסדר הזה, תמיד מלמעלה למטה.
+
+### 5. כרטיסיות שוות:
+- בכל שורה של כרטיסיות, **כולן באותו גובה** (CSS Grid דואג לזה).
+- padding פנימי מינימלי: 24px.
+- אין טקסט שנוגע בקצוות כרטיסייה.
+
+### 6. יישור טקסט:
+- כל הטקסט ב-RTL מיושר לימין (ברירת מחדל).
+- טקסט ממורכז רק עבור: מספרי מדדים, כותרות שקף שער, CTA.
+
+### 7. מקסימום תוכן:
+- **לא יותר מ-6 כרטיסיות** בשקף אחד. אם יש יותר, פצל לשקפים.
+- **לא יותר מ-4 שורות טקסט** בתוך כרטיסייה בודדת.
+
+### 8. אסור position: absolute על תוכן:
+- position: absolute מותר **רק** ל-watermarks דקורטיביים.
+- כל שאר התוכן: flex/grid flow רגיל בתוך .safe-zone.
+
+### 9. לוגואים:
+- הצב לוגואים ב-\`.slide-footer\` בתחתית ה-safe-zone.
+- לוגו לקוח בצד ימין, לוגו Leaders בצד שמאל.
+- גובה לוגו: 28-36px.
+
+### 10. לייאאוט לפי סוג שקף:
+| סוג | Grid | הערות |
+|-----|------|-------|
+| cover | ללא grid, flexbox ממורכז | תמונת רקע full-bleed + overlay gradient + כותרת מרכזית |
+| brief | cols-2 | טקסט ימין, תמונה שמאל (או עמודה אחת אם אין תמונה) |
+| goals | cols-3 או cols-4 | כרטיסיית מטרה לכל מטרה |
+| audience | cols-2 | שני סגמנטים זה לצד זה |
+| insight | עמודה אחת מרכזית | טקסט גדול ממורכז, ללא grid |
+| strategy | cols-3 | כרטיסיית עמוד תווך |
+| bigIdea | cols-2 | קונספט + תמונה |
+| approach | cols-2 או cols-3 | כרטיסיית גישה |
+| deliverables | cols-3 או cols-4 | כרטיסיית תוצר |
+| metrics | cols-4 | 4 תיבות מדדים בשורה |
+| influencers | cols-3 | כרטיסיית משפיען עם תמונה עגולה |
+| influencerStrategy | cols-2 | אסטרטגיה + קריטריונים |
+| closing | ללא grid, flexbox ממורכז | CTA גדול ממורכז |
+
+### 11. HTML תקין:
+- RTL, lang="he"
+- אסור לדלג על שום מידע תוכן מה-JSON
+- כותרות ומספרים בולטים, פסקאות נקיות
 
 ## פורמט הפלט:
-החזר אך ורק JSON - מערך של מחרוזות HTML. תבנית בסיס לכל שקף:
+החזר אך ורק JSON - מערך של מחרוזות HTML:
 \`\`\`json
 {
   "slides": [
-    "<!DOCTYPE html>\\n<html dir=\\"rtl\\" lang=\\"he\\">\\n<head>...</head>\\n<body><div class=\\"slide massive-layout-variant\\">...</div></body>\\n</html>",
+    "<!DOCTYPE html>\\n<html dir=\\"rtl\\" lang=\\"he\\">\\n<head>...</head>\\n<body><div class=\\"slide\\">...</div></body>\\n</html>",
     "<!DOCTYPE html>... (שקף 2)"
   ]
 }
@@ -221,25 +366,73 @@ function wrapSlideHtml(body: string, css: string): string {
 <style>
 @page { size: 1920px 1080px; margin: 0; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { 
-  font-family: 'Heebo', sans-serif; 
-  direction: rtl; 
-  -webkit-print-color-adjust: exact; 
-  color-adjust: exact; 
-  -webkit-font-smoothing: antialiased; 
-  text-rendering: optimizeLegibility; 
-  background-color: #ffffff; /* Fallback safe */
+body {
+  font-family: 'Heebo', sans-serif;
+  direction: rtl;
+  -webkit-print-color-adjust: exact;
+  color-adjust: exact;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background-color: #ffffff;
 }
-/* Enhanced Base Utilities for WOW effect */
+/* Base Slide */
 .slide { width: 1920px; height: 1080px; position: relative; overflow: hidden; }
 .absolute-fill { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 .bg-cover { background-size: cover; background-position: center; background-repeat: no-repeat; }
+
+/* === Rigid Grid System (Fallback - always present) === */
+.safe-zone {
+  position: absolute;
+  top: 80px; right: 80px; bottom: 80px; left: 80px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.content-grid {
+  display: grid;
+  gap: 30px;
+  flex: 1;
+  align-content: start;
+}
+.content-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.content-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.content-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.section-label {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  margin-bottom: 8px;
+}
+.slide-title {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 32px;
+}
+.card {
+  padding: 28px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.slide-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.slide-footer img { height: 32px; width: auto; }
+
+/* Brand Design System */
 ${css}
 </style>
 </head>
 <body>
 <div class="slide">
-<div class="slide-content absolute-fill">
+<div class="safe-zone">
 ${body}
 </div>
 </div>

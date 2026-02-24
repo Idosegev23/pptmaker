@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateProposal } from '@/lib/gemini/proposal-agent'
 
-export const maxDuration = 300
+export const maxDuration = 600
 
 export async function POST(request: NextRequest) {
   const requestId = `process-${Date.now()}`

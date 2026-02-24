@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateImage } from '@/lib/gemini/image'
+
+export const maxDuration = 600
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 
 export async function POST(request: NextRequest) {

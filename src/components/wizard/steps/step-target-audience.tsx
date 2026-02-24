@@ -8,11 +8,20 @@ import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import type { TargetAudienceStepData } from '@/types/wizard'
 
+interface AudienceInsight {
+  text: string
+  source?: string
+  sourceUrl?: string
+  dataPoint?: string
+  confidence?: 'high' | 'medium' | 'low'
+}
+
 interface StepTargetAudienceProps {
   data: Partial<TargetAudienceStepData>
   extractedData: Partial<TargetAudienceStepData>
   onChange: (data: Partial<TargetAudienceStepData>) => void
   errors: Record<string, string> | null
+  briefContext?: string
 }
 
 const GENDER_OPTIONS = [
@@ -27,6 +36,7 @@ export default function StepTargetAudience({
   extractedData,
   onChange,
   errors,
+  briefContext,
 }: StepTargetAudienceProps) {
   const targetGender = data.targetGender ?? ''
   const targetAgeRange = data.targetAgeRange ?? ''
@@ -36,6 +46,41 @@ export default function StepTargetAudience({
   const targetSecondary = data.targetSecondary ?? null
 
   const [showSecondary, setShowSecondary] = useState(!!targetSecondary)
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false)
+
+  const handleGenerateInsights = useCallback(async () => {
+    if (!targetGender && !targetAgeRange) return
+    setIsGeneratingInsights(true)
+    try {
+      const brandParts = briefContext?.split(':') || []
+      const res = await fetch('/api/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate_audience_insights',
+          gender: targetGender,
+          ageRange: targetAgeRange,
+          description: targetDescription,
+          brandName: brandParts[0]?.trim() || '',
+          industry: '',
+        }),
+      })
+      if (res.ok) {
+        const result = await res.json()
+        if (result.insights?.length) {
+          // Add AI insights as structured objects
+          const newInsights = [...targetInsights, ...result.insights.map((i: AudienceInsight) =>
+            i.source ? JSON.stringify(i) : i.text
+          )]
+          onChange({ ...data, targetInsights: newInsights })
+        }
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setIsGeneratingInsights(false)
+    }
+  }, [targetGender, targetAgeRange, targetDescription, briefContext, targetInsights, data, onChange])
 
   const addInsight = useCallback(() => {
     onChange({
@@ -141,9 +186,27 @@ export default function StepTargetAudience({
             <label className="block text-sm font-medium text-foreground">
               תובנות על קהל היעד
             </label>
-            <Button variant="ghost" size="sm" onClick={addInsight}>
-              + הוסף תובנה
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateInsights}
+                disabled={isGeneratingInsights || (!targetGender && !targetAgeRange)}
+                className="text-primary border-primary/30 hover:bg-primary/5"
+              >
+                {isGeneratingInsights ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin ml-1.5" />
+                    מחפש תובנות...
+                  </>
+                ) : (
+                  'חפש תובנות AI'
+                )}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={addInsight}>
+                + הוסף תובנה
+              </Button>
+            </div>
           </div>
 
           {errors?.targetInsights && (
@@ -156,37 +219,61 @@ export default function StepTargetAudience({
             </p>
           )}
 
-          {targetInsights.map((insight, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <Input
-                placeholder={`תובנה ${index + 1}`}
-                value={typeof insight === 'string' ? insight : (insight as {title?: string; name?: string})?.title || (insight as {name?: string})?.name || ''}
-                onChange={(e) => updateInsight(index, e.target.value)}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeInsight(index)}
-                className="shrink-0 text-destructive hover:bg-destructive/10"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+          {targetInsights.map((insight, index) => {
+            // Try to parse structured insight (AI-generated)
+            let parsed: AudienceInsight | null = null
+            if (typeof insight === 'string' && insight.startsWith('{')) {
+              try { parsed = JSON.parse(insight) } catch { /* not JSON */ }
+            }
+
+            if (parsed?.source) {
+              return (
+                <div key={index} className="rounded-lg border border-input bg-muted/20 p-3 space-y-1.5 relative group">
+                  <p className="text-sm font-medium text-foreground pr-6">{parsed.text}</p>
+                  {parsed.dataPoint && (
+                    <p className="text-xs text-primary font-semibold">{parsed.dataPoint}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {parsed.sourceUrl ? (
+                      <a href={parsed.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                        {parsed.source}
+                      </a>
+                    ) : parsed.source}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeInsight(index)}
+                    className="absolute top-2 left-2 shrink-0 text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 6L6 18" /><path d="M6 6l12 12" />
+                    </svg>
+                  </Button>
+                </div>
+              )
+            }
+
+            return (
+              <div key={index} className="flex items-center gap-2">
+                <Input
+                  placeholder={`תובנה ${index + 1}`}
+                  value={typeof insight === 'string' ? insight : (insight as {title?: string; name?: string})?.title || (insight as {name?: string})?.name || ''}
+                  onChange={(e) => updateInsight(index, e.target.value)}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeInsight(index)}
+                  className="shrink-0 text-destructive hover:bg-destructive/10"
                 >
-                  <path d="M3 6h18" />
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                </svg>
-              </Button>
-            </div>
-          ))}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  </svg>
+                </Button>
+              </div>
+            )
+          })}
         </div>
       </div>
 

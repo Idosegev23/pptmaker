@@ -12,6 +12,7 @@ interface StepGoalsProps {
   extractedData: Partial<GoalsStepData>
   onChange: (data: Partial<GoalsStepData>) => void
   errors: Record<string, string> | null
+  briefContext?: string
 }
 
 const PREDEFINED_GOALS = [
@@ -24,14 +25,56 @@ const PREDEFINED_GOALS = [
   'חיזוק נאמנות',
 ]
 
-export default function StepGoals({ data, extractedData, onChange, errors }: StepGoalsProps) {
+export default function StepGoals({ data, extractedData, onChange, errors, briefContext }: StepGoalsProps) {
   const goals = data.goals ?? []
   const customGoals = data.customGoals ?? []
   const [newCustomGoal, setNewCustomGoal] = useState('')
+  const [loadingGoals, setLoadingGoals] = useState<Set<string>>(new Set())
 
   const isGoalSelected = useCallback(
     (title: string) => goals.some((g) => g.title === title),
     [goals]
+  )
+
+  // Fire AI to auto-generate description for a goal
+  const generateGoalDescription = useCallback(
+    async (goalTitle: string, currentGoals: { title: string; description: string }[]) => {
+      setLoadingGoals(prev => new Set(prev).add(goalTitle))
+      try {
+        const res = await fetch('/api/ai-assist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'generate_goal_description',
+            goalTitle,
+            briefContext: briefContext || '',
+          }),
+        })
+        if (res.ok) {
+          const result = await res.json()
+          if (result.description) {
+            // Update goal description only if user hasn't typed anything yet
+            onChange({
+              ...data,
+              goals: currentGoals.map(g =>
+                g.title === goalTitle && !g.description
+                  ? { ...g, description: result.description }
+                  : g
+              ),
+            })
+          }
+        }
+      } catch {
+        // Silent fail - user can type manually
+      } finally {
+        setLoadingGoals(prev => {
+          const next = new Set(prev)
+          next.delete(goalTitle)
+          return next
+        })
+      }
+    },
+    [briefContext, data, onChange]
   )
 
   const toggleGoal = useCallback(
@@ -42,13 +85,16 @@ export default function StepGoals({ data, extractedData, onChange, errors }: Ste
           goals: goals.filter((g) => g.title !== title),
         })
       } else {
+        const newGoals = [...goals, { title, description: '' }]
         onChange({
           ...data,
-          goals: [...goals, { title, description: '' }],
+          goals: newGoals,
         })
+        // Auto-generate description in background
+        generateGoalDescription(title, newGoals)
       }
     },
-    [data, onChange, goals, isGoalSelected]
+    [data, onChange, goals, isGoalSelected, generateGoalDescription]
   )
 
   const updateGoalDescription = useCallback(
@@ -62,13 +108,16 @@ export default function StepGoals({ data, extractedData, onChange, errors }: Ste
   const addCustomGoal = useCallback(() => {
     const trimmed = newCustomGoal.trim()
     if (!trimmed) return
+    const newGoals = [...goals, { title: trimmed, description: '' }]
     onChange({
       ...data,
       customGoals: [...customGoals, trimmed],
-      goals: [...goals, { title: trimmed, description: '' }],
+      goals: newGoals,
     })
     setNewCustomGoal('')
-  }, [data, onChange, customGoals, goals, newCustomGoal])
+    // Auto-generate description for custom goal too
+    generateGoalDescription(trimmed, newGoals)
+  }, [data, onChange, customGoals, goals, newCustomGoal, generateGoalDescription])
 
   const removeCustomGoal = useCallback(
     (goalText: string) => {
@@ -204,12 +253,19 @@ export default function StepGoals({ data, extractedData, onChange, errors }: Ste
                     הסר
                   </Button>
                 </div>
-                <Textarea
-                  placeholder={`פרטו את מטרת ה${goal.title}...`}
-                  value={goal.description}
-                  onChange={(e) => updateGoalDescription(goal.title, e.target.value)}
-                  className="min-h-[80px]"
-                />
+                <div className="relative">
+                  <Textarea
+                    placeholder={loadingGoals.has(goal.title) ? 'AI מייצר תיאור...' : `פרטו את מטרת ה${goal.title}...`}
+                    value={goal.description}
+                    onChange={(e) => updateGoalDescription(goal.title, e.target.value)}
+                    className="min-h-[80px]"
+                  />
+                  {loadingGoals.has(goal.title) && (
+                    <div className="absolute top-3 left-3">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>

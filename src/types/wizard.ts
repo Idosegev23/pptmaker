@@ -170,3 +170,11 @@ export type WizardAction =
   | { type: 'SET_DOCUMENT_ID'; id: string }
   | { type: 'SET_EXTRACTED_DATA'; data: Partial<WizardStepDataMap> }
   | { type: 'MARK_DIRTY' }
+
+// Pipeline status for deferred processing (research + visuals run after wizard opens)
+export interface PipelineStatus {
+  textGeneration: 'pending' | 'complete' | 'error'
+  research: 'pending' | 'in_progress' | 'complete' | 'error'
+  visualAssets: 'pending' | 'in_progress' | 'complete' | 'error'
+  slideGeneration: 'pending' | 'in_progress' | 'complete' | 'stale' | 'error'
+}

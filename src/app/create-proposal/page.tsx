@@ -6,25 +6,22 @@ import Image from 'next/image'
 import GoogleDrivePicker from '@/components/google-drive-picker'
 import type { UploadedDocument, ExtractedBriefData } from '@/types/brief'
 
-type ProcessingStage = 'idle' | 'parsing' | 'processing' | 'researching' | 'visuals' | 'creating' | 'done' | 'error'
+type ProcessingStage = 'idle' | 'parsing' | 'processing' | 'creating' | 'done' | 'error'
 
-// ---------- Fallback tips (only shown before brand is identified) ----------
+// ---------- Data-Driven Generic Tips (WOW Effect) ----------
 const GENERIC_TIPS = [
-  'הצעת מחיר מנצחת מתחילה בהבנה עמוקה של הלקוח - לא רק מה הוא מבקש, אלא למה',
-  'משפיענים עם מעורבות גבוהה (3%+) מניבים ROI גבוה יותר ממשפיענים עם עוקבים רבים',
-  'קמפיין משפיענים ממוצע מחזיר $5.78 על כל דולר שמושקע',
-  'שילוב בין Macro ו-Micro משפיענים מייצר חשיפה רחבה וגם אמינות ממוקדת',
-  'תוכן שנוצר על ידי משפיענים מקבל מעורבות גבוהה פי 8 מתוכן ממותג רגיל',
-  'בריף ממוקד ותמציתי למשפיען מניב תוכן אותנטי יותר מבריף מפורט מדי',
-  'קהלי יעד מוגדרים היטב מעלים את אחוזי ההמרה ב-73% בממוצע',
-  'הזמן הממוצע לסגירת עסקה עם הצעה מעוצבת ומקצועית קצר ב-40%',
-  'רילס וסטוריז הם הפורמטים עם הצמיחה המהירה ביותר בשיווק משפיענים',
-  '92% מהצרכנים סומכים על המלצה ממשפיען יותר מפרסומת מסורתית',
-  'שילוב בין אורגני לממומן מייצר אפקט סינרגטי שמכפיל תוצאות',
-  'CPE (Cost Per Engagement) ממוצע בישראל נע בין 1.5-4 שקלים',
-  'תוכן video מניב מעורבות גבוהה פי 3 מתמונות סטטיות ברשתות החברתיות',
-  'משפיענים שעובדים עם מותג לטווח ארוך מייצרים תוצאות טובות פי 2',
-  'הוספת metrics מצופים (reach, impressions, engagement) מראה מקצועיות ובונה אמון',
+  'נתון אמת: קמפיין משפיענים מקצועי מייצר החזר השקעה (ROI) ממוצע של $5.20 על כל דולר שמושקע.',
+  '82% מהצרכנים מעידים שהם סומכים על המלצות של מיקרו-משפיענים יותר מאשר על פרסומות ממומנות רגילות.',
+  'שילוב תוכן גולשים (UGC) בתוך קמפיינים ממומנים (Paid Social) מוריד את עלות ההמרה (CPA) בעד 50%.',
+  'הצעת מחיר מנצחת מתחילה בתובנה (Insight) חדה - כזו שמחברת בין הכאב של הקהל לפתרון של המותג.',
+  'סוד מקצועי: משפיעני Nano (1K-10K עוקבים) מציגים את אחוזי המעורבות (Engagement) הגבוהים ביותר ברשת.',
+  'מסמכים והצעות מחיר שכוללים ויזואליה מותאמת אישית נסגרים ב-34% יותר מהר לעומת הצעות טקסטואליות.',
+  'CPE (עלות למעורבות) ממוצע בקמפיין משפיענים איכותי בישראל נע לרוב בין 1.5 ל-3.5 שקלים, תלוי בנישה.',
+  'טיקטוק או אינסטגרם? בטיקטוק החשיפה האורגנית גבוהה פי 4, אך באינסטגרם אחוזי ההמרה לרכישה עדיין מובילים.',
+  'קמפיינים ארוכי טווח (שגרירי מותג) מייצרים פי 2 יותר זכירות מותג מאשר קמפיינים נקודתיים (One-offs).',
+  'כדי לייצר קריאייטיב שובר רשת, תנו למשפיענים חופש פעולה ב-80% מהתוכן, ושמרו 20% למסרי חובה של המותג.',
+  '67% מאנשי השיווק מדווחים שהאיכות של קהל שמגיע דרך משפיענים גבוהה יותר מקהל שמגיע מפרסום רגיל.',
+  'הטעות הכי נפוצה היא לבחור משפיענים רק לפי כמות עוקבים, ולא לפי אמינות והתאמה לערכי המותג.'
 ]
 
 interface LogEntry {
@@ -41,6 +38,7 @@ export default function CreateProposalPage() {
   const router = useRouter()
   const briefInputRef = useRef<HTMLInputElement>(null)
   const kickoffInputRef = useRef<HTMLInputElement>(null)
+  const logsEndRef = useRef<HTMLDivElement>(null) // For auto-scrolling terminal
 
   const [briefDoc, setBriefDoc] = useState<UploadedDocument | null>(null)
   const [briefFile, setBriefFile] = useState<File | null>(null)
@@ -51,6 +49,13 @@ export default function CreateProposalPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [brandInfo, setBrandInfo] = useState<ExtractedBriefData | null>(null)
   const [brandFacts, setBrandFacts] = useState<string[]>([])
+
+  // Auto scroll logs for that "Terminal" effect
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [logs])
 
   const addLog = useCallback((type: LogEntry['type'], message: string) => {
     setLogs(prev => [...prev, {
@@ -109,7 +114,7 @@ export default function CreateProposalPage() {
     return data.parsedText
   }
 
-  // Fetch brand facts in background
+  // Fetch dynamic brand facts in background
   const fetchBrandFacts = async (brandName: string) => {
     try {
       const res = await fetch('/api/brand-quick-info', {
@@ -124,7 +129,7 @@ export default function CreateProposalPage() {
         }
       }
     } catch {
-      // Silent fail
+      // Silent fail - will fallback to generic tips
     }
   }
 
@@ -142,7 +147,8 @@ export default function CreateProposalPage() {
 
     try {
       // === STEP 1: Parse Documents ===
-      addLog('info', 'מתחיל עיבוד מסמכים...')
+      addLog('info', 'מאתחל חיבור למערכות AI מתקדמות...')
+      addLog('info', 'מתחיל סריקה ועיבוד מסמכים...')
       let briefText = ''
       let kickoffText = ''
 
@@ -154,7 +160,7 @@ export default function CreateProposalPage() {
         briefText = await parseFileUpload(briefFile, 'client_brief')
         const elapsedMs = ((Date.now() - startTime) / 1000).toFixed(1)
 
-        addLog('success', `בריף נקרא בהצלחה - ${briefText.length.toLocaleString()} תווים (${elapsedMs}s)`)
+        addLog('success', `בריף לקוח פוענח בהצלחה - ${briefText.length.toLocaleString()} תווים חולצו (${elapsedMs}s)`)
       }
 
       if (!briefText) {
@@ -163,24 +169,22 @@ export default function CreateProposalPage() {
 
       if (kickoffDoc && kickoffFile) {
         const formatName = getFormatDisplayName(kickoffFile.type)
-        addLog('info', `קורא מסמך התנעה: ${kickoffDoc.fileName} (${formatName}, ${formatFileSize(kickoffFile.size)})`)
+        addLog('info', `קורא מסמך התנעה פנימי: ${kickoffDoc.fileName}`)
 
         try {
           const startTime = Date.now()
           kickoffText = await parseFileUpload(kickoffFile, 'kickoff')
           const elapsedMs = ((Date.now() - startTime) / 1000).toFixed(1)
-          addLog('success', `מסמך התנעה נקרא - ${kickoffText.length.toLocaleString()} תווים (${elapsedMs}s)`)
+          addLog('success', `מסמך התנעה פוענח - ${kickoffText.length.toLocaleString()} תווים חולצו (${elapsedMs}s)`)
         } catch (kickoffErr) {
           addLog('warning', `מסמך ההתנעה לא נקרא: ${kickoffErr instanceof Error ? kickoffErr.message : 'שגיאה'}. ממשיכים עם הבריף בלבד.`)
         }
-      } else {
-        addLog('detail', 'לא הועלה מסמך התנעה - ממשיכים עם הבריף בלבד')
       }
 
       // === STEP 2: AI Processing ===
       setStage('processing')
-      addLog('info', 'סוכן AI מעבד את המסמכים ומייצר הצעה מלאה...')
-      addLog('detail', `סך הכל ${(briefText.length + kickoffText.length).toLocaleString()} תווים לניתוח`)
+      addLog('info', 'סוכן AI אסטרטגי מנתח את הנתונים ומייצר הצעה מלאה...')
+      addLog('detail', `מנתח סך הכל ${(briefText.length + kickoffText.length).toLocaleString()} תווים של תוכן עסקי`)
 
       const processStart = Date.now()
       const processRes = await fetch('/api/process-proposal', {
@@ -197,178 +201,35 @@ export default function CreateProposalPage() {
       const stepData = processData.stepData
       setBrandInfo(extracted)
 
-      addLog('success', `עיבוד AI הושלם (${processElapsed}s) - רמת ביטחון: ${extracted._meta?.confidence || 'N/A'}`)
+      addLog('success', `בניית ליבת ההצעה הושלמה (${processElapsed}s) - רמת ביטחון: ${extracted._meta?.confidence?.toUpperCase() || 'N/A'}`)
 
       if (extracted.brand?.name) {
-        addLog('success', `מותג זוהה: ${extracted.brand.name}${extracted.brand.industry ? ` (${extracted.brand.industry})` : ''}`)
+        addLog('success', `מותג אומת וזוהה: ${extracted.brand.name}${extracted.brand.industry ? ` | תעשייה: ${extracted.brand.industry}` : ''}`)
       } else {
-        addLog('warning', 'שם המותג לא זוהה - נדרש קלט ידני')
+        addLog('warning', 'שם המותג לא זוהה בוודאות - יידרש קלט ידני בהמשך')
       }
 
       if (extracted.budget?.amount && extracted.budget.amount > 0) {
-        addLog('detail', `תקציב: ${extracted.budget.currency}${extracted.budget.amount.toLocaleString()}`)
+        addLog('detail', `תקציב שאותר: ${extracted.budget.currency}${extracted.budget.amount.toLocaleString()}`)
       }
       if (stepData?.key_insight?.keyInsight) {
-        addLog('detail', `תובנה: ${stepData.key_insight.keyInsight.slice(0, 80)}...`)
-      }
-      if (stepData?.strategy?.strategyHeadline) {
-        addLog('detail', `אסטרטגיה: ${stepData.strategy.strategyHeadline}`)
-      }
-      if (stepData?.strategy?.strategyPillars?.length) {
-        addLog('detail', `עמודי אסטרטגיה: ${stepData.strategy.strategyPillars.length}`)
+        addLog('detail', `תובנה מרכזית פוצחה: ${stepData.key_insight.keyInsight.slice(0, 60)}...`)
       }
       if (stepData?.creative?.activityTitle) {
-        addLog('detail', `קריאייטיב: ${stepData.creative.activityTitle}`)
-      }
-      if (stepData?.quantities?.totalDeliverables) {
-        addLog('detail', `תוצרים: ${stepData.quantities.totalDeliverables} סה"כ`)
-      }
-      if (stepData?.influencers?.influencers?.length) {
-        addLog('detail', `משפיענים מוצעים: ${stepData.influencers.influencers.length}`)
+        addLog('detail', `קונספט קריאייטיבי: "${stepData.creative.activityTitle}"`)
       }
       if (extracted._meta?.warnings?.length) {
         extracted._meta.warnings.forEach((w: string) => addLog('warning', w))
       }
 
-      // === STEP 3: Background Research ===
-      setStage('researching')
-      addLog('info', 'מריץ מחקר מותג ומשפיענים ברקע...')
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let brandResearch: any = null
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let researchColors: any = null
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let researchLogos: any = null
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let influencerData: any = null
-
+      // Trigger background dynamic facts fetching (for tips display)
       if (extracted.brand?.name) {
         fetchBrandFacts(extracted.brand.name)
-
-        const researchPromises = await Promise.allSettled([
-          fetch('/api/research', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ brandName: extracted.brand.name }),
-          }).then(async (res) => {
-            if (!res.ok) throw new Error('Research failed')
-            return res.json()
-          }),
-          fetch('/api/influencers', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              mode: 'research',
-              brandResearch: {
-                brandName: extracted.brand.name,
-                industry: extracted.brand.industry || '',
-                targetDemographics: {
-                  primaryAudience: {
-                    gender: extracted.targetAudience?.primary?.gender || '',
-                    ageRange: extracted.targetAudience?.primary?.ageRange || '',
-                    interests: extracted.targetAudience?.primary?.interests || [],
-                  },
-                },
-              },
-              budget: extracted.budget?.amount || 0,
-              goals: extracted.campaignGoals || [],
-            }),
-          }).then(async (res) => {
-            if (!res.ok) throw new Error('Influencer research failed')
-            return res.json()
-          }),
-        ])
-
-        if (researchPromises[0].status === 'fulfilled') {
-          const researchResult = researchPromises[0].value
-          brandResearch = researchResult.research
-          researchColors = researchResult.colors || null
-          researchLogos = researchResult.logos || null
-          addLog('success', 'מחקר מותג הושלם בהצלחה')
-          if (researchColors?.primary) {
-            addLog('detail', `צבעי מותג מהמחקר: ${researchColors.primary}`)
-          }
-        } else {
-          addLog('warning', 'מחקר מותג לא הצליח - ממשיכים בלעדיו')
-        }
-
-        if (researchPromises[1].status === 'fulfilled') {
-          influencerData = researchPromises[1].value
-          const recCount = influencerData?.strategy?.recommendations?.length || influencerData?.recommendations?.length || 0
-          addLog('success', `המלצות משפיענים: ${recCount} פרופילים`)
-        } else {
-          addLog('warning', 'מחקר משפיענים לא הצליח - ממשיכים בלעדיו')
-        }
-      } else {
-        addLog('detail', 'דילוג על מחקר - שם מותג לא זוהה')
       }
 
-      // === STEP 4: Visual Assets (scrape + colors + AI images) ===
-      setStage('visuals')
-      addLog('info', 'מתחיל יצירת נכסים ויזואליים (לוגו, צבעים, תמונות)...')
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let visualAssets: any = null
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let scrapedData: any = null
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let brandColors: any = researchColors || null
-      let generatedImages: Record<string, string | undefined> = {}
-
-      try {
-        const visualStart = Date.now()
-        const websiteUrl = brandResearch?.website || extracted.brand?.website || null
-
-        const visualRes = await fetch('/api/generate-visual-assets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            brandName: extracted.brand?.name || '',
-            brandResearch,
-            stepData,
-            websiteUrl,
-          }),
-        })
-
-        if (visualRes.ok) {
-          visualAssets = await visualRes.json()
-          const visualElapsed = ((Date.now() - visualStart) / 1000).toFixed(1)
-
-          if (visualAssets.scraped?.logoUrl) {
-            scrapedData = visualAssets.scraped
-            addLog('success', `לוגו מותג נמצא (${visualElapsed}s)`)
-          }
-
-          if (visualAssets.brandColors?.primary) {
-            brandColors = visualAssets.brandColors
-            addLog('detail', `פלטת צבעים: ${brandColors.primary}, ${brandColors.secondary || ''}, ${brandColors.accent || ''}`)
-          }
-
-          generatedImages = visualAssets.generatedImages || {}
-          const imgCount = Object.values(generatedImages).filter(Boolean).length
-          const extraCount = visualAssets.extraImages?.length || 0
-
-          if (imgCount > 0 || extraCount > 0) {
-            addLog('success', `נוצרו ${imgCount + extraCount} תמונות AI למותג`)
-          } else {
-            addLog('warning', 'יצירת תמונות AI לא הצליחה - ימשיכו ללא תמונות')
-          }
-
-          if (visualAssets.imageStrategy) {
-            addLog('detail', `אסטרטגיית תמונה: ${visualAssets.imageStrategy.conceptSummary?.slice(0, 60) || ''}...`)
-          }
-        } else {
-          addLog('warning', 'שלב הויזואל נכשל - ממשיכים ללא תמונות')
-        }
-      } catch (visualErr) {
-        console.error('[Create Proposal] Visual assets error:', visualErr)
-        addLog('warning', 'יצירת נכסים ויזואליים נכשלה - ממשיכים ללא תמונות')
-      }
-
-      // === STEP 5: Create Document ===
+      // === STEP 3: Create Document ===
       setStage('creating')
-      addLog('info', 'יוצר מסמך חדש במערכת...')
+      addLog('info', 'מרכיב ואורז את הצעת המחיר למסמך אינטראקטיבי...')
 
       const docRes = await fetch('/api/documents', {
         method: 'POST',
@@ -382,14 +243,12 @@ export default function CreateProposalPage() {
             brandName: extracted.brand?.name || '',
             _extractedData: extracted,
             _stepData: stepData,
-            _brandResearch: brandResearch || undefined,
-            _influencerStrategy: influencerData?.strategy || undefined,
-            // Visual assets
-            _scraped: scrapedData || undefined,
-            _brandColors: brandColors || undefined,
-            _generatedImages: Object.keys(generatedImages).length > 0 ? generatedImages : undefined,
-            _extraImages: visualAssets?.extraImages?.length > 0 ? visualAssets.extraImages : undefined,
-            _imageStrategy: visualAssets?.imageStrategy || undefined,
+            _pipelineStatus: {
+              textGeneration: 'complete',
+              research: 'pending',
+              visualAssets: 'pending',
+              slideGeneration: 'pending',
+            },
             _wizardState: {
               currentStep: 'brief',
               stepStatuses: {
@@ -415,10 +274,9 @@ export default function CreateProposalPage() {
       if (!docRes.ok) throw new Error(docData.error || 'Failed to create document')
 
       const docId = docData.id || docData.document?.id
-      addLog('success', `מסמך נוצר בהצלחה (ID: ${docId?.slice(0, 8)}...)`)
+      addLog('success', `המסמך מוכן! מעביר לעורך הפרימיום (ID: ${docId?.slice(0, 8)}...)`)
 
       setStage('done')
-      addLog('info', 'מעביר לעורך ההצעה...')
 
       setTimeout(() => {
         router.push(`/wizard/${docId}`)
@@ -428,11 +286,11 @@ export default function CreateProposalPage() {
       setStage('error')
       const msg = err instanceof Error ? err.message : 'שגיאה לא צפויה'
       setError(msg)
-      addLog('error', msg)
+      addLog('error', `תהליך נעצר עקב שגיאה: ${msg}`)
     }
   }
 
-  // ---------- Tips system: brand-specific when available, generic fallback ----------
+  // ---------- Tips system logic ----------
   const activeTips = useMemo(() => {
     if (brandFacts.length > 0) return brandFacts
     return GENERIC_TIPS
@@ -480,10 +338,10 @@ export default function CreateProposalPage() {
   // ===================== RENDER =====================
 
   return (
-    <div dir="rtl" className="min-h-screen bg-[#f4f5f7]">
+    <div dir="rtl" className="min-h-screen bg-[#f4f5f7] font-sans selection:bg-[#f2cc0d] selection:text-[#212529]">
       {/* ---------- Top Navigation ---------- */}
-      <header className="sticky top-0 z-50 w-full border-b border-[#dfdfdf] bg-white">
-        <div className="flex items-center justify-between px-6 py-3 max-w-[1200px] mx-auto">
+      <header className="sticky top-0 z-50 w-full border-b border-[#dfdfdf] bg-white/80 backdrop-blur-md">
+        <div className="flex items-center justify-between px-6 py-4 max-w-[1200px] mx-auto">
           {/* Logo */}
           <div className="flex items-center gap-3">
             <Image
@@ -491,116 +349,110 @@ export default function CreateProposalPage() {
               alt="Leaders"
               width={120}
               height={36}
-              className="h-8 w-auto"
+              className="h-8 w-auto hover:opacity-80 transition-opacity"
             />
           </div>
 
           {/* Center: Page title as pill badge */}
           <div className="hidden sm:flex items-center">
-            <span className="bg-[#e5f2d6] text-[#212529] rounded-full px-5 py-2 text-sm font-semibold">
-              יצירת הצעת מחיר
+            <span className="bg-gradient-to-r from-[#e5f2d6] to-[#d4eabf] text-[#4a7c3f] rounded-full px-6 py-2 text-sm font-bold shadow-sm border border-[#cbe3af]">
+              סוכן בניית הצעות מחיר
             </span>
           </div>
 
           {/* Cancel */}
           <button
             onClick={() => router.push('/dashboard')}
-            className="flex items-center gap-2 bg-white border border-[#dfdfdf] text-[#6b7281] rounded-full px-5 py-2 text-sm font-medium hover:bg-[#f4f5f7] hover:text-[#212529] transition-all"
+            className="flex items-center gap-2 bg-white border border-[#dfdfdf] text-[#6b7281] rounded-full px-5 py-2 text-sm font-medium hover:bg-gray-50 hover:text-[#212529] hover:shadow-sm transition-all"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
-            חזרה
+            ביטול
           </button>
         </div>
       </header>
 
-      <div className="max-w-[1000px] mx-auto px-4 md:px-6 py-8">
+      <div className="max-w-[1000px] mx-auto px-4 md:px-6 py-10">
         {/* ---------- Upload State ---------- */}
         {!isProcessing && (
-          <>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Hero Header */}
-            <div className="mb-8">
-              <h1 className="text-[32px] font-bold text-[#212529] leading-tight mb-2">
-                הצעת מחיר חדשה
+            <div className="mb-10 text-center md:text-right">
+              <h1 className="text-4xl md:text-5xl font-extrabold text-[#212529] tracking-tight mb-4">
+                בואו ניצור <span className="text-transparent bg-clip-text bg-gradient-to-l from-[#f2cc0d] to-[#e0bc00]">הצעה מנצחת</span>
               </h1>
-              <p className="text-[#6b7281] text-base">
-                העלה את בריף הלקוח ומסמך ההתנעה - הסוכן ינתח, יצליב, ויבנה הצעה מלאה ב-10 שלבים
+              <p className="text-[#6b7281] text-lg max-w-2xl">
+                העלו את חומרי הגלם. סוכני ה-AI שלנו ינתחו את הבריף, יחקרו את המותג וייצרו הצעה עסקית, קריאייטיבית ומוכנה להגשה תוך דקות בודדות.
               </p>
             </div>
 
             {/* Upload Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
               {/* Client Brief Card */}
-              <div className="bg-white rounded-2xl p-6 hover:scale-[1.01] transition-transform">
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#dbe4f5] flex items-center justify-center">
-                      <svg className="w-5 h-5 text-[#3b5998]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="bg-white rounded-3xl p-7 shadow-sm border border-[#dfdfdf]/50 hover:shadow-md transition-all group">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#dbe4f5] to-[#c7d5ef] flex items-center justify-center shadow-inner">
+                      <svg className="w-6 h-6 text-[#3b5998]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 className="font-bold text-[#212529]">בריף לקוח</h3>
-                      <p className="text-xs text-[#6b7281]">חובה</p>
+                      <h3 className="font-bold text-lg text-[#212529]">בריף לקוח</h3>
+                      <p className="text-sm font-medium text-[#e94560]">מסמך חובה</p>
                     </div>
                   </div>
-                  <span className="inline-block border border-[#dfdfdf] rounded-md px-2 py-1 text-xs text-[#6b7281]">
-                    שלב 1
-                  </span>
                 </div>
 
                 <div
-                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+                  className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
                     briefDoc
-                      ? 'border-[#e5f2d6] bg-[#e5f2d6]/20'
-                      : 'border-[#dfdfdf] hover:border-[#f2cc0d] hover:bg-[#f2cc0d]/5'
+                      ? 'border-[#4a7c3f] bg-gradient-to-b from-[#e5f2d6]/30 to-transparent'
+                      : 'border-[#dfdfdf] group-hover:border-[#3b5998] group-hover:bg-[#f4f7fc]'
                   }`}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, 'client_brief')}
                 >
                   {briefDoc ? (
-                    <div className="animate-fadeIn">
-                      <div className="w-12 h-12 rounded-full bg-[#e5f2d6] mx-auto mb-3 flex items-center justify-center">
-                        <svg className="w-6 h-6 text-[#4a7c3f]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <div className="animate-in zoom-in-95 duration-300">
+                      <div className="w-14 h-14 rounded-full bg-[#e5f2d6] mx-auto mb-4 flex items-center justify-center shadow-sm">
+                        <svg className="w-7 h-7 text-[#4a7c3f]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
-                      <p className="font-semibold text-[#212529] text-sm">{briefDoc.fileName}</p>
+                      <p className="font-bold text-[#212529] text-base mb-1 truncate px-4">{briefDoc.fileName}</p>
                       <button
-                        className="text-xs text-[#6b7281] hover:text-[#212529] mt-2 transition-colors"
+                        className="text-sm font-medium text-[#6b7281] hover:text-[#e94560] mt-3 transition-colors px-3 py-1 rounded-full hover:bg-red-50"
                         onClick={() => {
                           setBriefDoc(null)
                           setBriefFile(null)
                           if (briefInputRef.current) briefInputRef.current.value = ''
                         }}
                       >
-                        החלף קובץ
+                        הסר קובץ
                       </button>
                     </div>
                   ) : (
                     <div>
-                      <div className="w-12 h-12 rounded-full bg-[#f4f5f7] mx-auto mb-3 flex items-center justify-center">
-                        <svg className="w-6 h-6 text-[#6b7281]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <div className="w-14 h-14 rounded-full bg-white shadow-sm border border-[#dfdfdf] mx-auto mb-4 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <svg className="w-6 h-6 text-[#3b5998]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                         </svg>
                       </div>
-                      <p className="text-[#6b7281] text-sm mb-4">גרור קובץ לכאן או בחר</p>
-                      <div className="flex gap-2 justify-center">
+                      <p className="text-[#212529] font-medium mb-5">גרירת קובץ לכאן</p>
+                      <div className="flex gap-3 justify-center">
                         <button
                           onClick={() => briefInputRef.current?.click()}
-                          className="bg-white border border-[#dfdfdf] text-[#212529] rounded-full px-4 py-2 text-sm font-medium hover:bg-[#f4f5f7] transition-all"
+                          className="bg-white border border-[#dfdfdf] shadow-sm text-[#212529] rounded-full px-5 py-2.5 text-sm font-semibold hover:bg-gray-50 hover:border-[#3b5998] transition-all"
                         >
-                          בחר קובץ
+                          בחירת קובץ
                         </button>
                         <GoogleDrivePicker
                           onFilePicked={(file) => handleFileSelect(file, 'client_brief')}
                           disabled={isProcessing}
                         />
                       </div>
-                      <p className="text-xs text-[#6b7281]/60 mt-3">
-                        PDF, Word, Google Docs, תמונה (עד 20MB)
-                      </p>
                     </div>
                   )}
                 </div>
@@ -618,75 +470,69 @@ export default function CreateProposalPage() {
               </div>
 
               {/* Kickoff Document Card */}
-              <div className="bg-white rounded-2xl p-6 hover:scale-[1.01] transition-transform">
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#e5f2d6] flex items-center justify-center">
-                      <svg className="w-5 h-5 text-[#4a7c3f]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="bg-white rounded-3xl p-7 shadow-sm border border-[#dfdfdf]/50 hover:shadow-md transition-all group">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fcf4d9] to-[#fae6a0] flex items-center justify-center shadow-inner">
+                      <svg className="w-6 h-6 text-[#d4a800]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 className="font-bold text-[#212529]">מסמך התנעה</h3>
-                      <p className="text-xs text-[#6b7281]">אופציונלי</p>
+                      <h3 className="font-bold text-lg text-[#212529]">מסמך התנעה / ישיבה</h3>
+                      <p className="text-sm font-medium text-[#6b7281]">אופציונלי להעשרה</p>
                     </div>
                   </div>
-                  <span className="inline-block border border-[#dfdfdf] rounded-md px-2 py-1 text-xs text-[#6b7281]">
-                    שלב 2
-                  </span>
                 </div>
 
                 <div
-                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+                  className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300 ${
                     kickoffDoc
-                      ? 'border-[#e5f2d6] bg-[#e5f2d6]/20'
-                      : 'border-[#dfdfdf] hover:border-[#f2cc0d] hover:bg-[#f2cc0d]/5'
+                      ? 'border-[#d4a800] bg-gradient-to-b from-[#f2cc0d]/10 to-transparent'
+                      : 'border-[#dfdfdf] group-hover:border-[#f2cc0d] group-hover:bg-[#fcf4d9]/40'
                   }`}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, 'kickoff')}
                 >
                   {kickoffDoc ? (
-                    <div className="animate-fadeIn">
-                      <div className="w-12 h-12 rounded-full bg-[#e5f2d6] mx-auto mb-3 flex items-center justify-center">
-                        <svg className="w-6 h-6 text-[#4a7c3f]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <div className="animate-in zoom-in-95 duration-300">
+                      <div className="w-14 h-14 rounded-full bg-[#fcf4d9] mx-auto mb-4 flex items-center justify-center shadow-sm">
+                        <svg className="w-7 h-7 text-[#d4a800]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
-                      <p className="font-semibold text-[#212529] text-sm">{kickoffDoc.fileName}</p>
+                      <p className="font-bold text-[#212529] text-base mb-1 truncate px-4">{kickoffDoc.fileName}</p>
                       <button
-                        className="text-xs text-[#6b7281] hover:text-[#212529] mt-2 transition-colors"
+                        className="text-sm font-medium text-[#6b7281] hover:text-[#e94560] mt-3 transition-colors px-3 py-1 rounded-full hover:bg-red-50"
                         onClick={() => {
                           setKickoffDoc(null)
                           setKickoffFile(null)
                           if (kickoffInputRef.current) kickoffInputRef.current.value = ''
                         }}
                       >
-                        החלף קובץ
+                        הסר קובץ
                       </button>
                     </div>
                   ) : (
                     <div>
-                      <div className="w-12 h-12 rounded-full bg-[#f4f5f7] mx-auto mb-3 flex items-center justify-center">
-                        <svg className="w-6 h-6 text-[#6b7281]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <div className="w-14 h-14 rounded-full bg-white shadow-sm border border-[#dfdfdf] mx-auto mb-4 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <svg className="w-6 h-6 text-[#6b7281]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                         </svg>
                       </div>
-                      <p className="text-[#6b7281] text-sm mb-4">גרור קובץ לכאן או בחר</p>
-                      <div className="flex gap-2 justify-center">
+                      <p className="text-[#212529] font-medium mb-5">גרירת קובץ לכאן</p>
+                      <div className="flex gap-3 justify-center">
                         <button
                           onClick={() => kickoffInputRef.current?.click()}
-                          className="bg-white border border-[#dfdfdf] text-[#212529] rounded-full px-4 py-2 text-sm font-medium hover:bg-[#f4f5f7] transition-all"
+                          className="bg-white border border-[#dfdfdf] shadow-sm text-[#212529] rounded-full px-5 py-2.5 text-sm font-semibold hover:bg-gray-50 hover:border-[#f2cc0d] transition-all"
                         >
-                          בחר קובץ
+                          בחירת קובץ
                         </button>
                         <GoogleDrivePicker
                           onFilePicked={(file) => handleFileSelect(file, 'kickoff')}
                           disabled={isProcessing}
                         />
                       </div>
-                      <p className="text-xs text-[#6b7281]/60 mt-3">
-                        PDF, Word, Google Docs, תמונה (עד 20MB)
-                      </p>
                     </div>
                   )}
                 </div>
@@ -706,11 +552,17 @@ export default function CreateProposalPage() {
 
             {/* Error */}
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6">
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6 animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-2 font-bold mb-1">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  שגיאה
+                </div>
                 {error}
                 {stage === 'error' && (
                   <button
-                    className="block mt-2 text-sm underline"
+                    className="block mt-2 text-sm font-medium underline hover:text-red-800"
                     onClick={() => { setStage('idle'); setError(null); setLogs([]) }}
                   >
                     נסה שוב
@@ -719,114 +571,122 @@ export default function CreateProposalPage() {
               </div>
             )}
 
-            {/* Generate Button */}
-            <div className="flex justify-center">
+            {/* Generate Button with Shine Effect */}
+            <div className="flex justify-center mt-8">
               <button
                 onClick={handleGenerate}
                 disabled={!briefDoc}
-                className="flex items-center gap-3 bg-[#f2cc0d] text-[#212529] rounded-full px-10 py-4 text-lg font-bold hover:brightness-95 transition-all shadow-[0_0_20px_rgba(242,204,13,0.3)] hover:shadow-[0_0_30px_rgba(242,204,13,0.4)] disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed"
+                className="group relative overflow-hidden flex items-center gap-3 bg-[#f2cc0d] text-[#212529] rounded-full px-12 py-5 text-xl font-extrabold hover:scale-105 transition-all duration-300 shadow-[0_0_20px_rgba(242,204,13,0.3)] hover:shadow-[0_0_35px_rgba(242,204,13,0.5)] disabled:opacity-50 disabled:shadow-none disabled:hover:scale-100 disabled:cursor-not-allowed"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent group-hover:animate-[shimmer_1.5s_infinite]" />
+                <svg className="w-7 h-7 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
                 </svg>
-                צור הצעת מחיר
+                <span className="relative z-10">חולל קסמים וצור הצעה</span>
               </button>
             </div>
-          </>
+          </div>
         )}
 
-        {/* ---------- Processing State ---------- */}
+        {/* ---------- Processing State (WOW Effect) ---------- */}
         {isProcessing && (
-          <div className="space-y-5 animate-fadeIn">
-            {/* Processing Hero Card - dark with brand accents */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] text-white p-8">
-              {/* Decorative SVG rings */}
-              <svg className="absolute top-0 left-0 w-full h-full opacity-[0.04] pointer-events-none" viewBox="0 0 800 500" fill="none">
-                <circle cx="650" cy="250" r="120" stroke="#f2cc0d" strokeWidth="1.5" />
-                <circle cx="650" cy="250" r="200" stroke="#f2cc0d" strokeWidth="1" />
-                <circle cx="650" cy="250" r="300" stroke="#f2cc0d" strokeWidth="0.5" />
-                <circle cx="150" cy="400" r="80" stroke="#e5f2d6" strokeWidth="1" />
-                <circle cx="150" cy="400" r="150" stroke="#e5f2d6" strokeWidth="0.5" />
+          <div className="space-y-6 animate-in fade-in zoom-in-95 duration-700">
+            {/* Processing Hero Card - dark with brand accents & Glassmorphism */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0f172a] via-[#1e1b4b] to-[#020617] text-white p-8 md:p-10 shadow-2xl border border-white/10">
+              {/* Decorative Animated SVG rings */}
+              <svg className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none" viewBox="0 0 800 500" fill="none">
+                <circle cx="650" cy="250" r="120" stroke="url(#glowGradient1)" strokeWidth="2" className="animate-[spin_20s_linear_infinite] origin-[650px_250px]" strokeDasharray="10 20" />
+                <circle cx="650" cy="250" r="200" stroke="#f2cc0d" strokeWidth="1" opacity="0.3" />
+                <circle cx="150" cy="400" r="100" stroke="url(#glowGradient2)" strokeWidth="1.5" className="animate-[spin_15s_linear_infinite_reverse] origin-[150px_400px]" strokeDasharray="30 10" />
+                <defs>
+                  <linearGradient id="glowGradient1" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#f2cc0d" />
+                    <stop offset="100%" stopColor="transparent" />
+                  </linearGradient>
+                  <linearGradient id="glowGradient2" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#e94560" />
+                    <stop offset="100%" stopColor="transparent" />
+                  </linearGradient>
+                </defs>
               </svg>
 
               <div className="relative z-10">
                 {/* Header row: logo + title + timer */}
-                <div className="flex items-start justify-between mb-8">
-                  <div className="flex items-center gap-4">
-                    <Image
-                      src="/logo.png"
-                      alt="Leaders"
-                      width={100}
-                      height={30}
-                      className="h-7 w-auto opacity-60"
-                    />
-                    <div className="w-px h-8 bg-white/10" />
+                <div className="flex items-start justify-between mb-10">
+                  <div className="flex items-center gap-5">
+                    <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                       <Image
+                        src="/logoblack.png"
+                        alt="Leaders"
+                        width={100}
+                        height={30}
+                        className="h-6 w-auto brightness-0 invert"
+                      />
+                    </div>
                     <div>
-                      <h2 className="text-xl font-bold">
-                        {stage === 'done' ? 'ההצעה מוכנה!' : 'בונה את ההצעה שלך...'}
+                      <h2 className="text-2xl font-extrabold tracking-tight">
+                        {stage === 'done' ? 'ההצעה פרימיום שלך מוכנה!' : 'מנועי ה-AI בונים את ההצעה...'}
                       </h2>
-                      <p className="text-white/50 text-sm mt-0.5">
-                        {stage === 'parsing' && 'קורא ומנתח את המסמכים שהעלית'}
-                        {stage === 'processing' && 'הסוכן מנתח, מצליב, ומייצר הצעה מלאה'}
-                        {stage === 'researching' && 'מריץ מחקר שוק ומשפיענים ברקע'}
-                        {stage === 'visuals' && 'מייצר לוגו, צבעים ותמונות AI למותג'}
-                        {stage === 'creating' && 'שומר את ההצעה במערכת'}
-                        {stage === 'done' && 'מעביר אותך לעורך ההצעה'}
+                      <p className="text-[#94a3b8] text-sm mt-1 font-medium">
+                        {stage === 'parsing' && 'מפענח נתונים ומחלץ אינטליגנציה עסקית מהבריף'}
+                        {stage === 'processing' && 'אסטרטג ה-AI בונה קונספט, מטרות ויעדי קמפיין'}
+                        {stage === 'creating' && 'אורז הכל למסמך אינטראקטיבי ומעוצב'}
+                        {stage === 'done' && 'מערכות מוכנות, מנווט לעורך...'}
                       </p>
                     </div>
                   </div>
                   {stage !== 'done' && (
-                    <div className="text-left shrink-0">
-                      <div className="text-2xl font-mono font-bold tabular-nums text-[#f2cc0d]">
+                    <div className="text-left shrink-0 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/5">
+                      <div className="text-3xl font-mono font-bold tabular-nums text-[#f2cc0d] drop-shadow-[0_0_8px_rgba(242,204,13,0.5)]">
                         {Math.floor(elapsed / 60).toString().padStart(2, '0')}:{(elapsed % 60).toString().padStart(2, '0')}
                       </div>
-                      <p className="text-white/30 text-xs">זמן עיבוד</p>
+                      <p className="text-[#94a3b8] text-xs font-semibold tracking-wider text-center mt-1">זמן ריצה</p>
                     </div>
                   )}
                 </div>
 
                 {/* Progress Steps */}
-                <div className="flex items-center gap-2 mb-8">
+                <div className="flex items-center gap-2 mb-10">
                   {[
                     { key: 'parsing', label: 'סריקה' },
-                    { key: 'processing', label: 'ניתוח AI' },
-                    { key: 'researching', label: 'מחקר' },
-                    { key: 'visuals', label: 'ויזואל' },
-                    { key: 'creating', label: 'יצירה' },
+                    { key: 'processing', label: 'פיצוח AI' },
+                    { key: 'creating', label: 'אריזה' },
                   ].map((step, i) => {
                     const status = getStepStatus(step.key, stage)
                     return (
                       <div key={step.key} className="flex items-center gap-2 flex-1">
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 ${
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold transition-all duration-500 ${
                             status === 'done'
-                              ? 'bg-[#e5f2d6] text-[#4a7c3f] shadow-[0_0_12px_rgba(229,242,214,0.3)]'
+                              ? 'bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
                               : status === 'active'
-                              ? 'bg-[#f2cc0d] text-[#212529] shadow-[0_0_15px_rgba(242,204,13,0.3)] scale-110'
-                              : 'bg-white/10 text-white/30'
+                              ? 'bg-[#f2cc0d] text-[#0f172a] shadow-[0_0_20px_rgba(242,204,13,0.4)] scale-110'
+                              : 'bg-white/5 text-white/30 border border-white/5'
                           }`}>
                             {status === 'done' ? (
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                               </svg>
                             ) : status === 'active' ? (
-                              <div className="w-2 h-2 bg-[#212529] rounded-full animate-ping" />
+                              <div className="relative flex items-center justify-center w-full h-full">
+                                <div className="absolute inset-0 rounded-2xl border-2 border-[#0f172a] border-t-transparent animate-spin" />
+                                <span>{i + 1}</span>
+                              </div>
                             ) : (
                               <span>{i + 1}</span>
                             )}
                           </div>
-                          <span className={`text-sm hidden sm:inline ${
-                            status === 'done' ? 'text-[#e5f2d6]' :
-                            status === 'active' ? 'text-[#f2cc0d] font-medium' :
+                          <span className={`text-sm font-bold hidden sm:inline tracking-wide ${
+                            status === 'done' ? 'text-[#10b981]' :
+                            status === 'active' ? 'text-[#f2cc0d]' :
                             'text-white/30'
                           }`}>{step.label}</span>
                         </div>
-                        {i < 4 && (
-                          <div className="flex-1 h-px relative">
-                            <div className="absolute inset-0 bg-white/10" />
-                            <div className={`absolute inset-y-0 right-0 transition-all duration-700 ${
+                        {i < 2 && (
+                          <div className="flex-1 h-1.5 rounded-full relative overflow-hidden bg-white/5">
+                            <div className={`absolute inset-y-0 right-0 transition-all duration-1000 ease-out ${
                               status === 'done'
-                                ? 'left-0 bg-gradient-to-l from-[#e5f2d6] to-[#e5f2d6]/60'
+                                ? 'left-0 bg-gradient-to-l from-[#10b981] to-[#047857]'
                                 : 'left-full bg-[#f2cc0d]'
                             }`} />
                           </div>
@@ -836,109 +696,111 @@ export default function CreateProposalPage() {
                   })}
                 </div>
 
-                {/* Brand Card - when brand is identified */}
+                {/* Brand Card - Glassmorphism reveal when brand is identified */}
                 {brandInfo?.brand?.name && (
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-xl bg-[#f2cc0d] text-[#212529] flex items-center justify-center font-bold text-2xl shadow-[0_0_15px_rgba(242,204,13,0.2)]">
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 mb-6 shadow-xl animate-in slide-in-from-top-4 duration-500">
+                    <div className="flex items-center gap-5">
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#f2cc0d] to-[#e0bc00] text-[#0f172a] flex items-center justify-center font-black text-3xl shadow-[0_0_20px_rgba(242,204,13,0.3)] border border-white/20">
                         {brandInfo.brand.name.charAt(0)}
                       </div>
                       <div className="flex-1">
-                        <p className="font-bold text-lg">{brandInfo.brand.name}</p>
+                        <p className="text-white/60 text-xs font-bold uppercase tracking-wider mb-1">לקוח מזוהה</p>
+                        <p className="font-extrabold text-2xl text-white tracking-tight">{brandInfo.brand.name}</p>
                         {brandInfo.brand.industry && (
-                          <p className="text-white/40 text-sm">{brandInfo.brand.industry}</p>
+                          <div className="inline-flex items-center mt-2 px-3 py-1 rounded-full bg-white/10 text-white/80 text-xs font-semibold border border-white/5">
+                            {brandInfo.brand.industry}
+                          </div>
                         )}
                       </div>
                       {brandInfo.budget?.amount ? (
-                        <div className="text-left bg-white/5 rounded-lg px-4 py-2 border border-white/5">
-                          <p className="text-white/30 text-xs">תקציב</p>
-                          <p className="font-bold text-lg text-[#f2cc0d]">{brandInfo.budget.currency}{brandInfo.budget.amount.toLocaleString()}</p>
+                        <div className="text-left bg-[#0f172a]/50 rounded-xl px-5 py-3 border border-white/10">
+                          <p className="text-[#94a3b8] text-xs font-bold uppercase tracking-wider mb-1">תקציב קמפיין</p>
+                          <p className="font-black text-2xl text-[#f2cc0d] drop-shadow-md">{brandInfo.budget.currency}{brandInfo.budget.amount.toLocaleString()}</p>
                         </div>
                       ) : null}
                     </div>
                   </div>
                 )}
 
-                {/* Tip Card */}
-                <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+                {/* Dynamic Tip Card */}
+                <div className="bg-black/20 backdrop-blur-sm border border-white/5 rounded-2xl p-6 mt-6">
                   <div className="flex items-start gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                      isBrandTips ? 'bg-[#f2cc0d]/20 text-[#f2cc0d]' : 'bg-white/10 text-white/60'
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
+                      isBrandTips ? 'bg-gradient-to-br from-[#f2cc0d]/30 to-[#f2cc0d]/10 text-[#f2cc0d] border border-[#f2cc0d]/20' : 'bg-white/5 text-white/50 border border-white/5'
                     }`}>
                       {isBrandTips ? (
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-6 h-6 animate-[pulse_3s_ease-in-out_infinite]" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
                         </svg>
                       ) : (
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
                         </svg>
                       )}
                     </div>
-                    <div className="flex-1 min-h-[3.5rem]">
-                      <p className={`text-xs font-medium mb-1.5 ${
-                        isBrandTips ? 'text-[#f2cc0d]/70' : 'text-white/40'
+                    <div className="flex-1 min-h-[4rem]">
+                      <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${
+                        isBrandTips ? 'text-[#f2cc0d]' : 'text-[#94a3b8]'
                       }`}>
                         {isBrandTips
-                          ? `על ${brandInfo?.brand?.name || 'המותג'}`
-                          : `טיפ מקצועי`
+                          ? `תובנת AI על ${brandInfo?.brand?.name || 'הלקוח'}`
+                          : `תובנה מקצועית בזמן ההמתנה`
                         }
-                        <span className="text-white/20 mr-2">
-                          {tipIndex + 1}/{activeTips.length}
+                        <span className="text-white/20 mr-3 text-[10px]">
+                          ({tipIndex + 1}/{activeTips.length})
                         </span>
                       </p>
-                      <p className={`text-white/80 text-sm leading-relaxed transition-opacity duration-500 ${
-                        tipVisible ? 'opacity-100' : 'opacity-0'
+                      <p className={`text-white/90 text-base md:text-lg font-medium leading-relaxed transition-all duration-500 ${
+                        tipVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
                       }`}>
-                        {activeTips[tipIndex % activeTips.length]}
+                        "{activeTips[tipIndex % activeTips.length]}"
                       </p>
                     </div>
-                  </div>
-                  {/* Tip dots */}
-                  <div className="flex justify-center gap-1 mt-5">
-                    {activeTips.map((_, i) => (
-                      <div
-                        key={i}
-                        className={`h-1 rounded-full transition-all duration-300 ${
-                          i === tipIndex % activeTips.length
-                            ? `w-4 ${isBrandTips ? 'bg-[#f2cc0d]' : 'bg-white/40'}`
-                            : 'w-1 bg-white/10'
-                        }`}
-                      />
-                    ))}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Live Log */}
-            <details className="group">
-              <summary className="flex items-center gap-2 cursor-pointer text-sm text-[#6b7281] hover:text-[#212529] transition-colors mb-2 select-none">
-                <svg className="w-4 h-4 transition-transform group-open:rotate-90 rtl:rotate-180 rtl:group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            {/* Live Terminal Log */}
+            <details className="group" open>
+              <summary className="flex items-center gap-2 cursor-pointer text-sm font-bold text-[#6b7281] hover:text-[#212529] transition-colors mb-3 select-none px-2">
+                <svg className="w-5 h-5 transition-transform group-open:rotate-90 rtl:rotate-180 rtl:group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>
-                לוג עיבוד ({logs.length} רשומות)
+                Terminal Activity ({logs.length})
               </summary>
-              <div className="bg-white rounded-2xl p-4 border border-[#dfdfdf]">
-                <div className="bg-[#1a1a2e] rounded-xl p-4 max-h-56 overflow-y-auto font-mono text-xs space-y-1" dir="ltr">
+              <div className="bg-[#0f172a] rounded-2xl border border-[#334155] overflow-hidden shadow-lg">
+                {/* Terminal Header */}
+                <div className="bg-[#1e293b] px-4 py-2 flex items-center gap-2 border-b border-[#334155]">
+                  <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+                  <span className="ml-4 text-xs font-mono text-[#94a3b8]">ai_agent_core.exe --verbose</span>
+                </div>
+                {/* Terminal Body */}
+                <div className="p-5 max-h-64 overflow-y-auto font-mono text-sm space-y-2 scrollbar-thin scrollbar-thumb-[#334155] scrollbar-track-transparent" dir="ltr">
                   {logs.map((log) => (
-                    <div key={log.id} className="flex gap-2 items-start">
-                      <span className="text-[#6b7281]/60 shrink-0">
-                        {log.timestamp.toLocaleTimeString('he-IL')}
+                    <div key={log.id} className="flex gap-3 items-start hover:bg-white/5 px-2 py-1 rounded transition-colors">
+                      <span className="text-[#64748b] shrink-0 font-semibold">
+                        [{log.timestamp.toLocaleTimeString('en-US', { hour12: false })}]
                       </span>
-                      <span className={getLogColorDark(log.type)}>
+                      <span className={`${getLogColorDark(log.type)} font-bold`}>
                         {getLogIcon(log.type)}
                       </span>
-                      <span className={log.type === 'detail' ? 'text-[#6b7281]' : 'text-[#e0e0e0]'}>
+                      <span className={log.type === 'detail' ? 'text-[#94a3b8]' : 'text-[#f8fafc] tracking-wide'}>
                         {log.message}
                       </span>
                     </div>
                   ))}
                   {stage !== 'done' && (
-                    <div className="text-[#6b7281]/40 animate-pulse">
-                      &gt; waiting...
+                    <div className="flex gap-3 items-center text-[#10b981] animate-pulse px-2 py-1">
+                      <span className="font-bold">&gt;</span>
+                      <span className="opacity-80">awaiting system response...</span>
+                      <div className="w-2 h-4 bg-[#10b981] animate-[ping_1s_infinite]"></div>
                     </div>
                   )}
+                  {/* Invisible div to scroll to */}
+                  <div ref={logsEndRef} />
                 </div>
               </div>
             </details>
@@ -947,17 +809,32 @@ export default function CreateProposalPage() {
 
         {/* Error during processing */}
         {stage === 'error' && error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mt-5">
-            {error}
+          <div className="bg-red-50 border-2 border-red-200 text-red-800 rounded-2xl p-6 mt-6 shadow-sm animate-in slide-in-from-top-4">
+            <div className="flex items-center gap-3 font-bold text-lg mb-2 text-red-600">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              שגיאת מערכת
+            </div>
+            <p className="font-medium text-red-700 ml-9">{error}</p>
             <button
-              className="block mt-2 text-sm underline"
+              className="mt-4 ml-9 bg-red-100 hover:bg-red-200 text-red-800 font-bold py-2 px-5 rounded-full transition-colors"
               onClick={() => { setStage('idle'); setError(null); setLogs([]) }}
             >
-              נסה שוב
+              התחל מחדש
             </button>
           </div>
         )}
       </div>
+      
+      {/* Add CSS animation for Shimmer effect on button */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes shimmer {
+          100% {
+            transform: translateX(100%);
+          }
+        }
+      `}} />
     </div>
   )
 }
@@ -965,7 +842,7 @@ export default function CreateProposalPage() {
 // === Helper Functions ===
 
 function getStepStatus(step: string, currentStage: ProcessingStage): 'pending' | 'active' | 'done' {
-  const order = ['parsing', 'processing', 'researching', 'visuals', 'creating', 'done']
+  const order = ['parsing', 'processing', 'creating', 'done']
   const stepIdx = order.indexOf(step)
   const currentIdx = order.indexOf(currentStage)
   if (currentIdx > stepIdx) return 'done'
@@ -975,21 +852,21 @@ function getStepStatus(step: string, currentStage: ProcessingStage): 'pending' |
 
 function getLogColorDark(type: LogEntry['type']): string {
   switch (type) {
-    case 'success': return 'text-[#e5f2d6]'
-    case 'warning': return 'text-[#f2cc0d]'
-    case 'error': return 'text-red-400'
-    case 'detail': return 'text-[#6b7281]/60'
-    default: return 'text-[#dbe4f5]'
+    case 'success': return 'text-[#10b981]' // Green
+    case 'warning': return 'text-[#f59e0b]' // Yellow
+    case 'error': return 'text-[#ef4444]' // Red
+    case 'detail': return 'text-[#94a3b8]' // Gray
+    default: return 'text-[#38bdf8]' // Blue
   }
 }
 
 function getLogIcon(type: LogEntry['type']): string {
   switch (type) {
-    case 'success': return '✓'
-    case 'warning': return '!'
-    case 'error': return '✗'
-    case 'detail': return '·'
-    default: return '►'
+    case 'success': return 'SUCCESS'
+    case 'warning': return 'WARN'
+    case 'error': return 'ERROR'
+    case 'detail': return 'INFO'
+    default: return 'EXEC'
   }
 }
 

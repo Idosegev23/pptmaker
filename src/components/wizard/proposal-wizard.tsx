@@ -58,6 +58,7 @@ export interface StepProps {
   extractedData: Partial<WizardStepDataMap[WizardStepId]>
   onChange: (data: Partial<WizardStepDataMap[WizardStepId]>) => void
   errors: Record<string, string> | null
+  briefContext?: string
 }
 
 // ---------- Step component map ----------
@@ -163,6 +164,8 @@ export default function ProposalWizard({
     'forward' | 'backward' | null
   >(null)
   const [isTransitioning, setIsTransitioning] = useState(false)
+  const [isResearchLoading, setIsResearchLoading] = useState(false)
+  const researchTriggeredRef = useRef(false)
 
   const prevStepRef = useRef(state.currentStep)
 
@@ -172,11 +175,12 @@ export default function ProposalWizard({
     async (stateToSave: WizardState) => {
       setIsSaving(true)
       try {
-        const payload = {
+        const payload: Record<string, unknown> = {
           _wizardState: {
             ...stateToSave,
             isDirty: false, // persisted state is never dirty
           },
+          _cachedSlides: null, // Invalidate cached slides on any edit
         }
 
         const res = await fetch(`/api/documents/${documentId}`, {
@@ -214,6 +218,94 @@ export default function ProposalWizard({
       debouncedSave(state)
     }
   }, [state, state.isDirty, debouncedSave])
+
+  // ---------- Background research (deferred from pipeline) ----------
+
+  useEffect(() => {
+    if (researchTriggeredRef.current) return
+    const pipelineStatus = initialData._pipelineStatus as { research?: string } | undefined
+    if (!pipelineStatus || pipelineStatus.research !== 'pending') return
+
+    const brandName = state.stepData.brief?.brandName || (initialData.brandName as string) || ''
+    if (!brandName) return
+
+    researchTriggeredRef.current = true
+    setIsResearchLoading(true)
+    console.log('[Wizard] Starting background research for:', brandName)
+
+    const extracted = initialData._extractedData as Record<string, unknown> | undefined
+    const brand = extracted?.brand as { industry?: string; website?: string } | undefined
+    const targetAudience = extracted?.targetAudience as { primary?: { gender?: string; ageRange?: string; interests?: string[] } } | undefined
+    const budget = extracted?.budget as { amount?: number } | undefined
+    const campaignGoals = extracted?.campaignGoals as string[] | undefined
+
+    Promise.allSettled([
+      fetch('/api/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandName }),
+      }).then(res => res.ok ? res.json() : Promise.reject('Research failed')),
+      fetch('/api/influencers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'research',
+          brandResearch: {
+            brandName,
+            industry: brand?.industry || '',
+            targetDemographics: {
+              primaryAudience: {
+                gender: targetAudience?.primary?.gender || '',
+                ageRange: targetAudience?.primary?.ageRange || '',
+                interests: targetAudience?.primary?.interests || [],
+              },
+            },
+          },
+          budget: budget?.amount || 0,
+          goals: campaignGoals || [],
+        }),
+      }).then(res => res.ok ? res.json() : Promise.reject('Influencer research failed')),
+    ]).then(async ([researchResult, influencerResult]) => {
+      const brandResearch = researchResult.status === 'fulfilled' ? researchResult.value.research : null
+      const influencerStrategy = influencerResult.status === 'fulfilled' ? (influencerResult.value.strategy || influencerResult.value) : null
+
+      console.log('[Wizard] Research complete:', { brandResearch: !!brandResearch, influencerStrategy: !!influencerStrategy })
+
+      // Enrich wizard data with research results
+      if (brandResearch || influencerStrategy) {
+        const enriched = enrichStepData(state.stepData, brandResearch, influencerStrategy)
+        dispatch({ type: 'SET_EXTRACTED_DATA', data: enriched })
+        // Also update step data so user sees enriched content
+        for (const [stepId, stepData] of Object.entries(enriched)) {
+          if (stepData) {
+            dispatch({ type: 'UPDATE_STEP_DATA', step: stepId as WizardStepId, data: stepData })
+          }
+        }
+      }
+
+      // Save research results to document
+      const patchPayload: Record<string, unknown> = {
+        _pipelineStatus: { ...pipelineStatus, research: 'complete' },
+      }
+      if (brandResearch) patchPayload._brandResearch = brandResearch
+      if (influencerStrategy) patchPayload._influencerStrategy = influencerStrategy
+      if (researchResult.status === 'fulfilled' && researchResult.value.colors) {
+        patchPayload._brandColors = researchResult.value.colors
+      }
+
+      await fetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchPayload),
+      })
+      console.log('[Wizard] Research results saved to document')
+    }).catch(err => {
+      console.error('[Wizard] Background research failed:', err)
+    }).finally(() => {
+      setIsResearchLoading(false)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run once on mount
 
   // ---------- Step data helpers ----------
 
@@ -369,7 +461,7 @@ export default function ProposalWizard({
       // Convert wizard data to proposal data
       const proposalData = wizardDataToProposalData(state.stepData)
 
-      // Save everything: proposal data + wizard state
+      // Save everything: proposal data + wizard state + invalidate cached slides
       const payload = {
         ...proposalData,
         _wizardState: {
@@ -381,6 +473,13 @@ export default function ProposalWizard({
           isDirty: false,
         },
         _wizardComplete: true,
+        _cachedSlides: null, // Invalidate - will regenerate on visual generation page
+        _pipelineStatus: {
+          textGeneration: 'complete',
+          research: ((initialData._pipelineStatus as Record<string, string> | undefined)?.research) || 'complete',
+          visualAssets: 'pending',
+          slideGeneration: 'pending',
+        },
       }
 
       const res = await fetch(`/api/documents/${documentId}`, {
@@ -395,8 +494,8 @@ export default function ProposalWizard({
 
       dispatch({ type: 'MARK_SAVED', timestamp: new Date().toISOString() })
 
-      // Redirect to edit/preview
-      router.push(`/edit/${documentId}`)
+      // Redirect to visual generation page
+      router.push(`/generate/${documentId}`)
     } catch (err) {
       console.error('[Wizard] Generate error:', err)
       alert('שגיאה ביצירת ההצעה. נסה שוב.')
@@ -477,6 +576,16 @@ export default function ProposalWizard({
           </div>
         </div>
 
+        {/* Background research indicator */}
+        {isResearchLoading && (
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 mb-4">
+            <div className="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-4 py-2.5 text-sm text-blue-700">
+              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <span>מחקר מותג ומשפיענים רץ ברקע - הנתונים יתעדכנו אוטומטית</span>
+            </div>
+          </div>
+        )}
+
         {/* Step component with transition */}
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <div
@@ -493,6 +602,7 @@ export default function ProposalWizard({
                 extractedData={currentExtractedData}
                 onChange={handleStepDataChange}
                 errors={stepErrors}
+                briefContext={`${state.stepData.brief?.brandName || ''}: ${state.stepData.brief?.brandBrief || ''}`}
               />
             )}
           </div>

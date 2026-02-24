@@ -132,7 +132,7 @@ export async function generateScreenshot(
 
   try {
     const page = await browser.newPage()
-    
+
     await page.setViewport({
       width: options.width || 1200,
       height: options.height || 800,
@@ -141,11 +141,48 @@ export async function generateScreenshot(
     await page.setContent(html, { waitUntil: 'networkidle0' })
     await page.evaluate(() => document.fonts?.ready)
 
-    const screenshot = await page.screenshot({ 
+    const screenshot = await page.screenshot({
       fullPage: true,
       type: 'png',
     })
     return Buffer.from(screenshot)
+  } finally {
+    await browser.close()
+  }
+}
+
+/**
+ * Render multiple HTML slides to PNG images (single browser instance).
+ * Returns array of base64-encoded PNG strings for embedding in PPTX.
+ */
+export async function renderSlidesToImages(
+  htmlSlides: string[]
+): Promise<string[]> {
+  const browser = await getBrowser()
+  const images: string[] = []
+
+  try {
+    console.log(`[Screenshots] Rendering ${htmlSlides.length} slides to PNG`)
+
+    for (let i = 0; i < htmlSlides.length; i++) {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 1920, height: 1080 })
+      await page.setContent(htmlSlides[i], { waitUntil: 'networkidle0' })
+      await page.evaluate(() => document.fonts?.ready)
+      await new Promise(resolve => setTimeout(resolve, i === 0 ? 800 : 300))
+
+      const screenshot = await page.screenshot({
+        type: 'png',
+        clip: { x: 0, y: 0, width: 1920, height: 1080 },
+      })
+      await page.close()
+
+      const base64 = Buffer.from(screenshot).toString('base64')
+      images.push(base64)
+    }
+
+    console.log(`[Screenshots] Rendered ${images.length} slide images`)
+    return images
   } finally {
     await browser.close()
   }
