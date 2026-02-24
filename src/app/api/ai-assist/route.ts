@@ -57,8 +57,10 @@ export async function POST(request: NextRequest) {
       model: FAST_MODEL,
       contents: prompt,
       config: {
-        responseMimeType: 'application/json',
-        ...(useGrounding ? { tools: [{ googleSearch: {} }] } : {}),
+        // Gemini doesn't allow responseMimeType with googleSearch tool
+        ...(useGrounding
+          ? { tools: [{ googleSearch: {} }] }
+          : { responseMimeType: 'application/json' }),
       },
     })
 
