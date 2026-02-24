@@ -1,11 +1,12 @@
 /**
- * Gemini AI Premium Slide Designer
- * Generates premium, structured presentation designs with rigid grid composition.
- * Heavily optimized for high-end PDF export (No shadows/blur, YES to clip-paths/gradients).
+ * Gemini AI Slide Designer
+ * Generates unique presentation designs from scratch for each brand.
  *
  * 2-Step process:
- * 1. generateDesignSystem() → Unique CSS for the brand (includes grid + safe-zone)
- * 2. generateSlidesBatch() → HTML slides using that CSS (strict layout rules)
+ * 1. generateDesignSystem() → Unique CSS for the brand
+ * 2. generateSlidesBatch() → HTML slides using that CSS
+ *
+ * Fallback: premium-proposal-template.tsx if AI fails
  */
 
 import { GoogleGenAI } from '@google/genai'
@@ -54,9 +55,7 @@ async function generateDesignSystem(
   const requestId = `ds-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Generating design system for: ${brand.brandName}`)
 
-  const prompt = `אתה Art Director ומנהל קריאייטיב ראשי בסוכנות מיתוג עולמית (בסגנון Apple, McKinsey, Pentagram).
-עליך ליצור מערכת עיצוב CSS למצגת פרימיום מקצועית - יוקרתית, מסודרת, עם קומפוזיציה מושלמת - עבור המותג "${brand.brandName}".
-המצגת תיוצא ל-PDF, ולכן עליה להיראות כמו מצגת אסטרטגית של סוכנות מובילה.
+  const prompt = `אתה מעצב מצגות ברמה עולמית. עליך ליצור מערכת עיצוב CSS ייחודית למותג "${brand.brandName}".
 
 מידע על המותג:
 - תעשייה: ${brand.industry || 'לא ידוע'}
@@ -64,30 +63,26 @@ async function generateDesignSystem(
 - צבע ראשי: ${brand.brandColors.primary}
 - צבע משני: ${brand.brandColors.secondary}
 - צבע הדגשה: ${brand.brandColors.accent}
-- אווירה: ${brand.brandColors.mood || 'יוקרתי ומקצועי'}
+- סגנון: ${brand.brandColors.style || 'corporate'}
+- אווירה: ${brand.brandColors.mood || 'מקצועי'}
+- קהל יעד: ${brand.targetAudience || 'מבוגרים 25-45'}
 
-## דרישות טכניות קשיחות (חובה ל-PDF!):
-- קנבס: 1920px × 1080px
-- RTL מובנה
-- פונט: Heebo
-- 🚫 איסור מוחלט על box-shadow (קורס ב-PDF). צור עומק עם borders כפולות, gradients, offset borders.
-- 🚫 איסור מוחלט על backdrop-filter (לא נתמך). השתמש ב-rgba עם gradient.
+צור מערכת עיצוב CSS מלאה ויחודית. כל מותג חייב לקבל עיצוב שונה לחלוטין.
 
-## ⚠️ חובה: מערכת גריד קשיחה עם שוליים (RIGID GRID SYSTEM)
+דרישות טכניות קשיחות:
+- גודל שקף: 1920px × 1080px
+- כיוון: RTL (עברית)
+- פונט: Heebo (כבר מיובא)
+- כל טקסט חייב להיות קריא - ניגודיות מספקת
+- אסור שטקסט ייחתך - overflow: hidden רק עם min-height מתאים
+- אסור להשתמש ב-box-shadow - נראה רע בייצוא PDF. השתמש ב-border, outline, gradient borders במקום
+- אסור backdrop-filter (glassmorphism) - לא עובד בייצוא PDF. השתמש ב-background עם opacity במקום
 
-זהו הכלל הכי חשוב: **כל תוכן חייב לשבת בתוך Safe Zone קשיח.**
-
-\`\`\`
-Canvas: 1920 × 1080
-Margins: 80px מכל ארבעת הכיוונים (top, right, bottom, left)
-Safe content area: 1760 × 920 (ממורכז)
-Logo footer zone: 60px תחתון (שמור ללוגואים)
-\`\`\`
-
-ה-CSS **חייב** לכלול את המחלקות הבאות (בדיוק כמו שהן):
-
+## Safe Zone (חובה):
+כל טקסט ותוכן חייב להישאר בתוך safe-zone של 80px מכל כיוון.
+אלמנטים דקורטיביים (gradients, shapes, watermarks) יכולים לחרוג.
+ה-CSS חייב לכלול:
 \`\`\`css
-/* === MANDATORY: Safe Zone + Grid System === */
 .safe-zone {
   position: absolute;
   top: 80px; right: 80px; bottom: 80px; left: 80px;
@@ -95,72 +90,44 @@ Logo footer zone: 60px תחתון (שמור ללוגואים)
   flex-direction: column;
   overflow: hidden;
 }
-
-.content-grid {
-  display: grid;
-  gap: 30px;
-  flex: 1;
-  align-content: start;
-}
-
-.content-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
-.content-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
-.content-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
-
-.section-label {
-  font-size: 14px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 3px;
-  margin-bottom: 8px;
-}
-
-.slide-title {
-  font-size: 52px;
-  font-weight: 800;
-  line-height: 1.1;
-  margin-bottom: 32px;
-}
-
-.card {
-  padding: 28px;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.slide-footer {
-  margin-top: auto;
-  padding-top: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.slide-footer img { height: 32px; width: auto; }
 \`\`\`
 
-## מה ה-CSS **נוסף** חייב לכלול (מעבר למחלקות החובה):
-
-1. **טיפוגרפיה פרימיום:** מחלקות לכותרות, תתי-כותרות, body text. גדלים: כותרת 48-56px, תת-כותרת 28-32px, body 18-20px. השתמש ב-letter-spacing ו-line-height מדויקים.
-2. **רקעים יוקרתיים:** linear-gradient ו-radial-gradient עדינים, לא צבע אחיד. שמור על נקיות - gradient עדין, לא אגרסיבי.
-3. **כרטיסיות (Cards):** \`.premium-card\` עם border עדין (1px solid), רקע gradient קל, padding פנימי של 24-28px מינימום. כל הכרטיסיות באותו גובה בשורה.
-4. **Watermark עדין:** \`.massive-watermark\` לטקסט רקע עם opacity 3-5%.
-5. **אלמנטים דקורטיביים:** קווים דקים (1px solid), עיגולי accent, אבל **בתוך ה-safe-zone בלבד**.
-6. **תגיות ומדדים:** \`.badge\`, \`.metric-value\` (מספר גדול בולט), \`.metric-label\` (הסבר קטן מתחת).
-7. **תמונות מעוגלות:** \`.avatar-circle\` עם border-radius: 50% ו-overflow: hidden.
-8. **כפתורי CTA:** \`.cta-button\` מסוגנן.
-
-**חשוב: אל תוסיף CSS שיגרום לאלמנטים לצאת מה-safe-zone. אין position: absolute על תוכן (רק על watermarks דקורטיביים).**
-
-החזר JSON בלבד:
+החזר JSON:
 \`\`\`json
 {
-  "designDirection": "פסקה קצרה על הקונספט הויזואלי",
-  "css": "ה-CSS השלם כאן (כולל המחלקות החובה למעלה + התוספות שלך)"
+  "designDirection": "תיאור קצר של כיוון העיצוב (2-3 משפטים)",
+  "css": "כל ה-CSS כמחרוזת אחת"
 }
-\`\`\``
+\`\`\`
+
+ה-CSS חייב לכלול:
+1. **:root** עם custom properties (--primary, --secondary, --accent, --bg, --text, --card-bg, --card-border, --card-shadow)
+2. **body, .slide** - רקע ייחודי (לא רק צבע אחיד - גרדיאנט, pattern, texture)
+3. **.slide-content** - padding, flex layout
+4. **h1** - כותרת ראשית (48-64px, bold)
+5. **h2** - כותרת משנית (36-48px)
+6. **h3** - כותרת שלישונית (24-32px)
+7. **.body-text** - טקסט גוף (20-24px)
+8. **.card** - קלף עם עיצוב ייחודי (לא רק border-radius - תחשוב על outlined, gradient borders, cutout corners, border-image, colored borders, double borders)
+9. **.metric-box** - תיבת מספר/מדד עם עיצוב מרשים
+10. **.metric-value** - ערך מספרי גדול ובולט
+11. **.accent-decoration** - אלמנט דקורטיבי ייחודי (shapes, lines, dots, waves - משהו שמזהה את המצגת הזו)
+12. **.slide-cover** - עיצוב שקף שער (hero, dramatic)
+13. **.cover-title** - כותרת שער ענקית (80-120px)
+14. **.influencer-card** - כרטיס משפיען עם תמונה עגולה
+15. **.influencer-image** - תמונת פרופיל עגולה עם מסגרת ייחודית
+16. **.tag** - תגית/badge קטנה
+17. **.grid-2, .grid-3, .grid-4** - grids עם gap
+18. **.logo-footer** - פוטר לוגואים
+19. **.brand-watermark** - סימן מים
+20. **.slide::before** - פס צבע תחתון (או אלמנט דקורטיבי אחר)
+
+דגשים חשובים:
+- אל תשתמש בעיצוב גנרי "עוד מצגת"
+- תהיה יצירתי - כל מותג צריך להרגיש שונה
+- תשתמש בטכניקות CSS מתקדמות: clip-path, mix-blend-mode, gradients מורכבים, border-image, outline
+- הצבעים חייבים להתבסס על צבעי המותג אבל עם וריאציות יצירתיות
+- חשוב על rhythm ויזואלי - לא כל שקף צריך להיראות אותו דבר`
 
   try {
     const response = await ai.models.generateContent({
@@ -206,129 +173,100 @@ async function generateSlidesBatch(
     const contentJson = JSON.stringify(slide.content, null, 2)
     return `
 ### שקף ${i + 1}: ${slide.title} (סוג: ${slide.slideType})
-${slide.imageUrl ? `תמונה זמינה: ${slide.imageUrl}` : 'אין תמונה - השתמש בטיפוגרפיה חזקה ורקעי CSS gradient'}
-תוכן (JSON):
+${slide.imageUrl ? `תמונה זמינה: ${slide.imageUrl}` : 'אין תמונה'}
+תוכן:
 \`\`\`json
 ${contentJson}
 \`\`\`
 `
   }).join('\n')
 
-  const prompt = `אתה מעצב מצגות בכיר. המשימה: לייצר קוד HTML למצגת PDF של המותג "${brandName}" עם קומפוזיציה מסודרת ומקצועית.
+  const prompt = `אתה מעצב מצגות מקצועי. צור HTML לשקפים הבאים של "${brandName}".
 
-## ה-CSS שלך (כבר מוטמע ב-HEAD):
+## מערכת העיצוב (CSS) - כבר מוכנה:
 \`\`\`css
 ${designCSS}
 \`\`\`
 
-## לוגואים זמינים:
+## לוגואים:
 ${logoUrl ? `- לוגו לקוח: ${logoUrl}` : '- אין לוגו לקוח'}
-${leadersLogoUrl ? `- לוגו סוכנות (Leaders): ${leadersLogoUrl}` : ''}
+${leadersLogoUrl ? `- לוגו Leaders: ${leadersLogoUrl}` : ''}
 
-## מידע לשקפים:
+## שקפים ליצירה:
 ${slidesDescription}
 
-## ⚠️ חוקי ברזל - קומפוזיציה קשיחה (MANDATORY):
+## הוראות קריטיות:
 
-### 1. שוליים קשיחים (Sacred Margins):
-- **כל תוכן** חייב לשבת בתוך \`.safe-zone\` (80px margins מכל כיוון).
-- **חריגה יחידה**: תמונת רקע full-bleed בשקף שער בלבד.
-- אסור לשום טקסט או אלמנט תוכני לגעת בקצוות השקף.
-
-### 2. מבנה HTML קפדני - כל שקף חייב להיות:
+1. כל שקף הוא דף HTML עצמאי מלא:
 \`\`\`html
-<div class="slide" style="background:...">
-  <!-- Watermark decorative only -->
-  <div class="massive-watermark">BRAND</div>
-
-  <!-- All content inside safe-zone -->
-  <div class="safe-zone">
-    <div class="section-label">סוג השקף</div>
-    <h2 class="slide-title">כותרת</h2>
-
-    <div class="content-grid cols-N">
-      <!-- Cards/content here -->
-    </div>
-
-    <div class="slide-footer">
-      <!-- logos -->
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    @page { size: 1920px 1080px; margin: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Heebo', sans-serif; direction: rtl; -webkit-print-color-adjust: exact; }
+    ${'{CSS_FROM_DESIGN_SYSTEM}'}
+  </style>
+</head>
+<body>
+  <div class="slide">
+    <div class="slide-content">
+      <!-- תוכן השקף -->
     </div>
   </div>
-</div>
+</body>
+</html>
 \`\`\`
 
-### 3. השתמש ב-CSS Grid לכל לייאאוט כרטיסיות:
-- \`content-grid cols-2\` לשני עמודות
-- \`content-grid cols-3\` לשלוש עמודות
-- \`content-grid cols-4\` לארבע עמודות
-- **אסור** למקם כרטיסיות עם position: absolute. רק CSS Grid.
+2. **Safe Zone חובה**: כל טקסט ותוכן חייב לשבת בתוך \`.safe-zone\` (80px margins מכל כיוון). אלמנטים דקורטיביים יכולים לחרוג.
+3. כל השקפים בגודל 1920x1080 בדיוק
+4. כל הטקסט בעברית, RTL
+5. חובה לכלול את כל שדות התוכן - אסור לדלג על מידע
+5. מספרים ואחוזים: הצג ב-LTR עם direction: ltr; unicode-bidi: isolate
+6. עיצוב layout ייחודי לכל שקף - אל תשתמש באותו layout חוזר
+7. ${logoUrl ? `הוסף לוגו לקוח בפוטר: <img src="${logoUrl}" style="height:40px;object-fit:contain">` : 'אין לוגו לקוח'}
+8. ${leadersLogoUrl ? `הוסף לוגו Leaders בפוטר: <img src="${leadersLogoUrl}" style="height:35px;object-fit:contain">` : ''}
+9. תמונות: אם יש URL תמונה, השתמש בה עם object-fit: cover ועיצוב מרשים (clip-path, overlay, etc.)
+10. אם אין תמונה, השתמש ברקע גרדיאנט או pattern במקום
+11. למשפיענים ללא תמונת פרופיל: הצג עיגול צבעוני עם האות הראשונה של השם
+12. אסור box-shadow - השתמש ב-border בלבד
 
-### 4. היררכיה אנכית קבועה (כל שקף):
-section-label (קטן, uppercase) → slide-title (גדול) → content-grid → slide-footer
-תמיד בסדר הזה, תמיד מלמעלה למטה.
+## כללי Layout לפי סוג שקף:
+- **cover**: רקע full-bleed (תמונה או גרדיאנט דרמטי). שם המותג בטייפ ענק (80-120px). כותרת משנית מתחת. לוגואים בפינות. ללא כרטיסים.
+- **brief**: חלוקה 60/40. צד אחד: כותרת + טקסט. צד שני: תמונה או אייקונים.
+- **goals**: 3-4 כרטיסים ב-grid. כל כרטיס: אזור אייקון, כותרת bold, תיאור.
+- **audience**: כרטיס פרסונה מרכזי עם נתונים סביבו, או layout אופקי עם תמונה בצד.
+- **strategy**: 3 עמודים שווים לכל pillar עם אלמנט ויזואלי מחבר.
+- **metrics**: 4 תיבות מספרים בשורה עם מספרים גדולים. מתחת: טקסט הסבר.
+- **influencers**: grid של 3-6 כרטיסים עם תמונות עגולות, שם, handle, סטטיסטיקות.
+- **closing**: כותרת ממורכזת, טייפ גדול, עיצוב מינימלי. לוגואים בפוטר.
 
-### 5. כרטיסיות שוות:
-- בכל שורה של כרטיסיות, **כולן באותו גובה** (CSS Grid דואג לזה).
-- padding פנימי מינימלי: 24px.
-- אין טקסט שנוגע בקצוות כרטיסייה.
+## Anti-patterns (אסור):
+- אסור טקסט קטן מ-18px
+- אסור יותר מ-3 צבעים בשקף בודד
+- אסור שטח ריק גדול ללא תוכן
+- אסור לערום יותר מ-6 אלמנטים אנכית
+- אסור box-shadow או backdrop-filter
 
-### 6. יישור טקסט:
-- כל הטקסט ב-RTL מיושר לימין (ברירת מחדל).
-- טקסט ממורכז רק עבור: מספרי מדדים, כותרות שקף שער, CTA.
-
-### 7. מקסימום תוכן:
-- **לא יותר מ-6 כרטיסיות** בשקף אחד. אם יש יותר, פצל לשקפים.
-- **לא יותר מ-4 שורות טקסט** בתוך כרטיסייה בודדת.
-
-### 8. אסור position: absolute על תוכן:
-- position: absolute מותר **רק** ל-watermarks דקורטיביים.
-- כל שאר התוכן: flex/grid flow רגיל בתוך .safe-zone.
-
-### 9. לוגואים:
-- הצב לוגואים ב-\`.slide-footer\` בתחתית ה-safe-zone.
-- לוגו לקוח בצד ימין, לוגו Leaders בצד שמאל.
-- גובה לוגו: 28-36px.
-
-### 10. לייאאוט לפי סוג שקף:
-| סוג | Grid | הערות |
-|-----|------|-------|
-| cover | ללא grid, flexbox ממורכז | תמונת רקע full-bleed + overlay gradient + כותרת מרכזית |
-| brief | cols-2 | טקסט ימין, תמונה שמאל (או עמודה אחת אם אין תמונה) |
-| goals | cols-3 או cols-4 | כרטיסיית מטרה לכל מטרה |
-| audience | cols-2 | שני סגמנטים זה לצד זה |
-| insight | עמודה אחת מרכזית | טקסט גדול ממורכז, ללא grid |
-| strategy | cols-3 | כרטיסיית עמוד תווך |
-| bigIdea | cols-2 | קונספט + תמונה |
-| approach | cols-2 או cols-3 | כרטיסיית גישה |
-| deliverables | cols-3 או cols-4 | כרטיסיית תוצר |
-| metrics | cols-4 | 4 תיבות מדדים בשורה |
-| influencers | cols-3 | כרטיסיית משפיען עם תמונה עגולה |
-| influencerStrategy | cols-2 | אסטרטגיה + קריטריונים |
-| closing | ללא grid, flexbox ממורכז | CTA גדול ממורכז |
-
-### 11. HTML תקין:
-- RTL, lang="he"
-- אסור לדלג על שום מידע תוכן מה-JSON
-- כותרות ומספרים בולטים, פסקאות נקיות
-
-## פורמט הפלט:
-החזר אך ורק JSON - מערך של מחרוזות HTML:
+החזר JSON - מערך של מחרוזות HTML, אחת לכל שקף:
 \`\`\`json
 {
   "slides": [
-    "<!DOCTYPE html>\\n<html dir=\\"rtl\\" lang=\\"he\\">\\n<head>...</head>\\n<body><div class=\\"slide\\">...</div></body>\\n</html>",
-    "<!DOCTYPE html>... (שקף 2)"
+    "<!DOCTYPE html>...",
+    "<!DOCTYPE html>..."
   ]
 }
-\`\`\`
-`
+\`\`\``
 
   try {
     const response = await ai.models.generateContent({
       model: MODEL,
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 4000 }, // Increased for complex layout logic
+        thinkingConfig: { thinkingBudget: 3000 },
       },
     })
 
@@ -339,7 +277,7 @@ section-label (קטן, uppercase) → slide-title (גדול) → content-grid �
       console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} slides`)
 
       // Validate each slide
-      const validSlides = parsed.slides.map((html) => {
+      const validSlides = parsed.slides.map((html, i) => {
         if (!html.includes('<html') && !html.includes('<!DOCTYPE')) {
           // Wrap partial HTML
           return wrapSlideHtml(html, designCSS)
@@ -366,73 +304,15 @@ function wrapSlideHtml(body: string, css: string): string {
 <style>
 @page { size: 1920px 1080px; margin: 0; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: 'Heebo', sans-serif;
-  direction: rtl;
-  -webkit-print-color-adjust: exact;
-  color-adjust: exact;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  background-color: #ffffff;
-}
-/* Base Slide */
+body { font-family: 'Heebo', sans-serif; direction: rtl; -webkit-print-color-adjust: exact; -webkit-font-smoothing: antialiased; color-adjust: exact; text-rendering: optimizeLegibility; }
 .slide { width: 1920px; height: 1080px; position: relative; overflow: hidden; }
-.absolute-fill { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-.bg-cover { background-size: cover; background-position: center; background-repeat: no-repeat; }
-
-/* === Rigid Grid System (Fallback - always present) === */
-.safe-zone {
-  position: absolute;
-  top: 80px; right: 80px; bottom: 80px; left: 80px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.content-grid {
-  display: grid;
-  gap: 30px;
-  flex: 1;
-  align-content: start;
-}
-.content-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
-.content-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
-.content-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
-.section-label {
-  font-size: 14px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 3px;
-  margin-bottom: 8px;
-}
-.slide-title {
-  font-size: 52px;
-  font-weight: 800;
-  line-height: 1.1;
-  margin-bottom: 32px;
-}
-.card {
-  padding: 28px;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.slide-footer {
-  margin-top: auto;
-  padding-top: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.slide-footer img { height: 32px; width: auto; }
-
-/* Brand Design System */
+.safe-zone { position: absolute; top: 80px; right: 80px; bottom: 80px; left: 80px; display: flex; flex-direction: column; overflow: hidden; }
 ${css}
 </style>
 </head>
 <body>
 <div class="slide">
-<div class="safe-zone">
+<div class="slide-content">
 ${body}
 </div>
 </div>
