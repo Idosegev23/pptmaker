@@ -75,6 +75,8 @@ async function generateDesignSystem(
 - פונט: Heebo (כבר מיובא)
 - כל טקסט חייב להיות קריא - ניגודיות מספקת
 - אסור שטקסט ייחתך - overflow: hidden רק עם min-height מתאים
+- אסור להשתמש ב-box-shadow - נראה רע בייצוא PDF. השתמש ב-border, outline, gradient borders במקום
+- אסור backdrop-filter (glassmorphism) - לא עובד בייצוא PDF. השתמש ב-background עם opacity במקום
 
 החזר JSON:
 \`\`\`json
@@ -92,7 +94,7 @@ async function generateDesignSystem(
 5. **h2** - כותרת משנית (36-48px)
 6. **h3** - כותרת שלישונית (24-32px)
 7. **.body-text** - טקסט גוף (20-24px)
-8. **.card** - קלף עם עיצוב ייחודי (לא רק border-radius - תחשוב על glassmorphism, neumorphism, outlined, gradient borders, floating shadows, cutout corners, etc.)
+8. **.card** - קלף עם עיצוב ייחודי (לא רק border-radius - תחשוב על outlined, gradient borders, cutout corners, border-image, colored borders, double borders)
 9. **.metric-box** - תיבת מספר/מדד עם עיצוב מרשים
 10. **.metric-value** - ערך מספרי גדול ובולט
 11. **.accent-decoration** - אלמנט דקורטיבי ייחודי (shapes, lines, dots, waves - משהו שמזהה את המצגת הזו)
@@ -109,7 +111,7 @@ async function generateDesignSystem(
 דגשים חשובים:
 - אל תשתמש בעיצוב גנרי "עוד מצגת"
 - תהיה יצירתי - כל מותג צריך להרגיש שונה
-- תשתמש בטכניקות CSS מתקדמות: clip-path, backdrop-filter, mix-blend-mode, gradients מורכבים
+- תשתמש בטכניקות CSS מתקדמות: clip-path, mix-blend-mode, gradients מורכבים, border-image, outline
 - הצבעים חייבים להתבסס על צבעי המותג אבל עם וריאציות יצירתיות
 - חשוב על rhythm ויזואלי - לא כל שקף צריך להיראות אותו דבר`
 
@@ -214,6 +216,25 @@ ${slidesDescription}
 8. ${leadersLogoUrl ? `הוסף לוגו Leaders בפוטר: <img src="${leadersLogoUrl}" style="height:35px;object-fit:contain">` : ''}
 9. תמונות: אם יש URL תמונה, השתמש בה עם object-fit: cover ועיצוב מרשים (clip-path, overlay, etc.)
 10. אם אין תמונה, השתמש ברקע גרדיאנט או pattern במקום
+11. למשפיענים ללא תמונת פרופיל: הצג עיגול צבעוני עם האות הראשונה של השם
+12. אסור box-shadow - השתמש ב-border בלבד
+
+## כללי Layout לפי סוג שקף:
+- **cover**: רקע full-bleed (תמונה או גרדיאנט דרמטי). שם המותג בטייפ ענק (80-120px). כותרת משנית מתחת. לוגואים בפינות. ללא כרטיסים.
+- **brief**: חלוקה 60/40. צד אחד: כותרת + טקסט. צד שני: תמונה או אייקונים.
+- **goals**: 3-4 כרטיסים ב-grid. כל כרטיס: אזור אייקון, כותרת bold, תיאור.
+- **audience**: כרטיס פרסונה מרכזי עם נתונים סביבו, או layout אופקי עם תמונה בצד.
+- **strategy**: 3 עמודים שווים לכל pillar עם אלמנט ויזואלי מחבר.
+- **metrics**: 4 תיבות מספרים בשורה עם מספרים גדולים. מתחת: טקסט הסבר.
+- **influencers**: grid של 3-6 כרטיסים עם תמונות עגולות, שם, handle, סטטיסטיקות.
+- **closing**: כותרת ממורכזת, טייפ גדול, עיצוב מינימלי. לוגואים בפוטר.
+
+## Anti-patterns (אסור):
+- אסור טקסט קטן מ-18px
+- אסור יותר מ-3 צבעים בשקף בודד
+- אסור שטח ריק גדול ללא תוכן
+- אסור לערום יותר מ-6 אלמנטים אנכית
+- אסור box-shadow או backdrop-filter
 
 החזר JSON - מערך של מחרוזות HTML, אחת לכל שקף:
 \`\`\`json
@@ -230,7 +251,7 @@ ${slidesDescription}
       model: MODEL,
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 5000 },
+        thinkingConfig: { thinkingBudget: 3000 },
       },
     })
 
@@ -357,7 +378,7 @@ export async function generateAISlides(
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const leadersLogo = config.leadersLogoUrl || `${supabaseUrl}/storage/v1/object/public/assets/logos/leaders-logo-black.png`
-  const clientLogo = config.clientLogoUrl || data._scraped?.logoUrl || ''
+  const clientLogo = config.clientLogoUrl || data._scraped?.logoUrl || config.brandLogoUrl || ''
 
   try {
     // ─── Step 1: Generate Design System ───

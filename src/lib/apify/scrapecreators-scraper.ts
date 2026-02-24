@@ -28,7 +28,7 @@ export interface ScrapeCreatorsProfile {
 export async function getInstagramProfile(handle: string): Promise<ScrapeCreatorsProfile | null> {
   const token = process.env.SCRAPE_CREATORS_TOKEN
   if (!token) {
-    console.log('[ScrapeCreators] No SCRAPE_CREATORS_TOKEN configured')
+    console.warn('[ScrapeCreators] WARNING: SCRAPE_CREATORS_TOKEN not set - influencer scraping disabled')
     return null
   }
 
@@ -49,7 +49,7 @@ export async function getInstagramProfile(handle: string): Promise<ScrapeCreator
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error')
-      console.error(`[ScrapeCreators] API error ${response.status}: ${errorText}`)
+      console.error(`[ScrapeCreators] API error for @${handle}: HTTP ${response.status}, body: ${errorText.slice(0, 200)}`)
       return null
     }
 
@@ -92,7 +92,7 @@ export async function getMultipleProfiles(
 ): Promise<ScrapeCreatorsProfile[]> {
   const token = process.env.SCRAPE_CREATORS_TOKEN
   if (!token) {
-    console.log('[ScrapeCreators] No SCRAPE_CREATORS_TOKEN configured')
+    console.warn('[ScrapeCreators] WARNING: SCRAPE_CREATORS_TOKEN not set - influencer scraping disabled')
     return []
   }
 

@@ -123,14 +123,28 @@ export async function POST(request: NextRequest) {
         imageStrategy: imageStrategy,
       }
 
-      // Try AI-designed slides first, fallback to premium template
-      try {
-        console.log('[PDF] Generating AI-designed slides')
-        htmlPages = await generateAISlides(documentData, templateConfig)
-        console.log(`[PDF] AI generated ${htmlPages.length} slides`)
-      } catch (aiError) {
-        console.error('[PDF] AI slide generation failed, using premium template:', aiError)
-        htmlPages = generatePremiumProposalSlides(documentData, templateConfig)
+      // Check for cached AI slides first
+      const cachedSlides = documentData._cachedSlides as string[] | undefined
+      if (cachedSlides && cachedSlides.length > 0 && !body.forceRegenerate) {
+        console.log(`[PDF] Using ${cachedSlides.length} cached AI slides`)
+        htmlPages = cachedSlides
+      } else {
+        // Try AI-designed slides, fallback to premium template
+        try {
+          console.log('[PDF] Generating AI-designed slides')
+          htmlPages = await generateAISlides(documentData, templateConfig)
+          console.log(`[PDF] AI generated ${htmlPages.length} slides`)
+
+          // Cache the AI slides for future preview/PDF requests
+          await supabase
+            .from('documents')
+            .update({ data: { ...documentData, _cachedSlides: htmlPages } })
+            .eq('id', documentId)
+          console.log('[PDF] Cached AI slides to document')
+        } catch (aiError) {
+          console.error('[PDF] AI slide generation failed, using premium template:', aiError)
+          htmlPages = generatePremiumProposalSlides(documentData, templateConfig)
+        }
       }
     } else {
       console.log('[PDF] Using standard template')

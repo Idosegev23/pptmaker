@@ -271,6 +271,7 @@ export default function SlideViewerPage() {
                   transform: 'scale(0.0802)',
                   transformOrigin: 'top left',
                   background: '#fff',
+                  willChange: 'transform',
                 }}
               />
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent pt-3 pb-1 text-center">

@@ -80,25 +80,45 @@ export async function generatePdf(
 }
 
 /**
- * Generate multi-page PDF from array of HTML pages
+ * Generate multi-page PDF from array of HTML pages.
+ * Uses a SINGLE browser instance for all pages (much faster).
  */
 export async function generateMultiPagePdf(
   htmlPages: string[],
   options: PdfOptions = {}
 ): Promise<Buffer> {
   const { PDFDocument } = await import('pdf-lib')
-  
-  const mergedPdf = await PDFDocument.create()
+  const browser = await getBrowser()
 
-  for (const html of htmlPages) {
-    const pageBuffer = await generatePdf(html, options)
-    const pagePdf = await PDFDocument.load(pageBuffer)
-    const copiedPages = await mergedPdf.copyPages(pagePdf, pagePdf.getPageIndices())
-    copiedPages.forEach(page => mergedPdf.addPage(page))
+  try {
+    const mergedPdf = await PDFDocument.create()
+    const pdfOpts = options.format === '16:9'
+      ? { width: '1920px', height: '1080px', printBackground: true, preferCSSPageSize: true }
+      : { format: 'A4' as const, printBackground: true, preferCSSPageSize: true }
+
+    console.log(`[PDF] Rendering ${htmlPages.length} slides with single browser instance`)
+
+    for (let i = 0; i < htmlPages.length; i++) {
+      const page = await browser.newPage()
+      await page.setContent(htmlPages[i], { waitUntil: 'networkidle0' })
+      await page.evaluate(() => document.fonts?.ready)
+      // First page: 800ms for initial font load; rest: 300ms (fonts already cached)
+      await new Promise(resolve => setTimeout(resolve, i === 0 ? 800 : 300))
+
+      const pageBuffer = await page.pdf(pdfOpts)
+      await page.close()
+
+      const pagePdf = await PDFDocument.load(pageBuffer)
+      const copiedPages = await mergedPdf.copyPages(pagePdf, pagePdf.getPageIndices())
+      copiedPages.forEach(p => mergedPdf.addPage(p))
+    }
+
+    const mergedBuffer = await mergedPdf.save()
+    console.log(`[PDF] All ${htmlPages.length} slides rendered successfully`)
+    return Buffer.from(mergedBuffer)
+  } finally {
+    await browser.close()
   }
-
-  const mergedBuffer = await mergedPdf.save()
-  return Buffer.from(mergedBuffer)
 }
 
 /**

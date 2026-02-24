@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { renderProposalToHtml } from '@/templates/quote/proposal-template'
 import { generatePremiumProposalSlides } from '@/templates/quote/premium-proposal-template'
-import { generateAISlides } from '@/lib/gemini/slide-designer'
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 
 /**
  * POST /api/preview-slides
  * Returns HTML slide strings for client-side preview rendering.
- * Uses the same template logic as /api/pdf but skips PDF generation.
+ * Uses cached AI slides if available, otherwise falls back to premium template (instant).
+ * NEVER calls generateAISlides() - that happens only during PDF export.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -47,7 +47,19 @@ export async function POST(request: NextRequest) {
 
     const isAutoProposal = !!documentData._brandResearch || !!documentData._brandColors || !!documentData.influencerResearch
 
-    // Build images config (same logic as /api/pdf)
+    // Check for cached AI slides first (generated during PDF export)
+    const cachedSlides = documentData._cachedSlides as string[] | undefined
+    if (cachedSlides && cachedSlides.length > 0) {
+      console.log(`[Preview Slides] Using ${cachedSlides.length} cached AI slides`)
+      return NextResponse.json({
+        slides: cachedSlides,
+        brandName: (documentData.brandName as string) || document.title || '',
+        slideCount: cachedSlides.length,
+        fromCache: true,
+      })
+    }
+
+    // Build images config
     const images = (documentData._generatedImages as Record<string, string>) || {}
     const brandColors = documentData._brandColors as { primary?: string; secondary?: string; accent?: string } | undefined
     const scrapedAssets = documentData._scraped as {
@@ -73,24 +85,16 @@ export async function POST(request: NextRequest) {
     let htmlPages: string[]
 
     if (isAutoProposal) {
-      const templateConfig = {
+      // Use premium template directly (instant, no AI call)
+      console.log('[Preview Slides] Using premium template (instant)')
+      htmlPages = generatePremiumProposalSlides(documentData, {
         accentColor: brandColors?.primary || '#E94560',
         brandLogoUrl: documentData.brandLogoFile as string | undefined,
         clientLogoUrl: scrapedAssets?.logoUrl,
         images: finalImages,
         extraImages,
         imageStrategy,
-      }
-
-      // Try AI-designed slides first, fallback to premium template
-      try {
-        console.log('[Preview Slides] Generating AI-designed slides')
-        htmlPages = await generateAISlides(documentData, templateConfig)
-        console.log(`[Preview Slides] AI generated ${htmlPages.length} slides`)
-      } catch (aiError) {
-        console.error('[Preview Slides] AI slide generation failed, using premium template:', aiError)
-        htmlPages = generatePremiumProposalSlides(documentData, templateConfig)
-      }
+      })
     } else {
       htmlPages = renderProposalToHtml(documentData, {
         accentColor: '#E94560',
@@ -103,6 +107,7 @@ export async function POST(request: NextRequest) {
       slides: htmlPages,
       brandName: (documentData.brandName as string) || document.title || '',
       slideCount: htmlPages.length,
+      fromCache: false,
     })
   } catch (error) {
     console.error('[Preview Slides] Error:', error)

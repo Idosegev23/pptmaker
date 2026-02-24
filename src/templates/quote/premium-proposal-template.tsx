@@ -291,8 +291,13 @@ export function generatePremiumProposalSlides(
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const defaultLeadersLogo = `${supabaseUrl}/storage/v1/object/public/assets/logos/leaders-logo-black.png`
   const leadersLogo = config.leadersLogoUrl || defaultLeadersLogo
-  const clientLogo = config.clientLogoUrl || data._scraped?.logoUrl || ''
+  const clientLogo = config.clientLogoUrl || data._scraped?.logoUrl || config.brandLogoUrl || ''
   
+  // Fallback avatar SVG for influencers without profile pics
+  const fallbackAvatar = `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="${primary}20"/><circle cx="50" cy="38" r="16" fill="${primary}50"/><ellipse cx="50" cy="72" rx="25" ry="18" fill="${primary}50"/></svg>`
+  )}`
+
   // Currency
   const currency = getCurrency(data)
   
@@ -499,8 +504,7 @@ export function generatePremiumProposalSlides(
         background: linear-gradient(160deg, #FFFFFF 0%, ${primary}04 100%);
         border-radius: 20px;
         padding: 40px;
-        border: 1px solid ${primary}12;
-        box-shadow: 0 2px 12px ${primary}08, 0 0 0 1px ${primary}04;
+        border: 1.5px solid ${primary}18;
         position: relative;
       }
 
@@ -532,11 +536,10 @@ export function generatePremiumProposalSlides(
         background: #FFFFFF;
         padding: 44px 36px;
         border-radius: 20px;
-        border: 1px solid ${primary}10;
+        border: 1.5px solid ${primary}15;
         position: relative;
         overflow: hidden;
         text-align: center;
-        box-shadow: 0 4px 24px ${primary}08;
       }
 
       .metric-box::before {
@@ -635,11 +638,10 @@ export function generatePremiumProposalSlides(
       /* Influencer grid */
       .influencer-card {
         background: #FFFFFF;
-        border: 1px solid ${primary}10;
+        border: 1.5px solid ${primary}15;
         border-radius: 20px;
         padding: 30px;
         text-align: center;
-        box-shadow: 0 2px 16px ${primary}06;
         transition: all 0.3s ease;
       }
 
@@ -650,8 +652,7 @@ export function generatePremiumProposalSlides(
         margin: 0 auto 20px;
         overflow: hidden;
         background: ${primary}08;
-        border: 3px solid ${primary};
-        box-shadow: 0 0 0 4px ${primary}15;
+        border: 4px solid ${primary};
       }
 
       .influencer-image img {
@@ -686,11 +687,11 @@ export function generatePremiumProposalSlides(
       position: absolute;
       inset: 0;
       /* Subtle gradient overlay - not box behind text */
-      background: linear-gradient(to top, 
-        rgba(0,0,0,0.65) 0%, 
-        rgba(0,0,0,0.3) 30%, 
-        rgba(0,0,0,0.15) 60%,
-        ${primary}30 100%);
+      background: linear-gradient(to top,
+        rgba(0,0,0,0.45) 0%,
+        rgba(0,0,0,0.18) 35%,
+        rgba(0,0,0,0.05) 65%,
+        ${primary}15 100%);
     }
     .slide.slide-cover::before {
       bottom: 4px; /* Don't cover the brand line */
@@ -851,7 +852,7 @@ export function generatePremiumProposalSlides(
       padding: 22px 28px;
       background: white;
       border-radius: 16px;
-      box-shadow: 0 2px 16px ${primary}08;
+      border: 1.5px solid ${primary}12;
       border-right: 4px solid ${primary};
     }
     .slide-brief .pain-icon {
@@ -965,7 +966,8 @@ export function generatePremiumProposalSlides(
       border-radius: 20px;
       text-align: center;
       border-top: 4px solid ${primary};
-      box-shadow: 0 4px 24px ${primary}08;
+      border: 1.5px solid ${primary}12;
+      border-top: 4px solid ${primary};
       position: relative;
     }
     .slide-goals .goal-card::after {
@@ -1317,7 +1319,7 @@ export function generatePremiumProposalSlides(
       background: white;
       padding: 50px 40px;
       border-radius: 24px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+      border: 1.5px solid rgba(0,0,0,0.08);
       display: flex;
       flex-direction: column;
       border-bottom: 5px solid var(--accent);
@@ -1363,7 +1365,7 @@ export function generatePremiumProposalSlides(
         <div style="display:flex; align-items:flex-start; justify-content:center; gap:10px; margin-top:40px; position:relative;">
           ${data.strategyFlow.steps.map((step, i) => `
             ${i > 0 ? `<div style="display:flex;align-items:center;padding-top:35px;font-size:40px;color:var(--accent);">&#8592;</div>` : ''}
-            <div style="flex:1;max-width:350px;text-align:center;background:var(--white);border-radius:20px;padding:30px 20px;box-shadow:0 8px 30px rgba(0,0,0,0.08);border-bottom:4px solid var(--accent);">
+            <div style="flex:1;max-width:350px;text-align:center;background:var(--white);border-radius:20px;padding:30px 20px;border:1.5px solid rgba(0,0,0,0.08);border-bottom:4px solid var(--accent);">
               <div style="width:50px;height:50px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;margin:0 auto 15px;">${i + 1}</div>
               <div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:10px;">${step.label}</div>
               <div style="font-size:16px;color:var(--text-light);line-height:1.5;">${step.description}</div>
@@ -2143,7 +2145,7 @@ export function generatePremiumProposalSlides(
       border-radius: 24px;
       padding: 35px 30px;
       text-align: center;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+      border: 1px solid rgba(0,0,0,0.06);
       position: relative;
       overflow: hidden;
     }
@@ -2170,7 +2172,7 @@ export function generatePremiumProposalSlides(
       font-weight: 700;
       overflow: hidden;
       border: 4px solid var(--accent);
-      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+      border: 2px solid rgba(0,0,0,0.10);
       position: relative;
     }
     .slide-recommendations .influencer-avatar img {
@@ -2245,10 +2247,7 @@ export function generatePremiumProposalSlides(
           <div class="influencer-card">
             <div class="influencer-avatar">
               <span class="avatar-letter">${inf.name.charAt(0).toUpperCase()}</span>
-              ${inf.profilePicUrl 
-                ? `<img src="${inf.profilePicUrl}" alt="${inf.name}" onerror="this.style.display='none';" loading="lazy">`
-                : ''
-              }
+              <img src="${inf.profilePicUrl || fallbackAvatar}" alt="${inf.name}" onerror="this.style.display='none';" loading="lazy">
             </div>
             <div class="influencer-name">${inf.name}</div>
             <div class="influencer-handle">${inf.handle}</div>
@@ -2461,7 +2460,7 @@ export function generatePremiumProposalSlides(
           <div class="inf-card">
             <div class="inf-avatar">
               <span>${inf.name.charAt(0)}</span>
-              ${inf.profilePicUrl ? `<img src="${inf.profilePicUrl}" alt="${inf.name}" onerror="this.style.display='none'">` : ''}
+              <img src="${inf.profilePicUrl || fallbackAvatar}" alt="${inf.name}" onerror="this.style.display='none'">
             </div>
             <div class="inf-name">${inf.name}${inf.isVerified ? ' &#10003;' : ''}</div>
             <div class="inf-handle">@${inf.username}</div>
