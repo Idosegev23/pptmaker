@@ -1,6 +1,6 @@
 /**
  * Gemini 3 Pro Image Generation
- * Creates lifestyle images for proposals based on brand research and colors
+ * Creates premium lifestyle images for proposals using the gemini-3-pro-image-preview model
  */
 
 import { GoogleGenAI } from '@google/genai'
@@ -9,7 +9,7 @@ import type { BrandColors } from './color-extractor'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-// Model for image generation
+// The multimodal Gemini 3 Pro Image Preview model
 const IMAGE_MODEL = 'gemini-3-pro-image-preview'
 
 export interface GeneratedImage {
@@ -20,9 +20,10 @@ export interface GeneratedImage {
 }
 
 export interface ImageGenerationOptions {
-  aspectRatio?: '16:9' | '1:1' | '9:16'
+  aspectRatio?: '16:9' | '1:1' | '9:16' | '4:3' | '3:4'
   style?: 'editorial' | 'lifestyle' | 'minimal' | 'vibrant'
   includeColors?: boolean
+  imageSize?: '2K' | '4K'
 }
 
 /**
@@ -34,40 +35,23 @@ export async function generateCoverImage(
   options: ImageGenerationOptions = {}
 ): Promise<GeneratedImage | null> {
   const colorContext = brandColors 
-    ? `Use these brand colors as inspiration: ${brandColors.primary}, ${brandColors.secondary}. Style: ${brandColors.style}, mood: ${brandColors.mood}.`
+    ? `Color palette inspiration: ${brandColors.primary}, ${brandColors.secondary}. Mood: ${brandColors.mood}.`
     : ''
 
-  // Get audience info from new or old format
   const primaryAudience = brandResearch.targetDemographics?.primaryAudience
   const audienceGender = primaryAudience?.gender || 'diverse'
   const audienceAge = primaryAudience?.ageRange || '25-45'
   const personality = brandResearch.brandPersonality?.join(', ') || 'modern, professional'
 
-  const prompt = `
-Create a premium, editorial-quality cover image for a marketing presentation.
+  const prompt = `A premium, ${options.style || 'editorial'}-quality cover image for a marketing presentation. 
+Brand: ${brandResearch.brandName}. Industry: ${brandResearch.industry}. Target audience: ${audienceGender}, ages ${audienceAge}. Brand personality: ${personality}. 
+${colorContext} 
+Style: High-end commercial photography, professional, aspirational, and modern mood. 
+Full bleed composition suitable as a presentation background. Real people in authentic situations if applicable. 
+Modern premium aesthetic, cinematic lighting. 
+Absolutely NO text, NO logos, NO overlays, NO graphics. Should feel aligned with the corporate brand identity.`
 
-Brand: ${brandResearch.brandName}
-Industry: ${brandResearch.industry}
-Target audience: ${audienceGender}, ages ${audienceAge}
-Brand personality: ${personality}
-
-${colorContext}
-
-Requirements:
-- Style: High-end commercial photography, ${options.style || 'editorial'}
-- Mood: Professional, aspirational, modern
-- Composition: Full bleed, suitable as presentation background
-- Real people in authentic situations (if applicable)
-- Modern, premium aesthetic
-- NO text, NO logos, NO overlays, NO graphics
-- Aspect ratio: ${options.aspectRatio || '16:9'} (widescreen)
-- Resolution: 4K quality
-- Should feel aligned with the brand's identity
-
-The image should be sophisticated enough to work as a cover slide background with text overlaid.
-`
-
-  return generateImage(prompt, 'cover')
+  return generateImage(prompt, 'cover', options)
 }
 
 /**
@@ -82,36 +66,21 @@ export async function generateBrandImage(
     ? `Color palette inspiration: ${brandColors.palette?.join(', ') || brandColors.primary}. Mood: ${brandColors.mood}.`
     : ''
 
-  // Get values from new or old format
   const primaryAudience = brandResearch.targetDemographics?.primaryAudience
   const audienceGender = primaryAudience?.gender || 'diverse'
   const audienceAge = primaryAudience?.ageRange || '25-45'
   const interests = primaryAudience?.interests?.join(', ') || 'lifestyle, quality'
   const brandValues = brandResearch.brandValues?.join(', ') || 'quality, innovation'
 
-  const prompt = `
-Create a lifestyle photograph that represents the essence of the brand "${brandResearch.brandName}".
+  const prompt = `A lifestyle photograph that represents the essence of the brand "${brandResearch.brandName}". 
+Industry: ${brandResearch.industry}. Brand values: ${brandValues}. Market position: ${brandResearch.marketPosition || 'premium'}. 
+Target audience: ${audienceGender}, ages ${audienceAge}. Interests: ${interests}. 
+${colorContext} 
+Style: ${options.style || 'lifestyle'}, authentic, natural candid feel. Show the brand's world and aesthetic. 
+Feature real people if relevant to the industry. Natural lighting, modern aspirational setting. 
+Photorealistic. Absolutely NO text, NO logos.`
 
-Industry: ${brandResearch.industry}
-Brand values: ${brandValues}
-Market position: ${brandResearch.marketPosition || 'premium'}
-Target audience: ${audienceGender}, ages ${audienceAge}
-Interests: ${interests}
-
-${colorContext}
-
-Requirements:
-- Style: ${options.style || 'lifestyle'}, authentic, natural
-- Show the brand's world and aesthetic
-- Feature real people if relevant to the industry
-- Natural lighting, candid feel
-- Modern, aspirational setting
-- NO text, NO logos
-- Aspect ratio: ${options.aspectRatio || '16:9'}
-- 4K quality
-`
-
-  return generateImage(prompt, 'brand')
+  return generateImage(prompt, 'brand', options)
 }
 
 /**
@@ -121,38 +90,28 @@ export async function generateAudienceImage(
   brandResearch: BrandResearch,
   options: ImageGenerationOptions = {}
 ): Promise<GeneratedImage | null> {
-  // Get values from new or old format
   const primaryAudience = brandResearch.targetDemographics?.primaryAudience
+  
+  // Translate to English for the model
   const genderRaw = primaryAudience?.gender || 'נשים וגברים'
-  const gender = genderRaw === 'נשים' ? 'women' :
-                 genderRaw === 'גברים' ? 'men' :
-                 'mixed group of people'
+  let gender = 'mixed group of people'
+  if (genderRaw.includes('נשים') && !genderRaw.includes('גברים')) gender = 'women'
+  if (genderRaw.includes('גברים') && !genderRaw.includes('נשים')) gender = 'men'
+
   const ageRange = primaryAudience?.ageRange || '25-45'
   const socioeconomic = primaryAudience?.socioeconomic || 'middle-upper class'
   const interests = primaryAudience?.interests?.join(', ') || 'lifestyle, quality products'
   const behavior = brandResearch.targetDemographics?.behavior || 'active consumers'
 
-  const prompt = `
-Create a lifestyle photograph showing the target audience for "${brandResearch.brandName}".
+  const prompt = `A lifestyle photograph showing the target demographic for "${brandResearch.brandName}". 
+Demographics: ${gender}, ages ${ageRange}. Socioeconomic status: ${socioeconomic}. 
+Interests: ${interests}. Consumer behavior: ${behavior}. 
+Style: ${options.style || 'lifestyle'}, Instagram-worthy, authentic. 
+Show these people in real-life relatable situations. Positive, engaged, connected vibe. 
+Modern setting, natural lighting, high-end commercial photography. 
+Absolutely NO text, NO logos.`
 
-Demographics:
-- ${gender}, ages ${ageRange}
-- Socioeconomic: ${socioeconomic}
-- Interests: ${interests}
-- Behavior: ${behavior}
-
-Requirements:
-- Style: ${options.style || 'lifestyle'}, Instagram-worthy, authentic
-- Show people in real-life situations
-- Positive, engaged, connected vibe
-- Modern, relatable setting
-- Natural lighting
-- NO text, NO logos
-- Aspect ratio: ${options.aspectRatio || '16:9'}
-- 4K quality
-`
-
-  return generateImage(prompt, 'audience')
+  return generateImage(prompt, 'audience', options)
 }
 
 /**
@@ -167,52 +126,50 @@ export async function generateLifestyleImage(
     ? `Color inspiration: ${brandColors.palette.join(', ')}.`
     : ''
 
-  const prompt = `
-Create a premium lifestyle photograph with the theme: "${theme}"
+  const prompt = `A premium lifestyle photograph representing the theme: "${theme}". 
+${colorContext} 
+Style: ${options.style || 'lifestyle'}, high-quality editorial photography. 
+Modern, aspirational aesthetic. Natural lighting, authentic and not staged. 
+Sharp focus. Absolutely NO text, NO logos, NO graphics.`
 
-${colorContext}
-
-Requirements:
-- Style: ${options.style || 'lifestyle'}, high-quality, editorial
-- Modern, aspirational aesthetic
-- Natural lighting
-- Authentic, not staged
-- NO text, NO logos, NO graphics
-- Aspect ratio: ${options.aspectRatio || '16:9'}
-- 4K quality
-`
-
-  return generateImage(prompt, 'lifestyle')
+  return generateImage(prompt, 'lifestyle', options)
 }
 
 /**
- * Core image generation function
+ * Core image generation function using the new Gemini 3 Pro multimodal capabilities
  */
 async function generateImage(
   prompt: string,
-  type: GeneratedImage['type']
+  type: GeneratedImage['type'],
+  options: ImageGenerationOptions = {}
 ): Promise<GeneratedImage | null> {
-  console.log(`[Gemini Image] Generating ${type} image...`)
+  console.log(`[Gemini 3 Pro] Generating ${type} image using ${IMAGE_MODEL}...`)
   
   try {
+    const config: any = {
+      responseModalities: ['image', 'text'],
+      imageConfig: {
+        aspectRatio: options.aspectRatio || '16:9',
+        imageSize: options.imageSize || '4K'
+      }
+    }
+
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
       contents: prompt,
-      config: {
-        responseModalities: ['image', 'text'],
-      }
+      config: config
     })
 
-    // Extract image from response
+    // Extract image from response parts
     const candidates = response.candidates || []
     for (const candidate of candidates) {
       const parts = candidate.content?.parts || []
       for (const part of parts) {
         if (part.inlineData) {
-          console.log(`[Gemini Image] Generated ${type} image successfully`)
+          console.log(`[Gemini 3 Pro] Generated ${type} image successfully`)
           return {
             base64: part.inlineData.data || '',
-            mimeType: part.inlineData.mimeType || 'image/png',
+            mimeType: part.inlineData.mimeType || 'image/jpeg',
             prompt,
             type,
           }
@@ -220,10 +177,10 @@ async function generateImage(
       }
     }
 
-    console.log('[Gemini Image] No image in response')
+    console.log('[Gemini 3 Pro] No image found in the response parts')
     return null
   } catch (error) {
-    console.error('[Gemini Image] Generation error:', error)
+    console.error('[Gemini 3 Pro] Generation error:', error)
     return null
   }
 }
@@ -239,7 +196,7 @@ export async function generateProposalImages(
   brandImage?: GeneratedImage
   audienceImage?: GeneratedImage
 }> {
-  console.log(`[Gemini Image] Generating all images for ${brandResearch.brandName}`)
+  console.log(`[Gemini 3 Pro] Generating all images for ${brandResearch.brandName}`)
   
   const [coverImage, brandImage, audienceImage] = await Promise.all([
     generateCoverImage(brandResearch, brandColors),
@@ -253,7 +210,7 @@ export async function generateProposalImages(
     audienceImage: audienceImage || undefined,
   }
   
-  console.log(`[Gemini Image] Generated ${Object.values(results).filter(Boolean).length}/3 images`)
+  console.log(`[Gemini 3 Pro] Generated ${Object.values(results).filter(Boolean).length}/3 images`)
   
   return results
 }
@@ -275,7 +232,7 @@ export async function uploadGeneratedImage(
 ): Promise<string | null> {
   try {
     const buffer = Buffer.from(image.base64, 'base64')
-    const extension = image.mimeType.split('/')[1] || 'png'
+    const extension = image.mimeType.split('/')[1] || 'jpeg'
     const fileName = `proposal_${documentId}_${image.type}_${Date.now()}.${extension}`
     
     const { error } = await supabaseClient.storage
@@ -300,4 +257,3 @@ export async function uploadGeneratedImage(
     return null
   }
 }
-

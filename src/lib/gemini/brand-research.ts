@@ -1,6 +1,6 @@
 /**
  * Gemini Deep Brand Research Service
- * Comprehensive brand research with Google Search grounding
+ * Multi-Agent approach: Targeted Google Searches -> Context Synthesis -> JSON Output
  */
 
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
@@ -23,12 +23,12 @@ export interface BrandResearch {
   website: string
   
   // Company Overview
-  companyDescription: string // 3-5 paragraphs
-  historyHighlights: string[] // Key milestones
+  companyDescription: string
+  historyHighlights: string[]
   businessModel: string
   
   // Market Position
-  marketPosition: string // Detailed paragraph
+  marketPosition: string
   marketShare?: string
   competitors: {
     name: string
@@ -67,7 +67,7 @@ export interface BrandResearch {
   }
   
   // Brand Identity
-  brandPersonality: string[] // 5-7 traits
+  brandPersonality: string[]
   brandValues: string[]
   brandPromise: string
   toneOfVoice: string
@@ -113,7 +113,7 @@ export interface BrandResearch {
   researchNotes?: string
 }
 
-interface ScrapedWebsite {
+export interface ScrapedWebsite {
   url: string
   title: string
   description: string
@@ -123,217 +123,195 @@ interface ScrapedWebsite {
 }
 
 /**
- * Deep research a brand using Gemini with Google Search grounding
+ * סוכן מחקר: מבצע חיפוש עמוק על זווית ספציפית
+ */
+async function searchSpecificAngle(brandName: string, angleName: string, angleDescription: string): Promise<{angle: string, data: string}> {
+  console.log(`[Research Agent] Starting search for angle: ${angleName}`)
+  
+  const prompt = `
+אתה חוקר מידע עסקי בכיר. בצע חיפוש עמוק ועדכני ב-Google על המותג "${brandName}", והתמקד **אך ורק** בנושא הבא:
+${angleDescription}
+
+הנחיות:
+1. בצע חיפושים ממוקדים כדי למצוא נתונים עדכניים, כתבות, סקירות ודוחות.
+2. סכם את כל המידע שמצאת בצורה מפורטת מאוד (לפחות 3-4 פסקאות).
+3. כלול נתונים מספריים, שמות ספציפיים וציטוטים אם מצאת.
+4. ציין את המקורות (URLs) עליהם התבססת בסוף הסיכום.
+5. אם לא מצאת מידע כלל על נושא מסוים, ציין במפורש "לא מצאתי מידע על כך ברשת".
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+      }
+    })
+    return { angle: angleName, data: response.text || `לא נאסף מידע עבור: ${angleName}` }
+  } catch (error) {
+    console.error(`[Research Agent Error] Failed to gather data for angle: ${angleName}`, error)
+    return { angle: angleName, data: `שגיאה באיסוף מידע.` }
+  }
+}
+
+/**
+ * Deep research a brand using multi-phase Google Search grounding
  */
 export async function researchBrand(
   brandName: string,
   websiteData?: ScrapedWebsite
 ): Promise<BrandResearch> {
-  console.log(`[Gemini Deep Research] Starting comprehensive research for: ${brandName}`)
+  console.log(`[Gemini Deep Research] Starting comprehensive multi-phase research for: ${brandName}`)
   
+  // שלב 1: איסוף מידע מבוזר (Map)
+  const researchAngles = [
+    {
+      name: "History and Business Profile",
+      description: "היסטוריה של המותג, שנת הקמה, מיקום מטה, מייסדים, חזון, מודל עסקי ומוצרים/שירותים מרכזיים."
+    },
+    {
+      name: "Market and Competitors",
+      description: "מתחרים ישירים ועקיפים, פוזיציה בשוק (האם הם פרימיום/תקציב?), יתרונות תחרותיים (USP) ונתח שוק."
+    },
+    {
+      name: "Target Audience",
+      description: "מי קהל היעד? דמוגרפיה (גיל, מגדר), רמה סוציואקונומית, תחומי עניין, כאבים שהמותג פותר והתנהגות צרכנים."
+    },
+    {
+      name: "Digital and Marketing",
+      description: "נוכחות בדיגיטל וברשתות חברתיות (אינסטגרם, פייסבוק, טיקטוק - הערכת עוקבים ומעורבות), קמפיינים קודמים, שימוש במשפיענים ומוניטין ציבורי."
+    },
+    {
+      name: "Industry Trends",
+      description: "מגמות וטרנדים בתעשייה שבה המותג פועל, עונתיות ותאריכי מפתח שיווקיים רלוונטיים."
+    }
+  ];
+
+  console.log(`[Gemini Deep Research] Executing ${researchAngles.length} targeted search agents in parallel...`);
+  
+  const gatheredData = await Promise.all(
+    researchAngles.map(angle => searchSpecificAngle(brandName, angle.name, angle.description))
+  );
+
+  // הדפסת המידע הגולמי לקונסול של Vercel לצורך בקרה ולוגים
+  console.log(`\n========== RAW RESEARCH LOGS FOR: ${brandName} ==========`);
+  let rawLogsContent = '';
+  gatheredData.forEach(result => {
+    const section = `\n--- ANGLE: ${result.angle} ---\n${result.data}\n`;
+    rawLogsContent += section;
+    console.log(section);
+  });
+  console.log(`=========================================================\n`);
+
+  console.log(`[Gemini Deep Research] Data gathering complete. Synthesizing final JSON report...`);
+
+  // שלב 2: בניית הקונטקסט המלא לסינתזה (Reduce)
   const websiteContext = websiteData ? `
 ## מידע שחולץ מהאתר הרשמי:
 - כתובת: ${websiteData.url}
 - כותרת: ${websiteData.title}
 - תיאור: ${websiteData.description}
-- כותרות מהאתר: ${websiteData.headings.slice(0, 15).join(' | ')}
 - רשתות חברתיות שנמצאו: ${websiteData.socialLinks.join(', ')}
 - תוכן מהאתר: 
-${websiteData.paragraphs.slice(0, 10).join('\n')}
+${websiteData.paragraphs.slice(0, 15).join('\n')}
 ` : ''
 
-  const researchPrompt = `
-אתה חוקר מותגים בכיר עם 20 שנות ניסיון. בצע מחקר מעמיק ומקיף על המותג "${brandName}".
+  const synthesisPrompt = `
+אתה אסטרטג מותגים וחוקר שוק בכיר. המשימה שלך היא לבנות דוח מחקר עומק מקיף וקפדני על המותג "${brandName}".
+
+להלן כל המידע הגולמי שנאסף על ידי סוכני המחקר שלנו מרחבי הרשת:
+${rawLogsContent}
 
 ${websiteContext}
 
-## הנחיות למחקר:
-1. חפש מידע עדכני ומדויק ב-Google
-2. בדוק את הנוכחות ברשתות החברתיות
-3. חפש כתבות, ראיונות, ופרסומים על המותג
-4. נתח את הפוזיציה בשוק לעומת מתחרים
-5. הבן את קהל היעד לעומק
-6. זהה קמפיינים קודמים עם משפיענים
+## הנחיות לסינתזה:
+1. התבסס **אך ורק** על המידע הגולמי שסופק לך למעלה (ומהאתר הרשמי אם יש).
+2. הצלב את הנתונים וצור תמונה עסקית מלאה, הגיונית ומעמיקה.
+3. כתוב פסקאות מלאות ועשירות, במיוחד בתיאור החברה, קהל היעד והצעת הערך.
+4. **אמינות היא מעל הכל!** אל תמציא מידע. אם נתון מסוים חסר לחלוטין במידע שנאסף, כתוב "לא נמצא מידע בסריקה".
+5. אסוף את כל המקורות (URLs) שהסוכנים ציינו במידע הגולמי והכנס אותם לשדה ה-sources.
 
-## חשוב מאוד:
-- כתוב פסקאות מלאות ומפורטות, לא רק נקודות
-- ספק ניתוח מעמיק, לא רק עובדות יבשות
-- התבסס על מקורות אמיתיים
-- אם אין מידע, ציין "לא נמצא מידע" ולא להמציא
-
-## החזר JSON מפורט בפורמט הבא:
+החזר JSON מפורט בלבד, לפי המבנה המדויק הבא:
 \`\`\`json
 {
   "brandName": "שם המותג בעברית",
   "officialName": "השם הרשמי באנגלית",
-  "tagline": "הסלוגן של המותג",
+  "tagline": "הסלוגן של המותג (אם נמצא)",
   "industry": "תעשייה ראשית",
   "subIndustry": "תת-תעשייה",
   "founded": "שנת הקמה",
   "headquarters": "מיקום המטה",
   "website": "כתובת האתר",
   
-  "companyDescription": "תיאור מקיף של החברה ב-3-5 פסקאות. כלול את ההיסטוריה, מה החברה עושה, מה מייחד אותה, ומה החזון שלה. זה צריך להיות תיאור עשיר שנותן תמונה מלאה על המותג.",
+  "companyDescription": "תיאור מקיף של החברה ב-3-5 פסקאות...",
+  "historyHighlights": ["אירוע 1", "אירוע 2"],
+  "businessModel": "תיאור המודל העסקי",
   
-  "historyHighlights": [
-    "אירוע משמעותי 1 עם שנה",
-    "אירוע משמעותי 2 עם שנה",
-    "אירוע משמעותי 3 עם שנה"
-  ],
-  
-  "businessModel": "תיאור המודל העסקי - B2B, B2C, DTC, קמעונאות וכו'",
-  
-  "marketPosition": "פסקה מפורטת על הפוזיציה בשוק. איפה המותג עומד ביחס למתחרים? מה נתח השוק? מה הייחודיות? מה החוזקות והחולשות?",
-  
-  "marketShare": "נתח שוק אם ידוע (למשל: 15% משוק הקוסמטיקה בישראל)",
-  
+  "marketPosition": "פסקה מפורטת על הפוזיציה בשוק...",
+  "marketShare": "נתח שוק אם ידוע",
   "competitors": [
-    {
-      "name": "שם מתחרה 1",
-      "description": "תיאור קצר של המתחרה",
-      "differentiator": "מה מבדיל אותו מהמותג שלנו"
-    },
-    {
-      "name": "שם מתחרה 2",
-      "description": "תיאור קצר",
-      "differentiator": "מה מבדיל אותו"
-    },
-    {
-      "name": "שם מתחרה 3",
-      "description": "תיאור קצר",
-      "differentiator": "מה מבדיל אותו"
-    }
+    { "name": "שם מתחרה", "description": "תיאור", "differentiator": "מה מבדיל" }
   ],
-  
-  "uniqueSellingPoints": [
-    "יתרון ייחודי 1 - עם הסבר",
-    "יתרון ייחודי 2 - עם הסבר",
-    "יתרון ייחודי 3 - עם הסבר"
-  ],
-  
-  "competitiveAdvantages": [
-    "יתרון תחרותי 1",
-    "יתרון תחרותי 2"
-  ],
+  "uniqueSellingPoints": ["יתרון 1", "יתרון 2"],
+  "competitiveAdvantages": ["יתרון תחרותי 1", "יתרון תחרותי 2"],
   
   "mainProducts": [
-    {
-      "name": "שם מוצר/שירות 1",
-      "description": "תיאור מפורט",
-      "targetMarket": "לאיזה קהל מיועד"
-    },
-    {
-      "name": "שם מוצר/שירות 2",
-      "description": "תיאור מפורט",
-      "targetMarket": "לאיזה קהל מיועד"
-    }
+    { "name": "שם מוצר", "description": "תיאור", "targetMarket": "קהל יעד למוצר" }
   ],
-  
   "pricePositioning": "budget/mid-range/premium/luxury",
   
   "targetDemographics": {
     "primaryAudience": {
-      "gender": "נשים/גברים/שניהם - עם פירוט",
-      "ageRange": "טווח גילאים מדויק",
-      "socioeconomic": "רמה סוציו-אקונומית מפורטת",
-      "lifestyle": "תיאור אורח החיים - עבודה, משפחה, פנאי",
-      "interests": ["תחום עניין 1", "תחום עניין 2", "תחום עניין 3", "תחום עניין 4"],
-      "painPoints": ["כאב 1 שהמותג פותר", "כאב 2", "כאב 3"],
-      "aspirations": ["שאיפה 1", "שאיפה 2"]
-    },
-    "secondaryAudience": {
-      "gender": "מגדר",
+      "gender": "פירוט מגדר",
       "ageRange": "טווח גילאים",
-      "description": "תיאור קהל משני"
+      "socioeconomic": "רמה סוציו-אקונומית",
+      "lifestyle": "תיאור אורח החיים",
+      "interests": ["עניין 1", "עניין 2"],
+      "painPoints": ["כאב 1", "כאב 2"],
+      "aspirations": ["שאיפה 1"]
     },
-    "behavior": "תיאור מפורט של התנהגות הצרכנים - איך הם מחפשים, איפה קונים, מה משפיע על ההחלטה שלהם",
-    "purchaseDrivers": ["גורם 1 שמניע לרכישה", "גורם 2", "גורם 3"]
+    "behavior": "תיאור התנהגות צרכנים",
+    "purchaseDrivers": ["מניע 1", "מניע 2"]
   },
   
-  "brandPersonality": ["תכונה 1", "תכונה 2", "תכונה 3", "תכונה 4", "תכונה 5"],
-  
-  "brandValues": ["ערך 1", "ערך 2", "ערך 3", "ערך 4"],
-  
-  "brandPromise": "מה המותג מבטיח ללקוחות שלו - משפט או שניים",
-  
-  "toneOfVoice": "תיאור מפורט של הטון - רשמי/צעיר/מקצועי/ידידותי/פרימיום וכו', עם דוגמאות",
-  
+  "brandPersonality": ["תכונה 1", "תכונה 2"],
+  "brandValues": ["ערך 1", "ערך 2"],
+  "brandPromise": "הבטחת המותג",
+  "toneOfVoice": "תיאור הטון",
   "visualIdentity": {
-    "primaryColors": ["#XXXXXX", "#XXXXXX"],
-    "style": "תיאור הסגנון הויזואלי - מינימליסטי, צבעוני, קלאסי וכו'",
-    "moodKeywords": ["מילת מפתח 1", "מילת מפתח 2", "מילת מפתח 3"]
+    "primaryColors": ["#XXXXXX"],
+    "style": "תיאור הסגנון",
+    "moodKeywords": ["מילה 1", "מילה 2"]
   },
   
   "socialPresence": {
-    "instagram": {
-      "handle": "@username",
-      "followers": "מספר עוקבים",
-      "engagement": "אחוז מעורבות משוער",
-      "contentStyle": "תיאור סגנון התוכן"
-    },
-    "facebook": {
-      "followers": "מספר עוקבים",
-      "engagement": "סוג התוכן והמעורבות"
-    },
-    "tiktok": {
-      "handle": "@username",
-      "followers": "מספר עוקבים",
-      "contentStyle": "סגנון התוכן"
-    }
+    "instagram": { "handle": "", "followers": "", "engagement": "", "contentStyle": "" },
+    "tiktok": { "handle": "", "followers": "", "contentStyle": "" }
   },
   
-  "websiteTraffic": "הערכת כמות תנועה חודשית אם זמין",
-  "onlineReputation": "תיאור המוניטין הדיגיטלי - ביקורות, דירוגים, תפיסה ציבורית",
+  "websiteTraffic": "הערכה אם קיימת",
+  "onlineReputation": "תיאור המוניטין",
   
   "previousCampaigns": [
-    {
-      "name": "שם קמפיין קודם",
-      "description": "תיאור הקמפיין ומשפיענים שהשתתפו",
-      "results": "תוצאות אם ידועות"
-    }
+    { "name": "שם קמפיין", "description": "תיאור", "results": "תוצאות" }
   ],
   
-  "influencerTypes": [
-    "סוג משפיען מומלץ 1 עם הסבר למה",
-    "סוג משפיען מומלץ 2 עם הסבר"
-  ],
-  
-  "contentThemes": [
-    "נושא תוכן מומלץ 1",
-    "נושא תוכן מומלץ 2",
-    "נושא תוכן מומלץ 3"
-  ],
-  
-  "suggestedApproach": "פסקה מפורטת עם הצעה אסטרטגית לגישה השיווקית עם משפיענים. מה הכיוון? מה הטון? מה סוג התוכן?",
-  
-  "recommendedGoals": [
-    "מטרה מומלצת 1 - עם הסבר",
-    "מטרה מומלצת 2 - עם הסבר",
-    "מטרה מומלצת 3 - עם הסבר"
-  ],
-  
-  "potentialChallenges": [
-    "אתגר פוטנציאלי 1 שיש לקחת בחשבון",
-    "אתגר פוטנציאלי 2"
-  ],
-  
-  "industryTrends": [
-    "טרנד 1 בתעשייה שרלוונטי למותג",
-    "טרנד 2",
-    "טרנד 3"
-  ],
-  
-  "seasonality": "האם יש עונתיות? מתי התקופות החזקות/חלשות?",
-  
-  "keyDates": ["תאריך חשוב 1", "תאריך חשוב 2"],
+  "influencerTypes": ["סוג 1", "סוג 2"],
+  "contentThemes": ["נושא 1", "נושא 2"],
+  "suggestedApproach": "פסקה מפורטת על אסטרטגיה",
+  "recommendedGoals": ["מטרה 1", "מטרה 2"],
+  "potentialChallenges": ["אתגר 1", "אתגר 2"],
+  "industryTrends": ["טרנד 1", "טרנד 2"],
+  "seasonality": "תיאור עונתיות",
+  "keyDates": ["תאריך 1"],
   
   "sources": [
-    { "title": "שם המקור 1", "url": "כתובת 1" },
-    { "title": "שם המקור 2", "url": "כתובת 2" }
+    { "title": "תיאור המקור", "url": "URL" }
   ],
   
   "confidence": "high/medium/low",
-  "researchNotes": "הערות נוספות על המחקר - מה היה קשה למצוא, מה דורש אימות נוסף"
+  "researchNotes": "הערות על איכות המידע שנאסף, מקורות חסרים או דברים שדורשים אימות אנושי"
 }
 \`\`\`
 `
@@ -341,26 +319,22 @@ ${websiteContext}
   try {
     const response = await ai.models.generateContent({
       model: MODEL,
-      contents: researchPrompt,
+      contents: synthesisPrompt,
       config: {
-        tools: [{ googleSearch: {} }, { urlContext: {} }],
         thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       }
     })
 
     const text = response.text || ''
-    console.log('[Gemini Deep Research] Response received, parsing...')
+    console.log('[Gemini Deep Research] Parsing final generated JSON...')
     
-    // Use JSON cleanup utility for robust parsing
     const research = parseGeminiJson<BrandResearch>(text)
     console.log(`[Gemini Deep Research] Complete. Confidence: ${research.confidence}`)
     console.log(`[Gemini Deep Research] Found ${research.competitors?.length || 0} competitors, ${research.sources?.length || 0} sources`)
     
     return research
   } catch (error) {
-    console.error('[Gemini Deep Research] Error:', error)
-    
-    // Return minimal research on error
+    console.error('[Gemini Deep Research] Error during synthesis:', error)
     return getMinimalResearch(brandName, websiteData)
   }
 }
@@ -377,7 +351,7 @@ function getMinimalResearch(brandName: string, websiteData?: ScrapedWebsite): Br
     headquarters: 'ישראל',
     website: websiteData?.url || '',
     
-    companyDescription: `${brandName} הוא מותג ישראלי. נדרש מחקר נוסף לקבלת מידע מפורט יותר.`,
+    companyDescription: `${brandName} הוא מותג. נדרש מחקר נוסף לקבלת מידע מפורט יותר.`,
     historyHighlights: [],
     businessModel: 'לא ידוע',
     
@@ -456,8 +430,7 @@ export async function quickBrandSummary(brandName: string): Promise<{
       model: MODEL,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }, { urlContext: {} }],
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        tools: [{ googleSearch: {} }],
       }
     })
 
@@ -471,9 +444,9 @@ export async function quickBrandSummary(brandName: string): Promise<{
   } catch (error) {
     console.error('[Gemini] Quick summary error:', error)
     return {
-      description: `${brandName} הוא מותג ישראלי`,
+      description: `${brandName} הוא מותג`,
       industry: 'לא ידוע',
-      targetAudience: 'צרכנים ישראליים',
+      targetAudience: 'צרכנים',
       toneOfVoice: 'מקצועי',
     }
   }

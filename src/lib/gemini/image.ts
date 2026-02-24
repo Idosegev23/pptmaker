@@ -1,10 +1,17 @@
+/**
+ * Gemini Image Generation Service
+ * Uses Nano Banana Pro (gemini-3-pro-image-preview) for high-fidelity image generation,
+ * with optional Gemini 3.1 Pro Search Grounding for real-time data visualization.
+ */
+
 import { GoogleGenAI } from '@google/genai'
 
 // Initialize the Google GenAI client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-// Model: Nano Banana Pro (gemini-3-pro-image-preview)
-const MODEL = 'gemini-3-pro-image-preview'
+// Models setup
+const IMAGE_MODEL = 'gemini-3-pro-image-preview' // The multimodal image generation model
+const TEXT_MODEL = 'gemini-3.1-pro-preview'      // Used for search grounding and prompt enhancement
 
 export interface GeneratedImage {
   base64: string
@@ -19,36 +26,42 @@ export interface ImageGenerationOptions {
 }
 
 /**
- * Generate an image using Gemini 3 Pro Image Preview
- * Features: 4K resolution, grounded generation with Google Search
+ * Generate an image using the Gemini 3 Pro Image Preview model
  */
 export async function generateImage(
   prompt: string,
   options: ImageGenerationOptions = {}
 ): Promise<GeneratedImage | null> {
   const { 
-    aspectRatio = '16:9', 
+    aspectRatio = '16:9',
     imageSize = '4K',
     useGoogleSearch = false 
   } = options
 
   try {
-    const config: Record<string, unknown> = {
-      imageConfig: {
-        aspectRatio,
-        imageSize,
-      },
+    let finalPrompt = prompt;
+
+    // If Google Search is requested, we use the Text model to fetch data and write the visual prompt
+    if (useGoogleSearch) {
+      console.log(`[Gemini Image] Using Search Grounding to enhance prompt...`);
+      finalPrompt = await createGroundedVisualPrompt(prompt);
+      console.log(`[Gemini Image] Grounded Prompt: ${finalPrompt}`);
+    } else {
+      console.log(`[Gemini Image] Generating image...`);
     }
 
-    // Add Google Search grounding for real-time data
-    if (useGoogleSearch) {
-      config.tools = [{ googleSearch: {} }]
+    const config: any = {
+      responseModalities: ['image', 'text'],
+      imageConfig: {
+        aspectRatio: aspectRatio,
+        imageSize: imageSize
+      }
     }
 
     const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: `צור תמונה מקצועית ואיכותית: ${prompt}`,
-      config,
+      model: IMAGE_MODEL,
+      contents: finalPrompt,
+      config: config,
     })
 
     // Extract image from response
@@ -57,29 +70,64 @@ export async function generateImage(
       const parts = candidate.content?.parts || []
       for (const part of parts) {
         if (part.inlineData) {
+          console.log(`[Gemini Image] Successfully generated image.`);
           return {
             base64: part.inlineData.data || '',
-            mimeType: part.inlineData.mimeType || 'image/png',
-            prompt,
+            mimeType: part.inlineData.mimeType || 'image/jpeg',
+            prompt: finalPrompt,
           }
         }
       }
     }
 
-    return null
+    throw new Error('No image returned from the API')
   } catch (error) {
-    console.error('Error generating image with Gemini 3 Pro:', error)
+    console.error('[Gemini Image] Error generating image:', error)
     return null
   }
 }
 
 /**
- * Generate image with Google Search grounding (for real-time data like weather, charts)
+ * Helper: Uses Gemini 3.1 Pro with Google Search to fetch real-time info 
+ * and convert it into a highly detailed text-to-image prompt.
+ */
+async function createGroundedVisualPrompt(userPrompt: string): Promise<string> {
+  const groundingPrompt = `
+You are an expert AI prompt engineer and data visualizer.
+The user wants an image based on this request: "${userPrompt}"
+
+Instructions:
+1. Use Google Search to find the most up-to-date and accurate information related to this request (e.g., current statistics, weather, news, or brand details).
+2. Based on the real-time facts you found, write a highly descriptive, visual text-to-image prompt IN ENGLISH.
+3. The prompt must describe exactly what should be drawn to represent this data visually (e.g., "A modern infographic showing...", "A realistic photo of...", etc.).
+4. Add professional photography or design modifiers (e.g., "8k resolution, highly detailed, cinematic lighting, corporate style").
+5. RETURN ONLY THE ENGLISH PROMPT. Do not include any intro, outro, or markdown blocks.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: TEXT_MODEL,
+      contents: groundingPrompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+      }
+    });
+    
+    return response.text?.trim() || userPrompt;
+  } catch (error) {
+    console.error('[Gemini Image] Error in Search Grounding, falling back to original prompt:', error);
+    // Translation fallback to English for better image generation
+    return `Professional high quality image of: ${userPrompt}`;
+  }
+}
+
+/**
+ * Generate image directly with Google Search grounding 
+ * (Syntactic sugar wrapper)
  */
 export async function generateGroundedImage(prompt: string): Promise<GeneratedImage | null> {
   return generateImage(prompt, {
     aspectRatio: '16:9',
-    imageSize: '4K',
     useGoogleSearch: true,
   })
 }
@@ -91,6 +139,7 @@ export async function generateImages(
   prompts: string[],
   options: ImageGenerationOptions = {}
 ): Promise<(GeneratedImage | null)[]> {
+  console.log(`[Gemini Image] Generating ${prompts.length} images in parallel...`)
   const results = await Promise.all(
     prompts.map(prompt => generateImage(prompt, options))
   )
@@ -98,24 +147,29 @@ export async function generateImages(
 }
 
 /**
- * Generate image prompts for deck slides
+ * Generate highly-optimized image prompts for deck slides
+ * Enhanced with professional photography and design keywords for the new model
  */
 export function generateSlideImagePrompts(
   deckTitle: string, 
   slides: Array<{ type: string; headline?: string; content?: string }>
 ): string[] {
+  // Base style modifiers to ensure consistent, high-end corporate quality
+  const styleModifiers = "professional corporate photography, 8k resolution, photorealistic, cinematic lighting, clean composition, high-end editorial style";
+  const graphicModifiers = "modern minimal abstract background, elegant corporate design, smooth gradients, 4k, high quality";
+
   return slides
     .filter(slide => ['title', 'image_focus', 'big_idea'].includes(slide.type))
     .map(slide => {
       switch (slide.type) {
         case 'title':
-          return `תמונת רקע מרשימה ומקצועית לשקופית פתיחה של מצגת בנושא: ${deckTitle}. סגנון עסקי מודרני, צבעים חמים, ללא טקסט.`
+          return `An impressive, abstract modern background for a presentation titled "${deckTitle}". Warm corporate colors, no text, ${graphicModifiers}.`
         case 'image_focus':
-          return `תמונה איכותית המייצגת את הנושא: ${slide.headline || deckTitle}. סגנון צילומי, מקצועי, מרכז ויזואלי חזק.`
+          return `A striking and highly detailed photograph representing the concept of: "${slide.headline || deckTitle}". Strong visual center, ${styleModifiers}.`
         case 'big_idea':
-          return `תמונה מעוררת השראה שמייצגת את הרעיון: ${slide.headline || slide.content || 'רעיון חדשני'}. סגנון אמנותי, ייחודי.`
+          return `An inspiring, conceptual and artistic image representing the innovative idea: "${slide.headline || slide.content || 'new innovation'}". Unique perspective, awe-inspiring, ${styleModifiers}.`
         default:
-          return `תמונה מקצועית לנושא: ${slide.headline || deckTitle}`
+          return `A professional image illustrating the topic: "${slide.headline || deckTitle}". ${styleModifiers}.`
       }
     })
 }

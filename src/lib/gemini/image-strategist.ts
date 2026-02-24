@@ -37,7 +37,7 @@ export async function analyzeAndPlanImages(
   proposalContent?: Partial<ProposalContent>
 ): Promise<ImageStrategy> {
   console.log(`[Image Strategist] Analyzing brand: ${brandResearch.brandName}`)
-  
+
   const prompt = `אתה מנהל אמנותי בכיר בסוכנות פרסום ישראלית מובילה.
 המשימה שלך: לנתח מותג ולתכנן אסטרטגיית תמונות מותאמת אישית עבור הצעת מחיר.
 
@@ -109,17 +109,17 @@ ${proposalContent?.goals?.map(g => `- ${g.title}: ${g.description}`).join('\n') 
 
     const text = response.text || ''
     const strategy = parseGeminiJson<ImageStrategy>(text)
-    
+
     if (strategy && strategy.images && strategy.images.length > 0) {
       console.log(`[Image Strategist] Created strategy with ${strategy.images.length} images`)
       console.log(`[Image Strategist] Concept: ${strategy.conceptSummary}`)
       return strategy
     }
-    
+
     throw new Error('Invalid strategy response')
   } catch (error) {
     console.error('[Image Strategist] Error:', error)
-    
+
     // Fallback strategy
     return getDefaultStrategy(brandResearch)
   }
@@ -167,5 +167,3 @@ function getDefaultStrategy(brandResearch: BrandResearch): ImageStrategy {
 }
 
 export { getDefaultStrategy }
-
-

@@ -1,13 +1,16 @@
 /**
- * Generate images for proposal slides using Gemini 3 Pro Image
+ * Generate images for proposal slides using Gemini 3 Pro Image (Nano Banana Pro)
  * Model: gemini-3-pro-image-preview
- * Features: 4K resolution, Google Search grounding
+ * Features: True 4K resolution native rendering, highly art-directed prompts
  */
 
 import { GoogleGenAI } from '@google/genai'
 import { createClient } from '@/lib/supabase/server'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
+
+// Using the newest multimodal image generation model
+const IMAGE_MODEL = 'gemini-3-pro-image-preview'
 
 interface ProposalData {
   brandName?: string
@@ -31,7 +34,7 @@ interface ImagePrompt {
 
 /**
  * Generate image prompts based on proposal data
- * Creates premium, lifestyle images for the proposal slides
+ * Creates premium, highly art-directed lifestyle images for the proposal slides
  */
 function generateImagePrompts(data: ProposalData): ImagePrompt[] {
   const prompts: ImagePrompt[] = []
@@ -41,49 +44,44 @@ function generateImagePrompts(data: ProposalData): ImagePrompt[] {
   if (brandInfo) {
     prompts.push({
       key: 'brandImage',
-      prompt: `Create a premium lifestyle photograph for a brand marketing presentation.
+      prompt: `Create a breathtaking, award-winning editorial photograph for a high-end corporate presentation.
 
-Brand: ${data.brandName || 'modern brand'}
-Description: ${data.brandDescription?.slice(0, 300) || 'premium lifestyle brand'}
+Brand Context: ${data.brandName || 'modern luxury brand'}
+Essence: ${data.brandDescription?.slice(0, 300) || 'premium lifestyle and innovation'}
 
 Requirements:
-- Style: Editorial, high-end commercial photography
-- Mood: Aspirational, clean, confident
-- Lighting: Natural, soft, professional
-- Composition: Full bleed, suitable as presentation background
-- Real people in authentic situations
-- Modern, urban, lifestyle context
-- NO text, NO logos, NO overlays, NO graphics
-- Aspect ratio: 16:9 (widescreen)
-- Resolution: 4K quality
-- Color palette: Warm, inviting tones`
+- Style: Vogue-style editorial, high-end commercial advertising photography
+- Mood: Aspirational, sophisticated, visionary, and clean
+- Lighting: Cinematic, soft studio lighting or dramatic natural golden hour, hyper-detailed
+- Composition: Wide cinematic shot, full bleed, perfect for a presentation background slide
+- Subject: Authentic but striking visual metaphor or real people in a premium modern environment
+- Text: ABSOLUTELY NO TEXT, NO LOGOS, NO WATERMARKS, NO GRAPHICS
+- Quality: Photorealistic, 8k resolution, masterpiece, highly detailed`
     })
   }
 
   // Audience image - target demographic for goals/audience slide
   if (data.targetGender || data.targetAgeRange) {
     const gender = data.targetGender === 'נשים' ? 'women' : 
-                   data.targetGender === 'גברים' ? 'men' : 'mixed group of people'
+                   data.targetGender === 'גברים' ? 'men' : 'a diverse mixed group of people'
     const age = data.targetAgeRange || '25-40'
-    const behavior = data.targetBehavior || 'active lifestyle'
+    const behavior = data.targetBehavior || 'living an active, modern lifestyle'
     
     prompts.push({
       key: 'audienceImage',
-      prompt: `Create a lifestyle photograph showing the target audience for a marketing campaign.
+      prompt: `Create a captivating, dynamic lifestyle portrait showing the target audience for a premium marketing campaign.
 
-Target: ${gender}, ages ${age}
-Behavior: ${behavior}
+Target Demographic: ${gender}, ages ${age}
+Lifestyle & Behavior: ${behavior}
 
 Requirements:
-- Scene: Real life situation, not posed
-- People: Diverse, relatable, aspirational
-- Mood: Positive, engaged, connected
-- Style: Instagram-worthy, authentic, natural
-- Activity: People enjoying life, socializing, or engaged in daily activities
-- NO text, NO logos, NO overlays
-- Aspect ratio: 16:9 (widescreen)
-- Resolution: 4K quality
-- Modern, contemporary setting`
+- Scene: Authentic, candid, yet highly polished real-life situation
+- People: Relatable but aspirational, expressive, stylish
+- Mood: Vibrant, engaged, deeply connected, inspiring
+- Style: High-end Instagram-worthy, editorial street style or elegant indoor setting
+- Lighting: Beautiful natural lighting, sharp focus, beautiful depth of field (bokeh)
+- Text: ABSOLUTELY NO TEXT, NO LOGOS, NO WATERMARKS
+- Quality: Photorealistic, 8k resolution, shot on 35mm lens, masterpiece`
     })
   }
 
@@ -91,35 +89,40 @@ Requirements:
 }
 
 /**
- * Generate a single image using Gemini 3 Pro Image
+ * Generate a single image using Gemini 3 Pro Image (Nano Banana Pro)
  */
 async function generateSingleImage(prompt: string): Promise<string | null> {
   try {
     console.log('[Gemini 3 Pro Image] Generating:', prompt.slice(0, 80) + '...')
     
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }], // Enable Google Search grounding
-        responseModalities: ['image', 'text'],
+    const config: any = {
+      responseModalities: ['image', 'text'],
+      imageConfig: {
+        aspectRatio: '16:9',
+        imageSize: '4K', // Explicitly request native 4K output from Nano Banana
       }
+    }
+
+    const response = await ai.models.generateContent({
+      model: IMAGE_MODEL,
+      contents: prompt,
+      config: config
     })
 
-    // Extract image from response
+    // Extract image from response parts
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         const base64 = part.inlineData.data
-        const mimeType = part.inlineData.mimeType || 'image/png'
-        console.log('[Gemini 3 Pro Image] Got image, mime:', mimeType)
+        const mimeType = part.inlineData.mimeType || 'image/jpeg'
+        console.log('[Gemini 3 Pro Image] Successfully generated image, mime:', mimeType)
         return `data:${mimeType};base64,${base64}`
       }
     }
 
-    console.log('[Gemini 3 Pro Image] No image in response')
+    console.log('[Gemini 3 Pro Image] No image found in response parts')
     return null
   } catch (error) {
-    console.error('[Gemini 3 Pro Image] Error:', error)
+    console.error('[Gemini 3 Pro Image] Error during generation:', error)
     return null
   }
 }
@@ -137,11 +140,14 @@ async function uploadImage(
     
     // Extract mime type and data
     const matches = base64Data.match(/^data:(.+);base64,(.+)$/)
-    if (!matches) return null
+    if (!matches) {
+      console.error('[Upload] Invalid base64 string format')
+      return null
+    }
     
     const mimeType = matches[1]
     const data = matches[2]
-    const extension = mimeType.split('/')[1] || 'png'
+    const extension = mimeType.split('/')[1] || 'jpeg'
     
     const buffer = Buffer.from(data, 'base64')
     const fileName = `proposal_${documentId}_${imageKey}_${Date.now()}.${extension}`
@@ -154,7 +160,7 @@ async function uploadImage(
       })
     
     if (error) {
-      console.error('[Upload] Error:', error)
+      console.error('[Upload] Supabase Error:', error)
       return null
     }
     
@@ -162,10 +168,10 @@ async function uploadImage(
       .from('assets')
       .getPublicUrl(fileName)
     
-    console.log('[Upload] Success:', fileName)
+    console.log('[Upload] Success. URL created:', fileName)
     return urlData.publicUrl
   } catch (error) {
-    console.error('[Upload] Error:', error)
+    console.error('[Upload] Unexpected Error:', error)
     return null
   }
 }
@@ -177,7 +183,7 @@ export async function generateProposalImages(
   data: ProposalData,
   documentId: string
 ): Promise<GeneratedImages> {
-  console.log('[Gemini] Input data:', {
+  console.log('[Gemini] Input data received for image generation:', {
     brandName: data.brandName,
     brandDescription: data.brandDescription?.slice(0, 50),
     targetGender: data.targetGender,
@@ -187,10 +193,10 @@ export async function generateProposalImages(
   const prompts = generateImagePrompts(data)
   const images: GeneratedImages = {}
   
-  console.log(`[Gemini] Generating ${prompts.length} images for proposal...`)
-  console.log('[Gemini] Image types:', prompts.map(p => p.key))
+  console.log(`[Gemini] Starting generation of ${prompts.length} premium images...`)
+  console.log('[Gemini] Image types in queue:', prompts.map(p => p.key))
   
-  // Generate images sequentially to avoid rate limits
+  // Generate images sequentially to avoid rate limits on the 4K model
   for (const { key, prompt } of prompts) {
     try {
       const base64 = await generateSingleImage(prompt)
@@ -200,14 +206,14 @@ export async function generateProposalImages(
           images[key] = url
         }
       }
-      // Small delay between requests
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Small delay between heavy 4K requests to keep the API happy
+      await new Promise(resolve => setTimeout(resolve, 800))
     } catch (error) {
-      console.error(`[Gemini] Failed to generate ${key}:`, error)
+      console.error(`[Gemini] Failed to generate or upload ${key}:`, error)
     }
   }
   
-  console.log('[Gemini] Generated images:', Object.keys(images))
+  console.log('[Gemini] Image generation cycle complete. Keys populated:', Object.keys(images))
   
   return images
 }

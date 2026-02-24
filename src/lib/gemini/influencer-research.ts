@@ -1,6 +1,6 @@
 /**
  * Influencer Research Service
- * Uses Gemini to recommend relevant influencers for a brand
+ * Uses Gemini to recommend relevant, real influencers for a brand grounded in Google Search
  */
 
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
@@ -9,7 +9,7 @@ import { parseGeminiJson } from '../utils/json-cleanup'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-// Use Gemini 3 Pro for best influencer research quality
+// Use Gemini 3.1 Pro for high-reasoning influencer research and market analysis
 const MODEL = 'gemini-3.1-pro-preview'
 
 export interface InfluencerRecommendation {
@@ -80,143 +80,95 @@ export async function researchInfluencers(
   budget: number,
   goals: string[]
 ): Promise<InfluencerStrategy> {
-  console.log(`[Influencer Research] Starting research for ${brandResearch.brandName}`)
+  console.log(`[Influencer Research] Starting research for ${brandResearch.brandName} with budget ${budget} ILS`)
   
   const prompt = `
-**IMPORTANT: Return ONLY valid JSON. No introductory text, no explanations, just the JSON object.**
+אתה מנהל שיווק משפיענים בכיר בישראל. בנה אסטרטגיית משפיענים קפדנית המבוססת על נתוני אמת.
 
-אתה מומחה שיווק משפיענים בכיר עם 15 שנות ניסיון בשוק הישראלי.
-בצע מחקר מעמיק והמלץ על אסטרטגיית משפיענים עבור המותג.
-
-## פרטי המותג:
-- שם: ${brandResearch.brandName}
+## פרטי המותג והקמפיין:
+- שם המותג: ${brandResearch.brandName}
 - תעשייה: ${brandResearch.industry}
-- קהל יעד: ${brandResearch.targetDemographics?.primaryAudience?.gender || 'לא ידוע'}, ${brandResearch.targetDemographics?.primaryAudience?.ageRange || '25-45'}
-- תחומי עניין של הקהל: ${brandResearch.targetDemographics?.primaryAudience?.interests?.join(', ') || 'לא ידוע'}
-- ערכי מותג: ${brandResearch.brandValues?.join(', ') || 'לא ידוע'}
-- טון מותג: ${brandResearch.toneOfVoice}
+- קהל יעד: ${brandResearch.targetDemographics?.primaryAudience?.gender || 'כללי'}, גילאי ${brandResearch.targetDemographics?.primaryAudience?.ageRange || '25-45'}
+- תחומי עניין: ${brandResearch.targetDemographics?.primaryAudience?.interests?.join(', ') || 'רלוונטי לתעשייה'}
+- ערכי המותג: ${brandResearch.brandValues?.join(', ') || 'איכות, מקצוענות'}
 - מתחרים: ${brandResearch.competitors?.map(c => typeof c === 'string' ? c : c.name).join(', ') || 'לא ידוע'}
+- תקציב פנוי: ${budget.toLocaleString()} ש"ח
+- מטרות הקמפיין: ${goals.join(', ')}
 
-## תקציב: ${budget.toLocaleString()} ש"ח
-## מטרות הקמפיין: ${goals.join(', ')}
+## הנחיות קריטיות למחקר:
+1. **השתמש בחיפוש גוגל כדי לאמת משפיענים ישראלים אמיתיים** בתחום הרלוונטי. בשום פנים ואופן אל תמציא שמות או Handles (@).
+2. הצע שכבות פעולה (Tiers) **שמותאמות ריאלית לתקציב** (למשל, אל תציע משפיעני מאקרו אם התקציב הוא רק 5,000 ש"ח).
+3. הערך עלויות ריאליסטיות בשוק הישראלי לפוסט/סטורי בהתאם לכמות העוקבים.
+4. הגדר KPIs שגוזרים משמעות כמותית מהתקציב.
 
-## המשימה שלך:
-1. חפש משפיענים ישראליים אמיתיים שמתאימים למותג
-2. הצע אסטרטגיית שכבות (Mega, Macro, Micro, Nano)
-3. הצע נושאי תוכן ספציפיים
-4. הגדר KPIs ריאליסטיים
-5. תכנן לוח זמנים
+## פורמט תגובה:
+החזר **אך ורק** אובייקט JSON חוקי לפי המבנה הבא (ללא טקסט מקדים או סיומת):
 
-## חשוב:
-- השתמש בשמות משפיענים ישראליים אמיתיים
-- התייחס לשוק הישראלי
-- חשב עלויות ריאליסטיות לשוק המקומי
-
-## החזר JSON בפורמט הבא:
 \`\`\`json
 {
-  "strategyTitle": "כותרת האסטרטגיה - קצרה וקולעת",
-  "strategySummary": "פסקה של 3-4 משפטים שמסכמת את האסטרטגיה הכללית",
+  "strategyTitle": "כותרת קצרה וקולעת לאסטרטגיה",
+  "strategySummary": "סיכום האסטרטגיה ב-3-4 משפטים המותאמים לתקציב ולמטרות.",
   
   "tiers": [
     {
-      "name": "Macro Influencers",
-      "description": "משפיענים עם 100K-500K עוקבים",
-      "recommendedCount": 2,
-      "budgetAllocation": "40%",
-      "purpose": "חשיפה רחבה ובניית אמינות"
-    },
-    {
-      "name": "Micro Influencers",
-      "description": "משפיענים עם 10K-100K עוקבים",
+      "name": "שם השכבה (למשל: Micro / Macro)",
+      "description": "תיאור קהל העוקבים הרלוונטי",
       "recommendedCount": 4,
-      "budgetAllocation": "35%",
-      "purpose": "מעורבות גבוהה והמרות"
-    },
-    {
-      "name": "Nano Influencers",
-      "description": "משפיענים עם 1K-10K עוקבים",
-      "recommendedCount": 8,
-      "budgetAllocation": "25%",
-      "purpose": "אותנטיות וקהילתיות"
+      "budgetAllocation": "אחוז מהתקציב",
+      "purpose": "מטרת השכבה בקמפיין"
     }
   ],
   
   "recommendations": [
     {
-      "name": "שם מלא של המשפיען",
-      "handle": "@username",
+      "name": "שם מלא ואמיתי של המשפיען",
+      "handle": "@username_real",
       "platform": "instagram",
-      "category": "לייפסטייל / ספורט / אופנה וכו'",
-      "followers": "150K",
-      "engagement": "4.5%",
-      "avgStoryViews": "25K",
-      "whyRelevant": "הסבר למה המשפיען מתאים למותג",
-      "contentStyle": "תיאור סגנון התוכן שלו",
-      "estimatedCost": "5,000-8,000 ש\"ח לפוסט",
-      "profileUrl": "https://instagram.com/username"
+      "category": "תחום התוכן",
+      "followers": "כמות משוערת (למשל 45K)",
+      "engagement": "אחוז מעורבות משוער",
+      "avgStoryViews": "כמות צפיות משוערת",
+      "whyRelevant": "למה הוא מתאים בול למותג הזה",
+      "contentStyle": "סגנון התוכן",
+      "estimatedCost": "הערכת מחיר בשקלים",
+      "profileUrl": "https://instagram.com/username_real"
     }
   ],
   
   "contentThemes": [
     {
-      "theme": "שם הנושא",
-      "description": "תיאור מפורט של נושא התוכן",
-      "examples": ["דוגמה 1 לתוכן", "דוגמה 2", "דוגמה 3"]
+      "theme": "שם הנושא לקריאייטיב",
+      "description": "תיאור מפורט",
+      "examples": ["דוגמה 1", "דוגמה 2"]
     }
   ],
   
   "expectedKPIs": [
     {
-      "metric": "Reach",
-      "target": "500,000",
-      "rationale": "הסבר למה זה המטרה"
-    },
-    {
-      "metric": "Engagement",
-      "target": "25,000",
-      "rationale": "הסבר"
-    },
-    {
-      "metric": "CPE",
-      "target": "2.5 ש\"ח",
-      "rationale": "הסבר"
+      "metric": "Reach / Engagement / Clicks",
+      "target": "מספר יעד ריאלי לתקציב",
+      "rationale": "הסבר לחישוב"
     }
   ],
   
   "suggestedTimeline": [
     {
-      "phase": "הכנה",
-      "duration": "שבועיים",
-      "activities": ["בחירת משפיענים", "משא ומתן", "בריף"]
-    },
-    {
-      "phase": "ביצוע",
-      "duration": "חודש",
-      "activities": ["יצירת תוכן", "פרסום", "ניטור"]
-    },
-    {
-      "phase": "סיכום",
-      "duration": "שבוע",
-      "activities": ["ניתוח תוצאות", "דוח מסכם"]
+      "phase": "שם השלב",
+      "duration": "משך זמן",
+      "activities": ["פעילות 1", "פעילות 2"]
     }
   ],
   
   "potentialRisks": [
     {
-      "risk": "תיאור הסיכון",
-      "mitigation": "איך מתמודדים"
+      "risk": "סיכון אפשרי",
+      "mitigation": "דרך התמודדות"
     }
   ]
 }
 \`\`\`
 
-## הנחיות חשובות:
-- המלץ על 6-10 משפיענים ספציפיים עם שמות אמיתיים
-- התייחס לתקציב בחלוקת השכבות
-- הצע KPIs ריאליסטיים לשוק הישראלי
-
-**CRITICAL: Your response must be ONLY the JSON object. Do not write any text before or after the JSON.**
+**חובה להחזיר JSON בלבד! וודא שמות משפיענים אמיתיים מהשוק הישראלי.**
 `
 
   try {
@@ -224,20 +176,19 @@ export async function researchInfluencers(
       model: MODEL,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }, { urlContext: {} }],
+        tools: [{ googleSearch: {} }], // Added only strictly supported Google tools
         thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       }
     })
 
     const text = response.text || ''
-    console.log('[Influencer Research] Response received')
+    console.log('[Influencer Research] Response received, parsing JSON...')
     
-    // Use JSON cleanup utility for robust parsing
     const strategy = parseGeminiJson<InfluencerStrategy>(text)
-    console.log(`[Influencer Research] Found ${strategy.recommendations?.length || 0} recommendations`)
+    console.log(`[Influencer Research] Complete. Found ${strategy.recommendations?.length || 0} real recommendations.`)
     return strategy
   } catch (error) {
-    console.error('[Influencer Research] Error:', error)
+    console.error('[Influencer Research] Error during strategy generation:', error)
     return getDefaultStrategy(brandResearch, budget, goals)
   }
 }
@@ -251,17 +202,18 @@ export async function getQuickInfluencerSuggestions(
   budget: number
 ): Promise<InfluencerRecommendation[]> {
   const prompt = `
-הצע 5 משפיענים ישראליים מתאימים לקמפיין:
+הצע 5 משפיענים ישראליים **אמיתיים וקיימים** שמתאימים לקמפיין הבא:
 - תעשייה: ${industry}
 - קהל יעד: ${targetAudience}
-- תקציב: ${budget.toLocaleString()} ש"ח
+- תקציב כולל: ${budget.toLocaleString()} ש"ח (התאם את גודל המשפיענים לתקציב)
 
-החזר JSON:
+השתמש בחיפוש גוגל כדי לאמת את קיומם.
+החזר אך ורק JSON במבנה הבא:
 \`\`\`json
 [
   {
-    "name": "שם מלא",
-    "handle": "@username",
+    "name": "שם מלא ואמיתי",
+    "handle": "@username_real",
     "platform": "instagram",
     "category": "קטגוריה",
     "followers": "100K",
@@ -269,7 +221,7 @@ export async function getQuickInfluencerSuggestions(
     "whyRelevant": "למה מתאים",
     "contentStyle": "סגנון",
     "estimatedCost": "X ש\"ח לפוסט",
-    "profileUrl": "https://..."
+    "profileUrl": "https://instagram.com/..."
   }
 ]
 \`\`\`
@@ -280,7 +232,7 @@ export async function getQuickInfluencerSuggestions(
       model: MODEL,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }, { urlContext: {} }],
+        tools: [{ googleSearch: {} }],
         thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
       }
     })
@@ -288,13 +240,13 @@ export async function getQuickInfluencerSuggestions(
     const text = response.text || ''
     return parseGeminiJson<InfluencerRecommendation[]>(text)
   } catch (error) {
-    console.error('[Quick Influencer] Error:', error)
+    console.error('[Quick Influencer] Error fetching suggestions:', error)
     return []
   }
 }
 
 /**
- * Default strategy fallback
+ * Default strategy fallback in case of API failure
  */
 function getDefaultStrategy(
   brandResearch: BrandResearch,
@@ -303,30 +255,29 @@ function getDefaultStrategy(
 ): InfluencerStrategy {
   return {
     strategyTitle: `אסטרטגיית משפיענים עבור ${brandResearch.brandName}`,
-    strategySummary: `אסטרטגיה משולבת הכוללת משפיענים בגדלים שונים להשגת ${goals.join(' ו-')}. 
-    הקמפיין יתמקד בתוכן אותנטי שמתחבר לקהל היעד.`,
+    strategySummary: `אסטרטגיה משולבת הכוללת משפיענים בגדלים שונים להשגת המטרות: ${goals.join(', ')}. הקמפיין יתמקד בתוכן אותנטי שמתחבר לקהל היעד.`,
     
     tiers: [
       {
         name: 'Macro Influencers',
         description: 'משפיענים עם 100K+ עוקבים',
-        recommendedCount: 2,
+        recommendedCount: 1,
         budgetAllocation: '40%',
-        purpose: 'חשיפה ומודעות'
+        purpose: 'חשיפה רחבה ומודעות למותג'
       },
       {
         name: 'Micro Influencers',
         description: 'משפיענים עם 10K-100K עוקבים',
-        recommendedCount: 4,
-        budgetAllocation: '35%',
-        purpose: 'מעורבות והמרות'
+        recommendedCount: 3,
+        budgetAllocation: '40%',
+        purpose: 'יצירת מעורבות אקטיבית והמרות'
       },
       {
         name: 'Nano Influencers',
         description: 'משפיענים עם 1K-10K עוקבים',
-        recommendedCount: 6,
-        budgetAllocation: '25%',
-        purpose: 'אותנטיות וקהילה'
+        recommendedCount: 5,
+        budgetAllocation: '20%',
+        purpose: 'בניית קהילה ואותנטיות'
       }
     ],
     
@@ -334,49 +285,57 @@ function getDefaultStrategy(
     
     contentThemes: [
       {
-        theme: 'שגרה יומית',
-        description: 'שילוב המוצר בשגרת היום של המשפיען',
-        examples: ['בוקר טוב עם המוצר', 'לפני/אחרי', 'השוואה']
+        theme: 'שילוב אותנטי בשגרה',
+        description: 'הדגמת שימוש במוצר או בשירות כחלק טבעי מסדר היום של המשפיען.',
+        examples: ['סרטון בוקר (GRWM) עם המוצר', 'ולוג יומי שמשלב את השירות']
       },
       {
-        theme: 'ביקורת אמיתית',
-        description: 'חוות דעת כנה על המוצר',
-        examples: ['ראשונים לנסות', 'חודש עם המוצר', 'התוצאות']
+        theme: 'סקירה מקצועית וכנה',
+        description: 'ביקורת מפורטת המציגה את היתרונות (והחסרונות) של המוצר לבניית אמינות.',
+        examples: ['סרטון Unboxing מרגש', 'סרטון שאלות ותשובות (Q&A) על המותג']
       }
     ],
     
     expectedKPIs: [
       {
-        metric: 'Reach',
-        target: Math.round(budget * 5).toLocaleString(),
-        rationale: 'לפי CPM ממוצע בשוק'
+        metric: 'Reach (חשיפה)',
+        target: Math.round(budget * 6).toLocaleString(),
+        rationale: 'חישוב מבוסס על עלות CPM ממוצעת של 15-20 ש"ח בשוק הישראלי'
       },
       {
-        metric: 'Engagement',
-        target: Math.round(budget / 2.5).toLocaleString(),
-        rationale: 'לפי CPE ממוצע'
+        metric: 'Engagement (מעורבות)',
+        target: Math.round(budget / 3).toLocaleString(),
+        rationale: 'חישוב מבוסס על עלות CPE ממוצעת של 3 ש"ח לאינטראקציה'
       }
     ],
     
     suggestedTimeline: [
       {
-        phase: 'הכנה',
-        duration: '2 שבועות',
-        activities: ['בחירת משפיענים', 'חוזים', 'בריף']
+        phase: 'הכנה ותכנון',
+        duration: 'שבועיים',
+        activities: ['איתור משפיענים סופיים', 'חתימה על הסכמים', 'שליחת מוצרים/בריף קריאייטיב']
       },
       {
-        phase: 'ביצוע',
-        duration: '4 שבועות',
-        activities: ['יצירה', 'פרסום', 'ניטור']
+        phase: 'ביצוע ועלייה לאוויר',
+        duration: '3-4 שבועות',
+        activities: ['אישור תכנים', 'פרסום מדורג (Drip)', 'ניטור תגובות בזמן אמת']
+      },
+      {
+        phase: 'מדידה ואופטימיזציה',
+        duration: 'שבוע',
+        activities: ['איסוף נתוני אמת מהמשפיענים', 'הפקת דוח סיכום קמפיין (ROI)']
       }
     ],
     
     potentialRisks: [
       {
-        risk: 'אי עמידה בדדליינים',
-        mitigation: 'תיאום מראש וגמישות בלו"ז'
+        risk: 'עיכובים בזמני הפרסום מצד המשפיענים',
+        mitigation: 'עיגון חלונות זמן מדויקים בחוזה ואישור תכנים מראש.'
+      },
+      {
+        risk: 'חוסר מעורבות (אדישות הקהל)',
+        mitigation: 'בחירת משפיענים עם שיעור מעורבות מוכח של מעל 3%, ומתן חופש קריאייטיבי להנגשת התוכן.'
       }
     ]
   }
 }
-

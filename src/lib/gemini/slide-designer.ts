@@ -1,15 +1,14 @@
 /**
- * Gemini AI Slide Designer
- * Generates unique presentation designs from scratch for each brand.
+ * Gemini AI Premium Slide Designer
+ * Generates ultra-premium, magazine-style editorial presentation designs.
+ * Heavily optimized for high-end PDF export (No shadows/blur, YES to clip-paths/gradients).
  *
  * 2-Step process:
  * 1. generateDesignSystem() → Unique CSS for the brand
  * 2. generateSlidesBatch() → HTML slides using that CSS
- *
- * Fallback: premium-proposal-template.tsx if AI fails
  */
 
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '@/lib/utils/json-cleanup'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
@@ -55,65 +54,43 @@ async function generateDesignSystem(
   const requestId = `ds-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Generating design system for: ${brand.brandName}`)
 
-  const prompt = `אתה מעצב מצגות ברמה עולמית. עליך ליצור מערכת עיצוב CSS ייחודית למותג "${brand.brandName}".
+  const prompt = `אתה Art Director ומנהל קריאייטיב ראשי בסוכנות מיתוג עולמית (בסגנון Apple, Nike, Pentagram).
+עליך ליצור מערכת עיצוב CSS למצגת שהיא ברמת מסטרפיס - "WOW effect" מוחלט - עבור המותג "${brand.brandName}".
+המצגת תיוצא ל-PDF, ולכן עליה להיראות כמו מגזין אופנה / פרימיום טק (Editorial Design).
 
-מידע על המותג:
+מידע על המותג ההשראה שלך:
 - תעשייה: ${brand.industry || 'לא ידוע'}
 - אישיות: ${brand.brandPersonality?.join(', ') || 'מקצועי'}
 - צבע ראשי: ${brand.brandColors.primary}
 - צבע משני: ${brand.brandColors.secondary}
 - צבע הדגשה: ${brand.brandColors.accent}
-- סגנון: ${brand.brandColors.style || 'corporate'}
-- אווירה: ${brand.brandColors.mood || 'מקצועי'}
-- קהל יעד: ${brand.targetAudience || 'מבוגרים 25-45'}
+- אווירה: ${brand.brandColors.mood || 'יוקרתי ומקצועי'}
 
-צור מערכת עיצוב CSS מלאה ויחודית. כל מותג חייב לקבל עיצוב שונה לחלוטין.
+דרישות טכניות קשיחות (חובה ל-PDF!):
+- גודל: 1920px × 1080px (פורמט ענק).
+- RTL מובנה.
+- פונט: Heebo.
+- 🚫 איסור מוחלט על box-shadow: זה קורס ב-PDF! צור עומק בעזרת מסגרות (borders) כפולות, צבעי רקע מדורגים (gradients), ו-offset borders מוחלטים.
+- 🚫 איסור מוחלט על backdrop-filter (blur): זה לא נתמך. צור אפקט של חצי-שקיפות בעזרת rgba עם גרדיאנט.
 
-דרישות טכניות קשיחות:
-- גודל שקף: 1920px × 1080px
-- כיוון: RTL (עברית)
-- פונט: Heebo (כבר מיובא)
-- כל טקסט חייב להיות קריא - ניגודיות מספקת
-- אסור שטקסט ייחתך - overflow: hidden רק עם min-height מתאים
-- אסור להשתמש ב-box-shadow - נראה רע בייצוא PDF. השתמש ב-border, outline, gradient borders במקום
-- אסור backdrop-filter (glassmorphism) - לא עובד בייצוא PDF. השתמש ב-background עם opacity במקום
-
-החזר JSON:
+החזר JSON בלבד:
 \`\`\`json
 {
-  "designDirection": "תיאור קצר של כיוון העיצוב (2-3 משפטים)",
-  "css": "כל ה-CSS כמחרוזת אחת"
+  "designDirection": "פסקה מרתקת על הקונספט הויזואלי (למשל: 'עיצוב ברוטליסטי עם חיתוכים אלכסוניים וטייפוגרפיה ענקית')",
+  "css": "ה-CSS השלם כאן"
 }
 \`\`\`
 
-ה-CSS חייב לכלול:
-1. **:root** עם custom properties (--primary, --secondary, --accent, --bg, --text, --card-bg, --card-border, --card-shadow)
-2. **body, .slide** - רקע ייחודי (לא רק צבע אחיד - גרדיאנט, pattern, texture)
-3. **.slide-content** - padding, flex layout
-4. **h1** - כותרת ראשית (48-64px, bold)
-5. **h2** - כותרת משנית (36-48px)
-6. **h3** - כותרת שלישונית (24-32px)
-7. **.body-text** - טקסט גוף (20-24px)
-8. **.card** - קלף עם עיצוב ייחודי (לא רק border-radius - תחשוב על outlined, gradient borders, cutout corners, border-image, colored borders, double borders)
-9. **.metric-box** - תיבת מספר/מדד עם עיצוב מרשים
-10. **.metric-value** - ערך מספרי גדול ובולט
-11. **.accent-decoration** - אלמנט דקורטיבי ייחודי (shapes, lines, dots, waves - משהו שמזהה את המצגת הזו)
-12. **.slide-cover** - עיצוב שקף שער (hero, dramatic)
-13. **.cover-title** - כותרת שער ענקית (80-120px)
-14. **.influencer-card** - כרטיס משפיען עם תמונה עגולה
-15. **.influencer-image** - תמונת פרופיל עגולה עם מסגרת ייחודית
-16. **.tag** - תגית/badge קטנה
-17. **.grid-2, .grid-3, .grid-4** - grids עם gap
-18. **.logo-footer** - פוטר לוגואים
-19. **.brand-watermark** - סימן מים
-20. **.slide::before** - פס צבע תחתון (או אלמנט דקורטיבי אחר)
+מה ה-CSS חייב לכלול כדי להיות WOW:
+1. **טיפוגרפיה אדירה (Editorial Typography):** הגדר מחלקות לכותרות ענק שחותכות את המסך. השתמש ב-letter-spacing, line-height צפוף לכותרות פאנצ'יות. הגדר מחלקת \`.text-stroke\` ליצירת טקסט שקוף עם קו מתאר (webkit-text-stroke).
+2. **רקעים נועזים:** אל תעשה רקעים בצבע אחיד! השתמש ב-linear-gradient, radial-gradient, רשתות (css patterns) או ענני צבע.
+3. **שבירת גריד (clip-path):** צור מחלקות כמו \`.angled-section\`, \`.cutout-image\` המשתמשות ב-clip-path: polygon() כדי לשבור את הריבועים המשעממים.
+4. **Watermarks ענקיים:** מחלקה \`.massive-watermark\` לטקסט רקע עצום (200px+) בזווית עם 3% אטימות (opacity).
+5. **אלמנטים דקורטיביים פרימיום:** קווים דקים מפרידים (1px solid), עיגולי אקסנט צבעוניים, מסגרות אסימטריות (\`.premium-card\`).
+6. **מודולריות מגזין:** .split-screen (50/50), .grid-asymmetric, .magazine-layout (תמונה גדולה עם חפיפה של קופסת טקסט).
+7. **כפתורים ותגיות פאנצ'יים:** \`.badge\`, \`.metric-value\` (מספר ענק בגוון גרדיאנט - \`background-clip: text; color: transparent\`).
 
-דגשים חשובים:
-- אל תשתמש בעיצוב גנרי "עוד מצגת"
-- תהיה יצירתי - כל מותג צריך להרגיש שונה
-- תשתמש בטכניקות CSS מתקדמות: clip-path, mix-blend-mode, gradients מורכבים, border-image, outline
-- הצבעים חייבים להתבסס על צבעי המותג אבל עם וריאציות יצירתיות
-- חשוב על rhythm ויזואלי - לא כל שקף צריך להיראות אותו דבר`
+תהיה מטורף, תהיה א방גרד. זה חייב להיות העיצוב הכי יפה שהלקוח ראה בחיים שלו.`
 
   try {
     const response = await ai.models.generateContent({
@@ -159,99 +136,54 @@ async function generateSlidesBatch(
     const contentJson = JSON.stringify(slide.content, null, 2)
     return `
 ### שקף ${i + 1}: ${slide.title} (סוג: ${slide.slideType})
-${slide.imageUrl ? `תמונה זמינה: ${slide.imageUrl}` : 'אין תמונה'}
-תוכן:
+${slide.imageUrl ? `תמונה זמינה: ${slide.imageUrl}` : 'אין תמונה - השתמש בטיפוגרפיה קיצונית ורקעי CSS'}
+תוכן (JSON):
 \`\`\`json
 ${contentJson}
 \`\`\`
 `
   }).join('\n')
 
-  const prompt = `אתה מעצב מצגות מקצועי. צור HTML לשקפים הבאים של "${brandName}".
+  const prompt = `אתה מעצב Layout בכיר במגזין. המשימה שלך היא לייצר קוד HTML למצגת PDF של המותג "${brandName}".
 
-## מערכת העיצוב (CSS) - כבר מוכנה:
+## ה-CSS שלך (כבר מוטמע ב-HEAD):
 \`\`\`css
 ${designCSS}
 \`\`\`
 
-## לוגואים:
+## לוגואים זמינים (השתמש רק איפה שהגיוני ויוקרתי, אל תדביק סתם בפינה):
 ${logoUrl ? `- לוגו לקוח: ${logoUrl}` : '- אין לוגו לקוח'}
-${leadersLogoUrl ? `- לוגו Leaders: ${leadersLogoUrl}` : ''}
+${leadersLogoUrl ? `- לוגו סוכנות (Leaders): ${leadersLogoUrl}` : ''}
 
-## שקפים ליצירה:
+## מידע לשקפים:
 ${slidesDescription}
 
-## הוראות קריטיות:
+## חוקי ברזל להפקת לייאאוט ברמת WOW (Editorial Design):
+1. **שבור את התבנית (No boring slides):** אף שקף לא נראה כמו פאוורפוינט עם כותרת ובולטים. השתמש בלייאאוט א-סימטרי (לדוגמה: תמונה ענקית תופסת 70% מסך מצד ימין וטקסט צף מצד שמאל).
+2. **טקסט כאלמנט עיצובי:** השתמש בחלקי תוכן מסוימים באותיות ענק שחותכות את השוליים. הוסף שכבות של טקסט רקע חלש מאוד כ-Watermark בכל שקף כדי לתת עומק.
+3. **שילוב תמונות (Image Integration):** תמונות חייבות לקבל יחס יוקרתי - עטוף אותן בדיבים (divs), השתמש ב-overflow:hidden ובמסגרות או פילטרים דרך CSS. הוסף גרדיאנט מעל תמונות רקע כדי שהטקסט יבלוט בצורה מושלמת.
+4. **משפיענים/כרטיסיות:** אל תעשה סתם "ריבועים". השתמש ב-offset borders (קווים שיוצאים מהמסגרת), רקעים מדורגים, ותמונות פרופיל במבנים מעניינים (למשל צורות אובליות לא סימטריות במקום סתם עיגול מושלם).
+5. **מספרים וסטטיסטיקות:** הבלט אותם! נתון של "500K" צריך לקבל פונט מטורף בגודלו עם צבע בולט. פסקאות הטקסט שמתחת יהיו קטנות, נקיות, בסגנון מגזין אלגנטי.
+6. **מבנה HTML סגור וקפדני:** הקוד חייב להיות תקין (RTL, שפה). אסור לדלג על שום מידע תוכן שנשלח אליך ב-JSON.
 
-1. כל שקף הוא דף HTML עצמאי מלא:
-\`\`\`html
-<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head>
-  <meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <style>
-    @page { size: 1920px 1080px; margin: 0; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Heebo', sans-serif; direction: rtl; -webkit-print-color-adjust: exact; }
-    ${'{CSS_FROM_DESIGN_SYSTEM}'}
-  </style>
-</head>
-<body>
-  <div class="slide">
-    <div class="slide-content">
-      <!-- תוכן השקף -->
-    </div>
-  </div>
-</body>
-</html>
-\`\`\`
-
-2. כל השקפים בגודל 1920x1080 בדיוק
-3. כל הטקסט בעברית, RTL
-4. חובה לכלול את כל שדות התוכן - אסור לדלג על מידע
-5. מספרים ואחוזים: הצג ב-LTR עם direction: ltr; unicode-bidi: isolate
-6. עיצוב layout ייחודי לכל שקף - אל תשתמש באותו layout חוזר
-7. ${logoUrl ? `הוסף לוגו לקוח בפוטר: <img src="${logoUrl}" style="height:40px;object-fit:contain">` : 'אין לוגו לקוח'}
-8. ${leadersLogoUrl ? `הוסף לוגו Leaders בפוטר: <img src="${leadersLogoUrl}" style="height:35px;object-fit:contain">` : ''}
-9. תמונות: אם יש URL תמונה, השתמש בה עם object-fit: cover ועיצוב מרשים (clip-path, overlay, etc.)
-10. אם אין תמונה, השתמש ברקע גרדיאנט או pattern במקום
-11. למשפיענים ללא תמונת פרופיל: הצג עיגול צבעוני עם האות הראשונה של השם
-12. אסור box-shadow - השתמש ב-border בלבד
-
-## כללי Layout לפי סוג שקף:
-- **cover**: רקע full-bleed (תמונה או גרדיאנט דרמטי). שם המותג בטייפ ענק (80-120px). כותרת משנית מתחת. לוגואים בפינות. ללא כרטיסים.
-- **brief**: חלוקה 60/40. צד אחד: כותרת + טקסט. צד שני: תמונה או אייקונים.
-- **goals**: 3-4 כרטיסים ב-grid. כל כרטיס: אזור אייקון, כותרת bold, תיאור.
-- **audience**: כרטיס פרסונה מרכזי עם נתונים סביבו, או layout אופקי עם תמונה בצד.
-- **strategy**: 3 עמודים שווים לכל pillar עם אלמנט ויזואלי מחבר.
-- **metrics**: 4 תיבות מספרים בשורה עם מספרים גדולים. מתחת: טקסט הסבר.
-- **influencers**: grid של 3-6 כרטיסים עם תמונות עגולות, שם, handle, סטטיסטיקות.
-- **closing**: כותרת ממורכזת, טייפ גדול, עיצוב מינימלי. לוגואים בפוטר.
-
-## Anti-patterns (אסור):
-- אסור טקסט קטן מ-18px
-- אסור יותר מ-3 צבעים בשקף בודד
-- אסור שטח ריק גדול ללא תוכן
-- אסור לערום יותר מ-6 אלמנטים אנכית
-- אסור box-shadow או backdrop-filter
-
-החזר JSON - מערך של מחרוזות HTML, אחת לכל שקף:
+## פורמט הפלט:
+החזר אך ורק JSON - מערך של מחרוזות HTML. תבנית בסיס לכל שקף:
 \`\`\`json
 {
   "slides": [
-    "<!DOCTYPE html>...",
-    "<!DOCTYPE html>..."
+    "<!DOCTYPE html>\\n<html dir=\\"rtl\\" lang=\\"he\\">\\n<head>...</head>\\n<body><div class=\\"slide massive-layout-variant\\">...</div></body>\\n</html>",
+    "<!DOCTYPE html>... (שקף 2)"
   ]
 }
-\`\`\``
+\`\`\`
+`
 
   try {
     const response = await ai.models.generateContent({
       model: MODEL,
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 3000 },
+        thinkingConfig: { thinkingBudget: 4000 }, // Increased for complex layout logic
       },
     })
 
@@ -262,7 +194,7 @@ ${slidesDescription}
       console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} slides`)
 
       // Validate each slide
-      const validSlides = parsed.slides.map((html, i) => {
+      const validSlides = parsed.slides.map((html) => {
         if (!html.includes('<html') && !html.includes('<!DOCTYPE')) {
           // Wrap partial HTML
           return wrapSlideHtml(html, designCSS)
@@ -289,13 +221,25 @@ function wrapSlideHtml(body: string, css: string): string {
 <style>
 @page { size: 1920px 1080px; margin: 0; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Heebo', sans-serif; direction: rtl; -webkit-print-color-adjust: exact; -webkit-font-smoothing: antialiased; }
+body { 
+  font-family: 'Heebo', sans-serif; 
+  direction: rtl; 
+  -webkit-print-color-adjust: exact; 
+  color-adjust: exact; 
+  -webkit-font-smoothing: antialiased; 
+  text-rendering: optimizeLegibility; 
+  background-color: #ffffff; /* Fallback safe */
+}
+/* Enhanced Base Utilities for WOW effect */
+.slide { width: 1920px; height: 1080px; position: relative; overflow: hidden; }
+.absolute-fill { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.bg-cover { background-size: cover; background-position: center; background-repeat: no-repeat; }
 ${css}
 </style>
 </head>
 <body>
 <div class="slide">
-<div class="slide-content">
+<div class="slide-content absolute-fill">
 ${body}
 </div>
 </div>

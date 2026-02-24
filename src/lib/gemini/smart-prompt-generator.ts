@@ -53,8 +53,8 @@ export async function generateSmartPrompts(
    Rationale: ${img.rationale}`
   ).join('\n\n')
 
-  const prompt = `אתה מומחה ל-Prompt Engineering עבור Gemini Nano Banana Pro (מודל יצירת תמונות).
-המשימה: לכתוב פרומפטים מקצועיים ומדויקים עבור כל תמונה באסטרטגיה.
+  const prompt = `אתה Art Director בכיר ומומחה ל-Prompt Engineering עבור Gemini Nano Banana Pro (מודל יצירת תמונות מטורף).
+המשימה: לכתוב פרומפטים מקצועיים, דרמטיים ומדויקים עבור כל תמונה באסטרטגיה, שיופקו ברמת פרימיום/מגזין.
 
 ## המותג
 - שם: ${brandResearch.brandName}
@@ -76,53 +76,39 @@ ${imagePlans}
 
 ## כללי כתיבת פרומפט ל-Nano Banana Pro
 
-1. **מבנה JSON**: הפרומפט צריך להיות מובנה ומפורט
-2. **ספציפיות**: פרטים מדויקים > תיאורים כלליים
-3. **ישראליות**: אלמנטים ספציפיים לישראל (לא אמריקה/אירופה)
-4. **NO TEXT**: קריטי! אין טקסט, אותיות, מילים, לוגואים
-5. **תאורה**: תאורה ים-תיכונית חמה
-6. **קומפוזיציה**: מקום לטקסט בצד ימין (RTL)
+1. **מבנה JSON**: הפרומפט צריך להיות מובנה, ספציפי ועשיר.
+2. **Cinematic & Editorial**: תאר את התמונות כאילו מדובר בהפקת אופנה או פרסומת במיליון דולר.
+3. **ישראליות מודרנית**: תל אביב הייטקיסטית, חופי ים תיכון אסתטיים, אנשים יפים ואותנטיים (לא תמונות סטוק גנריות מאמריקה).
+4. **NO TEXT**: קריטי! אין טקסט, אותיות, מילים, לוגואים.
+5. **תאורה**: תאורה ים-תיכונית חמה, שעת זהב, תאורת סטודיו דרמטית.
+6. **קומפוזיציה**: שטח שלילי (Negative space) בצד ימין לטובת כתיבת טקסט ב-RTL במצגת.
 
-## דוגמה לפרומפט טוב
-
+## פורמט תגובה (החזר JSON בלבד)
+\`\`\`json
 {
-  "subject": "בקבוק מי עדן 1.5 ליטר, עיצוב פרימיום עם טיפות מים",
-  "scene": "שולחן פיקניק מעץ בפארק הירקון, משפחה מטושטשת ברקע",
-  "mood": "רענן, טבעי, משפחתי, חיובי",
-  "colors": ["#29468F", "#FFDA63", "ירוקים טבעיים", "שמיים כחולים"],
-  "composition": "בקבוק בקדמת התמונה צד שמאל, רקע מטושטש בעומק שדה, 70% שמיים",
-  "lighting": "שעת זהב אחה\"צ, קרני שמש חמות, צללים רכים",
-  "style": "צילום מסחרי פרימיום, איכות פרסומת, פוטוריאליסטי",
-  "israeliElements": "פארק ישראלי, אקליפטוסים, משפחות טיפוסיות ישראליות",
-  "noText": true
-}
-
-## מבנה התשובה
-
-החזר JSON בלבד:
-
-{
-  "styleGuide": "משפט אחד על הסגנון האחיד לכל התמונות",
+  "styleGuide": "משפט אחד על הסגנון האחיד (למשל: 'מראה פילם 35ממ, תאורה רכה, גוונים חמים')",
   "prompts": [
     {
-      "imageId": "המזהה מהאסטרטגיה",
+      "imageId": "המזהה מהאסטרטגיה (חובה לשמור על אותו ID)",
       "placement": "cover/brand/audience/activity/product/lifestyle/closing/custom",
       "prompt": {
         "subject": "נושא מרכזי מפורט",
-        "scene": "תיאור הסצנה והסביבה",
-        "mood": "תחושות ואווירה",
-        "colors": ["צבעים ספציפיים"],
-        "composition": "מיקום אלמנטים בפריים",
-        "lighting": "סוג התאורה",
-        "style": "סגנון צילום/עיצוב",
-        "israeliElements": "אלמנטים ישראליים ספציפיים",
+        "scene": "תיאור הסצנה והסביבה ברזולוציה גבוהה",
+        "mood": "תחושות ואווירה (למשל: יוקרתי, קצבי, מרגש)",
+        "colors": ["Hex", "Color names"],
+        "composition": "מיקום אלמנטים (למשל: צד שמאל מפוקס, צד ימין נקי לטקסט)",
+        "lighting": "סוג התאורה (למשל: Cinematic golden hour)",
+        "style": "סגנון צילום (למשל: High-end commercial photography)",
+        "israeliElements": "אלמנטים ישראליים ספציפיים (למשל: אדריכלות באוהאוס בתל אביב)",
         "noText": true
       },
       "aspectRatio": "16:9",
-      "priority": "essential/recommended/optional"
+      "priority": "essential"
     }
   ]
-}`
+}
+\`\`\`
+`
 
   try {
     const response = await ai.models.generateContent({
@@ -138,7 +124,7 @@ ${imagePlans}
     const result = parseGeminiJson<GeneratedPrompts>(text)
     
     if (result && result.prompts && result.prompts.length > 0) {
-      console.log(`[Smart Prompts] Generated ${result.prompts.length} prompts`)
+      console.log(`[Smart Prompts] Generated ${result.prompts.length} premium prompts`)
       console.log(`[Smart Prompts] Style guide: ${result.styleGuide}`)
       return result
     }
@@ -153,26 +139,28 @@ ${imagePlans}
 }
 
 /**
- * Convert SmartImagePrompt to a narrative-style text prompt for Nano Banana Pro
+ * Convert SmartImagePrompt to a narrative-style English text prompt for Nano Banana Pro
  *
- * Uses narrative descriptions instead of tag lists, following Gemini image
- * generation best practices:
- * - Descriptive sentences > keyword tags
- * - Photographic vocabulary (aperture, focal length, lighting setup)
- * - Specific composition instructions
- * - Semantic negatives woven into the description
+ * Uses narrative descriptions and injects high-end photography modifiers
+ * to ensure breathtaking 4K results.
  */
 export function smartPromptToText(smartPrompt: SmartImagePrompt): string {
   const p = smartPrompt.prompt
 
   // Build a cohesive narrative prompt
   const colorMention = p.colors.slice(0, 3).join(', ')
+  
+  // Photography and rendering boosters for Nano Banana Pro
+  const premiumBoosters = "8k resolution, highly detailed masterpiece, award-winning photography, photorealistic, Vogue editorial style, shot on 35mm lens, beautiful depth of field, sharp focus on subject, soft bokeh background"
 
-  return `A premium commercial photograph of ${p.subject}, set in ${p.scene}. The atmosphere is ${p.mood}, with a color palette dominated by ${colorMention}. ${p.israeliElements}.
+  return `A breathtaking, high-end commercial photograph of ${p.subject}. 
+Set in ${p.scene}. The atmosphere is ${p.mood}, evoking a premium lifestyle feel. 
+The visual color palette is dominated by ${colorMention}, incorporating ${p.israeliElements}. 
+Lighting setup: ${p.lighting}. Composition details: ${p.composition}, ensuring negative space where needed.
+Overall styling: ${p.style}. 
 
-Shot with a professional DSLR camera, ${p.lighting}. The composition features ${p.composition}. The overall style is ${p.style} — sharp focus on the main subject with a shallow depth of field creating a soft bokeh background. High-end advertising quality at ${smartPrompt.aspectRatio} aspect ratio.
-
-The image is purely photographic with absolutely no text, no letters, no words, no logos, no watermarks, and no typography of any kind. No generic stock photo aesthetics — instead, authentic and specific, avoiding cold or sterile lighting.`
+Technical details: ${premiumBoosters}. 
+CRITICAL RULES: The image is purely visual. ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS, NO LOGOS, NO GRAPHICS. Zero text. Avoid generic stock photo look; make it authentic and spectacular.`
 }
 
 /**
@@ -187,14 +175,14 @@ function getDefaultPrompts(
     imageId: img.id,
     placement: img.placement,
     prompt: {
-      subject: `${brandResearch.brandName} - ${img.purpose}`,
+      subject: `${brandResearch.brandName} - premium representation of ${img.purpose}`,
       scene: img.rationale,
-      mood: brandResearch.brandPersonality?.join(', ') || 'מקצועי, מודרני, מזמין',
+      mood: brandResearch.brandPersonality?.join(', ') || 'Professional, modern, inviting',
       colors: [brandColors.primary, brandColors.secondary || brandColors.accent, brandColors.accent],
-      composition: 'מרכז עם מקום לטקסט בצד ימין',
-      lighting: 'תאורה טבעית ים-תיכונית, שעת זהב',
-      style: 'צילום מסחרי פרימיום, פוטוריאליסטי',
-      israeliElements: 'אווירה ישראלית אותנטית, אור ים תיכוני',
+      composition: 'Subject on the left, clean negative space on the right for RTL text overlay',
+      lighting: 'Natural Mediterranean lighting, golden hour, soft cinematic shadows',
+      style: 'Premium commercial photography, photorealistic',
+      israeliElements: 'Authentic modern Israeli lifestyle vibe',
       noText: true,
     },
     aspectRatio: '16:9',
@@ -202,11 +190,9 @@ function getDefaultPrompts(
   }))
 
   return {
-    styleGuide: 'סגנון מודרני וישראלי עם תאורה חמה ואווירה מזמינה',
+    styleGuide: 'Modern Israeli editorial style with warm cinematic lighting and clean composition.',
     prompts,
   }
 }
 
 export { getDefaultPrompts }
-
-
