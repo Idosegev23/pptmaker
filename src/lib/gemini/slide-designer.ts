@@ -658,7 +658,7 @@ async function generateDesignSystemAST(
   const requestId = `ds-ast-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Generating AST design system for: ${brand.brandName}`)
 
-  const prompt = `אתה מעצב מצגות ברמה עולמית. צור ערכת עיצוב למותג "${brand.brandName}".
+  const prompt = `אתה מעצב מצגות ברמת Apple Keynote / Pitch.com. צור ערכת עיצוב פרימיום למותג "${brand.brandName}".
 
 מידע על המותג:
 - תעשייה: ${brand.industry || 'לא ידוע'}
@@ -670,18 +670,19 @@ async function generateDesignSystemAST(
 - אווירה: ${brand.brandColors.mood || 'מקצועי'}
 - קהל יעד: ${brand.targetAudience || 'מבוגרים 25-45'}
 
-צור ערכת צבעים מלאה ויחודית בהתבסס על צבעי המותג.
+צור ערכת צבעים עשירה שמרגישה פרימיום ומקצועית. הצבעים חייבים לעבוד יחד ליצירת contrast מרשים.
+חשוב על: רקע כהה ועמוק, accent צבע חזק שבולט, גבולות עדינים שיוצרים עומק.
 
 החזר JSON:
 {
   "colors": {
-    "primary": "#hex - הצבע הראשי של המותג",
-    "secondary": "#hex - צבע משני (רקעים כהים)",
-    "accent": "#hex - צבע הדגשה",
-    "background": "#hex - רקע ברירת מחדל לשקפים",
-    "text": "#hex - צבע טקסט ברירת מחדל",
-    "cardBg": "#hex - רקע כרטיסים",
-    "cardBorder": "#hex - גבול כרטיסים"
+    "primary": "#hex - הצבע הראשי של המותג (saturated, rich)",
+    "secondary": "#hex - צבע משני לרקעים ואזורים כהים",
+    "accent": "#hex - צבע הדגשה חזק שבולט על הרקע",
+    "background": "#hex - רקע ברירת מחדל לשקפים (כהה, עמוק)",
+    "text": "#hex - צבע טקסט ברירת מחדל (ניגודיות גבוהה)",
+    "cardBg": "#hex - רקע כרטיסים (מעט בהיר מהרקע הראשי)",
+    "cardBorder": "#hex - גבול כרטיסים (עדין, semi-transparent)"
   },
   "fonts": {
     "heading": "Heebo",
@@ -757,7 +758,8 @@ ${contentJson}
   }).join('\n')
 
   const colors = designSystem.colors
-  const prompt = `אתה מעצב מצגות מקצועי ברמה עולמית. צור שקפים כ-JSON עבור "${brandName}".
+  const prompt = `אתה מעצב מצגות ברמת Apple Keynote / Pitch.com / McKinsey. אתה יוצר עיצובים שגורמים לאנשים לומר "וואו".
+צור שקפים כ-JSON עבור "${brandName}".
 
 ## ערכת עיצוב:
 - צבע ראשי: ${colors.primary}
@@ -777,40 +779,66 @@ ${leadersLogoUrl ? `- לוגו Leaders: ${leadersLogoUrl}` : ''}
 ## שקפים ליצירה:
 ${slidesDescription}
 
-## הוראות קריטיות:
+## פילוסופיית עיצוב:
+
+אתה לא יוצר "מצגת רגילה עם רקע ושורות טקסט". אתה יוצר חוויה ויזואלית.
+
+### עקרונות עיצוב מרכזיים:
+- **דרמטיות ויזואלית**: כל שקף צריך אלמנט "WOW" - gradient overlay דרמטי, shape חותך עם clip-path, טיפוגרפיה ענקית
+- **שכבות עומק (Layering)**: minimum 2-3 shapes דקורטיביים בכל שקף. shapes חופפים, שקיפויות, אלמנטים שחותכים אחד לשני
+- **קונטרסט טיפוגרפי**: הבדלים דרמטיים בגודל - כותרת 64-96px לצד body 20-24px. אף פעם לא הכל באותו גודל
+- **צבע אסטרטגי**: 80% מהשקף בטון ניטרלי (רקע כהה/בהיר), 20% בצבע accent פוצץ. הצבע מדגיש רק את מה שחשוב
+- **מרחב לבן (Breathing Room)**: אל תדחוס הכל. תשאיר ריקים מכוונים. שקף עם מעט תוכן מעוצב היטב > שקף עם הרבה תוכן דחוס
+- **אסימטריה מחושבת**: layouts לא סימטריים נראים מודרניים יותר. חלוקות 70/30, 60/40, אלמנטים ב-offset
+
+### טכניקות CSS חובה לשימוש:
+- **clip-path**: לחיתוך shapes דקורטיביים: polygon(), circle(), ellipse(). דוגמאות:
+  - "polygon(0 0, 100% 0, 100% 85%, 0 100%)" - שקף חתוך באלכסון
+  - "polygon(0 15%, 100% 0, 100% 100%, 0 100%)" - shape עליון אלכסוני
+  - "circle(40% at 70% 50%)" - עיגול דקורטיבי
+  - "ellipse(60% 80% at 75% 50%)" - אליפסה
+- **gradients מורכבים**: לא רק 2 צבעים! 3-4 color stops, angles מעניינים (135deg, 220deg), radial-gradient לאפקטי זוהר
+  - "linear-gradient(135deg, ${colors.background} 0%, ${colors.secondary} 50%, ${colors.primary}20 100%)"
+  - "radial-gradient(ellipse at 80% 20%, ${colors.primary}40 0%, transparent 60%)" - זוהר צבעוני
+- **opacity שכבות**: shapes עם opacity 0.1-0.3 יוצרים עומק ללא הסתרת תוכן
+
+## הוראות טכניות:
 
 1. קנבס: 1920×1080 פיקסלים. כל אלמנט ממוקם באופן אבסולוטי עם x, y, width, height.
 2. Safe Zone: טקסט ותוכן חייבים להישאר בתוך 80px margins (x >= 80, y >= 80, x+width <= 1840, y+height <= 1000).
-3. אלמנטים דקורטיביים (shapes) יכולים לחרוג מ-Safe Zone.
+3. אלמנטים דקורטיביים (shapes) חייבים לחרוג מ-Safe Zone - הם מכסים את כל הקנבס או חלקים גדולים ממנו.
 4. כל הטקסט בעברית, textAlign: "right" (RTL).
 5. מספרים ואחוזים: textAlign: "left" עם כיוון LTR.
 6. חובה לכלול את כל שדות התוכן - אסור לדלג על מידע.
-7. כותרות: fontSize 48-72, fontWeight 700-900, color ייחודי.
+7. כותרות: fontSize 56-96, fontWeight 700-900. צבע שונה מגוף הטקסט.
 8. גוף: fontSize 20-28, fontWeight 400-500.
-9. מספרים/מדדים: fontSize 48-80, fontWeight 800-900, color accent.
+9. מספרים/מדדים: fontSize 56-96, fontWeight 800-900, color accent.
 10. תמונות: objectFit "cover", borderRadius 16-32.
-11. שימוש נרחב ב-shapes דקורטיביים: gradients, clip-paths, עיגולים, קווים.
+11. **חובה minimum 2 shapes דקורטיביים בכל שקף** - gradient overlays, geometric forms, accent lines.
 
-## כללי Layout לפי סוג:
-- **cover**: רקע gradient דרמטי. שם מותג בטייפ ענק (80-120px) ממורכז. כותרת משנית מתחת. shape דקורטיבי. לוגואים בפינות.
-- **brief**: חלוקה 60/40. צד ימין: כותרת + טקסט. צד שמאל: תמונה (אם יש) או shape דקורטיבי.
-- **goals**: 3-4 כרטיסים ב-grid (shapes כרקע + text elements). כל כרטיס: כותרת bold + תיאור.
-- **audience**: כרטיס פרסונה מרכזי. נתונים בצד. תמונה אם זמינה.
-- **insight**: טקסט תובנה גדול ומרכזי עם עיצוב דרמטי. מקור + נתון תומך.
-- **strategy**: 3 עמודים שווים. כל pillar: shape רקע + כותרת + תיאור.
-- **bigIdea**: כותרת ענקית ממורכזת + תיאור + תמונה גדולה.
-- **approach**: צעדים מחוברים (3-4 שלבים). כל שלב: כותרת + תיאור.
-- **deliverables**: רשימת תוצרים מעוצבת. כל פריט: סוג + כמות + תיאור.
-- **metrics**: 4 תיבות מספרים בשורה עם ערכים ענקיים. מתחת: הסבר.
-- **influencerStrategy**: קריטריונים + הנחיות ברשימה מעוצבת.
-- **influencers**: grid של כרטיסי משפיענים. כל כרטיס: תמונה עגולה + שם + handle + נתונים.
-- **closing**: כותרת ממורכזת ענקית. עיצוב מינימלי. לוגואים בפוטר.
+## כללי Layout לפי סוג שקף:
 
-## Anti-patterns (אסור):
+- **cover**: רקע gradient דרמטי עם minimum 3 shapes חופפים (base gradient + radial glow + diagonal cut). שם מותג בטייפ ענק (96-120px) ממורכז. פס accent בצד. לוגואים בפינות. כותרת משנית קטנה מתחת (24px).
+- **brief**: חלוקה אסימטרית 65/35. צד ימין: כותרת ענקית + טקסט עם מרווח נדיב. צד שמאל: shape דקורטיבי עם clip-path אלכסוני או תמונה עם overlay. פס accent אנכי מפריד.
+- **goals**: כרטיסים ב-grid (2x2 או 1x3-4). כל כרטיס: shape רקע עם borderRadius 24 + gradient עדין + כותרת bold + תיאור. מספר/אייקון בפינה עליונה. קו accent מתחת לכותרת.
+- **audience**: פרסונה card גדול במרכז (800px רוחב) עם background shape. נתונים בצד. accent circle דקורטיבי מאחורי ה-card. מידע מאורגן ב-grid קטן.
+- **insight**: תובנה כציטוט ענק (fontSize 48-56) ממורכז עם guillemets או מירכאות גדולות כ-shape. רקע gradient דרמטי. מקור + נתון תומך למטה בגודל קטן.
+- **strategy**: 3 עמודים עם shapes רקע נפרדים. כל pillar: מספר גדול (01, 02, 03) בצבע accent כ-watermark, כותרת bold, תיאור. קו אופקי מחבר.
+- **bigIdea**: כותרת ענקית (80-96px) ממורכזת. תיאור מתחת (24px). תמונה גדולה בצד עם clip-path עגול/אלכסוני. רקע דו-טוני (חצי כהה חצי בהיר) או diagonal split.
+- **approach**: שלבים (3-4) מחוברים עם קו gradient אופקי. כל שלב: עיגול accent עם מספר + כותרת + תיאור. step connector line כ-shape.
+- **deliverables**: רשימת תוצרים ב-cards (2-3 שורות). כל פריט: סוג + כמות (גדול, accent) + תיאור. icon/number בכל card. רקע alternating.
+- **metrics**: 3-4 metric boxes גדולים. ערכים ענקיים (72-96px) בצבע accent. label קטן מתחת. shape רקע עגול/מלבני מאחורי כל מספר. הסבר כללי למטה.
+- **influencerStrategy**: כותרת גדולה + קריטריונים כ-tags/badges עם shapes רקע. accent lines. guidelines כנקודות עם bullet circles.
+- **influencers**: grid של כרטיסי משפיענים (2x3 או 3x2). כל כרטיס: shape רקע עגול לתמונה + שם bold + @handle קטן + followers + engagement. למשפיענים ללא תמונה: circle עם אות ראשונה.
+- **closing**: רקע gradient דרמטי כמו cover. כותרת ממורכזת ענקית (80px). tagline מתחת. לוגואים בפוטר. minimum 2 shapes דקורטיביים.
+
+## Anti-patterns (אסור בשום מצב):
 - טקסט קטן מ-18px
-- שטח ריק גדול ללא תוכן
-- יותר מ-6 אלמנטים אנכית
+- שקף בלי שום shape דקורטיבי - אסור שקף "שטוח"
+- layout זהה בין שני שקפים - כל שקף חייב layout שונה
 - zIndex בלי הגיון (רקע=0-5, תוכן=10-50, overlay=60+)
+- shapes שחוסמים טקסט חשוב (shapes דקורטיביים חייבים להיות מתחת לתוכן ב-zIndex)
+- gradient בודד בלי שכבות נוספות - תמיד תוסיף לפחות shape אחד נוסף
 
 ## מבנה JSON לכל שקף:
 {
@@ -823,12 +851,18 @@ ${slidesDescription}
       "id": "el-{unique}", "type": "shape",
       "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
       "shapeType": "decorative", "fill": "linear-gradient(135deg, #1a1a2e, #16213e)",
-      "clipPath": "...", "borderRadius": 0, "opacity": 0.5
+      "clipPath": "polygon(0 0, 100% 0, 100% 85%, 0 100%)", "borderRadius": 0, "opacity": 0.5
+    },
+    {
+      "id": "el-{unique}", "type": "shape",
+      "x": 1200, "y": -100, "width": 900, "height": 900, "zIndex": 1,
+      "shapeType": "decorative", "fill": "radial-gradient(circle, ${colors.primary}30 0%, transparent 70%)",
+      "borderRadius": 999, "opacity": 0.4
     },
     {
       "id": "el-{unique}", "type": "text",
       "x": 80, "y": 120, "width": 800, "height": 80, "zIndex": 10,
-      "content": "כותרת", "fontSize": 56, "fontWeight": 700,
+      "content": "כותרת", "fontSize": 64, "fontWeight": 800,
       "color": "#ffffff", "textAlign": "right", "role": "title"
     },
     {
@@ -838,6 +872,8 @@ ${slidesDescription}
     }
   ]
 }
+
+דוגמה: שים לב שלשקף יש 2 shapes דקורטיביים (gradient base + radial glow) לפני ה-text. זה המינימום.
 
 החזר JSON:
 {
@@ -849,7 +885,7 @@ ${slidesDescription}
       model: MODEL,
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 5000 },
+        thinkingConfig: { thinkingBudget: 8000 },
       },
     })
 

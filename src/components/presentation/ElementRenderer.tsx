@@ -60,6 +60,15 @@ function TextElementView({ element, isEditing, onTextChange }: {
 }
 
 function ImageElementView({ element }: { element: ImageElement }) {
+  const [hasError, setHasError] = React.useState(false)
+  const [retryCount, setRetryCount] = React.useState(0)
+
+  // Reset error state when src changes
+  React.useEffect(() => {
+    setHasError(false)
+    setRetryCount(0)
+  }, [element.src])
+
   const containerStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
@@ -69,21 +78,54 @@ function ImageElementView({ element }: { element: ImageElement }) {
     border: element.border || undefined,
   }
 
+  const handleError = () => {
+    // Retry once with cache-busted URL
+    if (retryCount < 1 && element.src) {
+      setRetryCount(prev => prev + 1)
+      return
+    }
+    console.warn('[ElementRenderer] Image failed to load:', element.src?.slice(0, 80))
+    setHasError(true)
+  }
+
+  // Build src with cache-busting on retry
+  const imgSrc = retryCount > 0 && element.src
+    ? `${element.src}${element.src.includes('?') ? '&' : '?'}t=${Date.now()}`
+    : element.src
+
   return (
     <div style={containerStyle}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={element.src}
-        alt={element.alt || ''}
-        style={{
+      {hasError ? (
+        <div style={{
           width: '100%',
           height: '100%',
-          objectFit: element.objectFit,
-          display: 'block',
-        }}
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-        draggable={false}
-      />
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+          color: '#666',
+          fontSize: '12px',
+          textAlign: 'center',
+          padding: '8px',
+        }}>
+          <span>תמונה לא זמינה</span>
+        </div>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          key={`${element.src}-${retryCount}`}
+          src={imgSrc}
+          alt={element.alt || ''}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: element.objectFit,
+            display: 'block',
+          }}
+          onError={handleError}
+          draggable={false}
+        />
+      )}
     </div>
   )
 }

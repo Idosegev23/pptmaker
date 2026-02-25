@@ -245,12 +245,23 @@ export default function PresentationEditorPage() {
   }, [documentId, editor])
 
   // ─── Image replace ──────────────────────────────────
+  const imageModalElementIdRef = useRef<string | null>(null)
+  // Keep ref in sync with state for use in callbacks
+  useEffect(() => {
+    imageModalElementIdRef.current = imageModalElementId
+  }, [imageModalElementId])
+
   const handleImageSelected = useCallback((url: string) => {
-    if (imageModalElementId) {
-      editor.updateElement(imageModalElementId, { src: url } as Partial<SlideElement>)
+    const elementId = imageModalElementIdRef.current
+    console.log('[Editor] handleImageSelected called:', { url: url?.slice(0, 60), elementId, slideIndex: editor.selectedSlideIndex })
+    if (elementId) {
+      editor.updateElement(elementId, { src: url } as Partial<SlideElement>)
+      console.log('[Editor] Image element updated:', elementId)
       setImageModalElementId(null)
+    } else {
+      console.warn('[Editor] No imageModalElementId — image not placed')
     }
-  }, [imageModalElementId, editor])
+  }, [editor])
 
   // ─── Loading state ──────────────────────────────────
   if (pageState === 'loading' || pageState === 'generating') {
