@@ -21,6 +21,10 @@ export interface PresentationMetadata {
   createdAt?: string
   updatedAt?: string
   version: number
+  pipeline?: string
+  qualityScore?: number
+  creativeDirection?: string
+  duration?: number
 }
 
 // ============================================================
@@ -106,6 +110,7 @@ export type TextRole =
   | 'metric-label'
   | 'list-item'
   | 'tag'
+  | 'decorative'
 
 export type FontWeight = 300 | 400 | 500 | 600 | 700 | 800 | 900
 
