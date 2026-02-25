@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
-import { formatDate, statusLabels } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { isDevMode, DEV_USER } from '@/lib/auth/dev-mode'
 
 interface DocumentRow {
@@ -88,10 +88,42 @@ export default async function DashboardPage() {
           {documents.length > 0 ? (
             <div className="space-y-2">
               {documents.map((doc) => {
-                const brandName = (doc.data as Record<string, unknown>)?.brandName as string || ''
-                const hasWizardData = !!(doc.data as Record<string, unknown>)?._stepData || !!(doc.data as Record<string, unknown>)?._extractedData
-                const isComplete = !!(doc.data as Record<string, unknown>)?._wizardComplete
-                const href = isComplete ? `/edit/${doc.id}` : `/wizard/${doc.id}`
+                const docData = (doc.data || {}) as Record<string, unknown>
+                const brandName = (docData.brandName as string) || ''
+                const pipelineStatus = (docData._pipelineStatus || {}) as Record<string, string>
+                const hasPresentation = !!(docData._presentation as { slides?: unknown[] })?.slides
+                const isWizardComplete = !!docData._wizardComplete
+                const hasWizardData = !!docData._stepData || !!docData._extractedData
+                const researchDone = pipelineStatus.research === 'complete'
+                const slidesGenerated = pipelineStatus.slideGeneration === 'complete' || hasPresentation
+
+                // Determine where to send the user based on pipeline state
+                let href: string
+                let statusLabel: string
+                let statusColor: string
+                let flowHint: string
+
+                if (slidesGenerated) {
+                  href = `/edit/${doc.id}`
+                  statusLabel = 'מצגת מוכנה'
+                  statusColor = 'bg-green-100 text-green-700'
+                  flowHint = 'עורך מצגת'
+                } else if (isWizardComplete) {
+                  href = `/generate/${doc.id}`
+                  statusLabel = 'ממתין ליצירה'
+                  statusColor = 'bg-purple-100 text-purple-700'
+                  flowHint = 'יצירת מצגת'
+                } else if (researchDone || hasWizardData) {
+                  href = `/wizard/${doc.id}`
+                  statusLabel = 'בעריכה'
+                  statusColor = 'bg-blue-100 text-blue-700'
+                  flowHint = 'עריכת הצעה'
+                } else {
+                  href = `/research/${doc.id}`
+                  statusLabel = 'ממתין למחקר'
+                  statusColor = 'bg-amber-100 text-amber-700'
+                  flowHint = 'מחקר'
+                }
 
                 return (
                   <Link
@@ -107,19 +139,14 @@ export default async function DashboardPage() {
                         <p className="font-medium">{doc.title}</p>
                         <p className="text-sm text-muted-foreground">
                           {formatDate(doc.created_at)}
-                          {hasWizardData && !isComplete && ' \u00B7 בעריכה'}
+                          {' · '}
+                          {flowHint}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                        isComplete
-                          ? 'bg-green-100 text-green-700'
-                          : doc.status === 'draft'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {isComplete ? 'הושלם' : statusLabels[doc.status] || doc.status}
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor}`}>
+                        {statusLabel}
                       </span>
                       <svg className="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import FlowStepper from '@/components/flow-stepper'
 
 interface WizardHeaderProps {
   brandName: string
@@ -84,25 +85,29 @@ export default function WizardHeader({
         </div>
       </div>
 
-      {/* Center: Save status */}
-      <div className="flex items-center gap-2">
-        {/* Save indicator dot */}
-        <span
-          className={cn(
-            'inline-block h-2 w-2 rounded-full transition-colors',
-            isSaving && 'animate-pulse bg-amber-500',
-            !isSaving && isDirty && 'bg-orange-500',
-            !isSaving && !isDirty && 'bg-green-500'
-          )}
-        />
-        <span className={cn('text-xs font-medium', getSaveStatusColor())}>
-          {getSaveStatusText()}
-        </span>
-        {lastSavedAt && !isDirty && !isSaving && (
-          <span className="text-xs text-muted-foreground">
-            ({formatSavedTime(lastSavedAt)})
+      {/* Center: Flow stepper + Save status */}
+      <div className="flex flex-col items-center gap-0.5">
+        <div className="hidden md:block">
+          <FlowStepper currentStep="wizard" compact />
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              'inline-block h-2 w-2 rounded-full transition-colors',
+              isSaving && 'animate-pulse bg-amber-500',
+              !isSaving && isDirty && 'bg-orange-500',
+              !isSaving && !isDirty && 'bg-green-500'
+            )}
+          />
+          <span className={cn('text-xs font-medium', getSaveStatusColor())}>
+            {getSaveStatusText()}
           </span>
-        )}
+          {lastSavedAt && !isDirty && !isSaving && (
+            <span className="text-xs text-muted-foreground">
+              ({formatSavedTime(lastSavedAt)})
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Left side: Exit button */}

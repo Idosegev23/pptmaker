@@ -6,6 +6,7 @@ import Link from 'next/link'
 import type { Presentation, Slide, SlideElement, TextElement, ShapeElement, ImageElement, ShapeType } from '@/types/presentation'
 import { isTextElement } from '@/types/presentation'
 import { usePresentationEditor } from '@/hooks/usePresentationEditor'
+import FlowStepper from '@/components/flow-stepper'
 import SlideEditor from '@/components/presentation/SlideEditor'
 import SlideViewer from '@/components/presentation/SlideViewer'
 import PropertiesPanel from '@/components/presentation/PropertiesPanel'
@@ -414,7 +415,7 @@ export default function PresentationEditorPage() {
               נסה שוב
             </button>
             <Link
-              href="/documents"
+              href="/dashboard"
               className="px-5 py-2 bg-gray-800 text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
             >
               חזרה לרשימה
@@ -451,9 +452,9 @@ export default function PresentationEditorPage() {
       {/* ── Header ───────────────────────────────────── */}
       <header className="bg-[#0f0f18]/90 backdrop-blur-md border-b border-white/5 z-50 flex-shrink-0" dir="rtl">
         <div className="max-w-[1800px] mx-auto px-5 py-2.5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between relative">
             <div className="flex items-center gap-3">
-              <Link href="/documents" className="text-gray-500 hover:text-white transition-colors text-xs flex items-center gap-1">
+              <Link href="/dashboard" className="text-gray-500 hover:text-white transition-colors text-xs flex items-center gap-1">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
                 חזרה
               </Link>
@@ -463,6 +464,10 @@ export default function PresentationEditorPage() {
               {editor.isDirty && <span className="text-yellow-500/70 text-xs animate-pulse">שומר...</span>}
               {aiRewriteState?.loading && <span className="text-purple-400/70 text-xs animate-pulse">AI כותב...</span>}
               {isRegenerating && <span className="text-purple-400/70 text-xs animate-pulse">AI מעצב שקף...</span>}
+            </div>
+
+            <div className="hidden lg:block absolute left-1/2 -translate-x-1/2">
+              <FlowStepper currentStep="edit" compact />
             </div>
 
             <div className="flex items-center gap-2">

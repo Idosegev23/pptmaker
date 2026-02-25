@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
+import FlowStepper from '@/components/flow-stepper'
 
 type GenerationStage =
   | 'loading'
@@ -351,9 +352,9 @@ export default function GeneratePage() {
           <div className="flex items-center gap-3">
             <Image src="/logoblack.png" alt="Leaders" width={120} height={36} className="h-8 w-auto hover:opacity-80 transition-opacity" />
           </div>
-          <span className="bg-gradient-to-r from-[#e5f2d6] to-[#d4eabf] text-[#4a7c3f] rounded-full px-6 py-2 text-sm font-bold shadow-sm border border-[#cbe3af]">
-            מעצב מצגת פרימיום
-          </span>
+          <div className="hidden sm:block">
+            <FlowStepper currentStep="generate" compact />
+          </div>
           <div />
         </div>
       </header>

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { enrichStepData } from '@/components/wizard/wizard-utils'
+import FlowStepper from '@/components/flow-stepper'
 
 type ResearchStage = 'loading' | 'brand_research' | 'influencer_research' | 'enriching' | 'done' | 'error'
 
@@ -264,10 +265,8 @@ export default function ResearchPage() {
           <div className="flex items-center gap-3">
             <Image src="/logoblack.png" alt="Leaders" width={120} height={36} className="h-8 w-auto hover:opacity-80 transition-opacity" />
           </div>
-          <div className="hidden sm:flex items-center">
-            <span className="bg-gradient-to-r from-[#dbe4f5] to-[#c7d5ef] text-[#3b5998] rounded-full px-6 py-2 text-sm font-bold shadow-sm border border-[#b8c9e6]">
-              מחקר מותג ומשפיענים
-            </span>
+          <div className="hidden sm:block">
+            <FlowStepper currentStep="research" compact />
           </div>
           <button
             onClick={() => router.push('/dashboard')}
