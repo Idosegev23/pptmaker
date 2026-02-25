@@ -40,6 +40,7 @@ function renderBackground(bg: Slide['background']): string {
 }
 
 function renderTextElement(el: TextElement): string {
+  const isGradientText = !!el.gradientFill
   const styles = [
     `position: absolute`,
     `left: ${el.x}px`,
@@ -49,7 +50,7 @@ function renderTextElement(el: TextElement): string {
     `z-index: ${el.zIndex}`,
     `font-size: ${el.fontSize}px`,
     `font-weight: ${el.fontWeight}`,
-    `color: ${el.color}`,
+    `color: ${isGradientText ? 'transparent' : el.color}`,
     `text-align: ${el.textAlign}`,
     `white-space: pre-wrap`,
     `word-wrap: break-word`,
@@ -61,11 +62,21 @@ function renderTextElement(el: TextElement): string {
   if (el.lineHeight) styles.push(`line-height: ${el.lineHeight}`)
   if (el.letterSpacing) styles.push(`letter-spacing: ${el.letterSpacing}px`)
   if (el.textDecoration && el.textDecoration !== 'none') styles.push(`text-decoration: ${el.textDecoration}`)
+  if (el.textTransform && el.textTransform !== 'none') styles.push(`text-transform: ${el.textTransform}`)
   if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
   if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
   if (el.backgroundColor) styles.push(`background-color: ${el.backgroundColor}`)
   if (el.borderRadius) styles.push(`border-radius: ${el.borderRadius}px`)
   if (el.padding) styles.push(`padding: ${el.padding}px`)
+  if (el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
+  // Hollow/Stroke Typography
+  if (el.textStroke) styles.push(`-webkit-text-stroke: ${el.textStroke.width}px ${el.textStroke.color}`)
+  // Gradient text fill
+  if (isGradientText) {
+    styles.push(`background: ${el.gradientFill}`)
+    styles.push(`-webkit-background-clip: text`)
+    styles.push(`background-clip: text`)
+  }
 
   return `<div style="${styles.join('; ')}">${escapeHtml(el.content)}</div>`
 }
@@ -119,6 +130,7 @@ function renderShapeElement(el: ShapeElement): string {
   if (el.border) styles.push(`border: ${el.border}`)
   if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
   if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
+  if (el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
 
   return `<div style="${styles.join('; ')}"></div>`
 }
@@ -158,8 +170,9 @@ export function slideToHtml(slide: Slide, designSystem: DesignSystem): string {
     body {
       font-family: '${fontFamily}', sans-serif;
       direction: ${designSystem.direction};
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
       width: ${W}px;
       height: ${H}px;
       overflow: hidden;
@@ -171,6 +184,10 @@ export function slideToHtml(slide: Slide, designSystem: DesignSystem): string {
       overflow: hidden;
       ${bgCSS}
     }
+    /* Ensure gradients and colors print correctly */
+    div { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    /* Force text to remain as vector, not rasterized */
+    .slide * { -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
   </style>
 </head>
 <body>

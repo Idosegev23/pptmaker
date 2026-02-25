@@ -141,7 +141,7 @@ async function generateDesignSystem(
       model: MODEL,
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 8000 },
+        thinkingConfig: { thinkingBudget: 10000 },
       },
     })
 
@@ -831,40 +831,118 @@ ${slidesDescription}
 - zIndex בלי הגיון (רקע=0-5, תוכן=10-50, overlay=60+)
 - shapes שחוסמים טקסט חשוב (shapes דקורטיביים חייבים להיות מתחת לתוכן ב-zIndex)
 
-## מבנה JSON לכל שקף:
+## שדות JSON נתמכים:
+
+### Shape element:
+{ "id": "el-X", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
+  "shapeType": "decorative", "fill": "linear-gradient(...) or radial-gradient(...) or #color",
+  "clipPath": "polygon(...)", "borderRadius": 0, "opacity": 0.5, "rotation": 0,
+  "border": "1px solid rgba(255,255,255,0.1)", "mixBlendMode": "screen" }
+
+### Text element:
+{ "id": "el-X", "type": "text", "x": 80, "y": 120, "width": 800, "height": 80, "zIndex": 10,
+  "content": "טקסט", "fontSize": 64, "fontWeight": 800, "color": "#fff", "textAlign": "right",
+  "role": "title", "lineHeight": 1.1, "letterSpacing": -2, "opacity": 1, "rotation": 0,
+  "textTransform": "uppercase",
+  "textStroke": { "width": 2, "color": "${colors.accent}" },
+  "gradientFill": "linear-gradient(135deg, ${colors.primary}, ${colors.accent})",
+  "mixBlendMode": "normal",
+  "backgroundColor": "rgba(0,0,0,0.5)", "borderRadius": 16, "padding": 20 }
+
+### Image element:
+{ "id": "el-X", "type": "image", "x": 960, "y": 0, "width": 960, "height": 1080, "zIndex": 5,
+  "src": "URL", "objectFit": "cover", "borderRadius": 500, "clipPath": "...", "alt": "תיאור" }
+
+## דוגמאות קונקרטיות לכל סגנון Layout:
+
+### דוגמה 1: Typographic Brutalism (Cover/Insight/Closing):
 {
-  "id": "slide-{N}",
-  "slideType": "cover|brief|goals|...",
-  "label": "שם השקף בעברית",
-  "background": { "type": "solid|gradient|image", "value": "CSS value or URL" },
+  "id": "slide-0", "slideType": "cover", "label": "שער",
+  "background": { "type": "solid", "value": "${colors.background}" },
   "elements": [
-    {
-      "id": "el-{unique}", "type": "shape",
-      "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
-      "shapeType": "decorative", "fill": "linear-gradient(135deg, #1a1a2e, #16213e)",
-      "clipPath": "polygon(0 0, 100% 0, 100% 85%, 0 100%)", "borderRadius": 0, "opacity": 0.5
-    },
-    {
-      "id": "el-{unique}", "type": "shape",
-      "x": 1200, "y": -100, "width": 900, "height": 900, "zIndex": 1,
-      "shapeType": "decorative", "fill": "radial-gradient(circle, ${colors.primary}30 0%, transparent 70%)",
-      "borderRadius": 999, "opacity": 0.4
-    },
-    {
-      "id": "el-{unique}", "type": "text",
-      "x": 80, "y": 120, "width": 800, "height": 80, "zIndex": 10,
-      "content": "כותרת", "fontSize": 64, "fontWeight": 800,
-      "color": "#ffffff", "textAlign": "right", "role": "title"
-    },
-    {
-      "id": "el-{unique}", "type": "image",
-      "x": 960, "y": 200, "width": 880, "height": 600, "zIndex": 5,
-      "src": "URL", "objectFit": "cover", "borderRadius": 24, "alt": "תיאור"
-    }
+    { "id": "el-aurora", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
+      "shapeType": "decorative", "fill": "radial-gradient(circle at 20% 30%, ${colors.primary}60 0%, transparent 50%), radial-gradient(circle at 80% 80%, ${colors.accent}60 0%, transparent 50%), radial-gradient(circle at 50% 50%, ${colors.secondary}80 0%, transparent 50%)" },
+    { "id": "el-grid1", "type": "shape", "x": 400, "y": 0, "width": 1, "height": 1080, "zIndex": 1,
+      "shapeType": "line", "fill": "rgba(255,255,255,0.06)" },
+    { "id": "el-grid2", "type": "shape", "x": 0, "y": 700, "width": 1920, "height": 1, "zIndex": 1,
+      "shapeType": "line", "fill": "rgba(255,255,255,0.06)" },
+    { "id": "el-bigtext", "type": "text", "x": -100, "y": 150, "width": 2200, "height": 500, "zIndex": 2,
+      "content": "BRAND", "fontSize": 350, "fontWeight": 900, "color": "transparent",
+      "textAlign": "center", "rotation": -12, "opacity": 0.15,
+      "textStroke": { "width": 2, "color": "${colors.accent}" }, "textTransform": "uppercase" },
+    { "id": "el-title", "type": "text", "x": 100, "y": 350, "width": 1000, "height": 120, "zIndex": 20,
+      "content": "הצעת שיתוף פעולה", "fontSize": 96, "fontWeight": 800, "color": "${colors.text}",
+      "textAlign": "right", "role": "title", "lineHeight": 1.0, "letterSpacing": -2 },
+    { "id": "el-sub", "type": "text", "x": 100, "y": 490, "width": 700, "height": 60, "zIndex": 20,
+      "content": "משפט משנה קצר וחותך", "fontSize": 28, "fontWeight": 400, "color": "${colors.accent}",
+      "textAlign": "right", "role": "subtitle", "textTransform": "uppercase", "letterSpacing": 4 },
+    { "id": "el-accent", "type": "shape", "x": 100, "y": 470, "width": 120, "height": 4, "zIndex": 15,
+      "shapeType": "decorative", "fill": "${colors.accent}" }
   ]
 }
 
-דוגמה: שים לב שלשקף יש 2 shapes דקורטיביים (gradient base + radial glow) לפני ה-text. זה המינימום.
+### דוגמה 2: Bento Box (Goals/Metrics/Deliverables):
+{
+  "id": "slide-3", "slideType": "goals", "label": "יעדים",
+  "background": { "type": "solid", "value": "${colors.background}" },
+  "elements": [
+    { "id": "el-aurora", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
+      "shapeType": "decorative", "fill": "radial-gradient(circle at 30% 20%, ${colors.primary}30 0%, transparent 60%), radial-gradient(circle at 80% 70%, ${colors.accent}20 0%, transparent 50%)" },
+    { "id": "el-title", "type": "text", "x": 80, "y": 60, "width": 600, "height": 70, "zIndex": 20,
+      "content": "יעדי הפרויקט", "fontSize": 56, "fontWeight": 800, "color": "${colors.text}",
+      "textAlign": "right", "role": "title" },
+    { "id": "el-card1-shadow", "type": "shape", "x": 95, "y": 185, "width": 860, "height": 370, "zIndex": 3,
+      "shapeType": "decorative", "fill": "#000000", "borderRadius": 32, "opacity": 0.15 },
+    { "id": "el-card1", "type": "shape", "x": 80, "y": 170, "width": 860, "height": 370, "zIndex": 4,
+      "shapeType": "decorative", "fill": "${colors.cardBg}", "borderRadius": 32, "opacity": 0.85,
+      "border": "1px solid ${colors.cardBorder}" },
+    { "id": "el-card1-num", "type": "text", "x": 780, "y": 190, "width": 140, "height": 120, "zIndex": 10,
+      "content": "01", "fontSize": 96, "fontWeight": 900, "color": "transparent",
+      "textAlign": "left", "textStroke": { "width": 2, "color": "${colors.accent}" } },
+    { "id": "el-card1-title", "type": "text", "x": 120, "y": 210, "width": 600, "height": 50, "zIndex": 10,
+      "content": "כותרת יעד", "fontSize": 32, "fontWeight": 700, "color": "${colors.text}",
+      "textAlign": "right" },
+    { "id": "el-card1-body", "type": "text", "x": 120, "y": 270, "width": 600, "height": 200, "zIndex": 10,
+      "content": "תיאור היעד", "fontSize": 22, "fontWeight": 400, "color": "${colors.text}",
+      "textAlign": "right", "opacity": 0.7, "lineHeight": 1.5 }
+  ]
+}
+
+### דוגמה 3: Split Screen Asymmetry (Strategy/Approach):
+{
+  "id": "slide-6", "slideType": "strategy", "label": "אסטרטגיה",
+  "background": { "type": "solid", "value": "${colors.background}" },
+  "elements": [
+    { "id": "el-left", "type": "shape", "x": 0, "y": 0, "width": 700, "height": 1080, "zIndex": 0,
+      "shapeType": "decorative", "fill": "${colors.secondary}" },
+    { "id": "el-right-glow", "type": "shape", "x": 700, "y": 0, "width": 1220, "height": 1080, "zIndex": 0,
+      "shapeType": "decorative", "fill": "radial-gradient(circle at 50% 50%, ${colors.primary}40 0%, transparent 70%)" },
+    { "id": "el-divider", "type": "shape", "x": 698, "y": 0, "width": 3, "height": 1080, "zIndex": 5,
+      "shapeType": "line", "fill": "${colors.accent}", "opacity": 0.5 },
+    { "id": "el-section-title", "type": "text", "x": 100, "y": 80, "width": 500, "height": 80, "zIndex": 10,
+      "content": "אסטרטגיה", "fontSize": 64, "fontWeight": 800, "color": "#ffffff",
+      "textAlign": "right", "role": "title" },
+    { "id": "el-float-card-shadow", "type": "shape", "x": 565, "y": 215, "width": 740, "height": 260, "zIndex": 8,
+      "shapeType": "decorative", "fill": "#000000", "borderRadius": 24, "opacity": 0.2 },
+    { "id": "el-float-card", "type": "shape", "x": 550, "y": 200, "width": 740, "height": 260, "zIndex": 9,
+      "shapeType": "decorative", "fill": "${colors.cardBg}", "borderRadius": 24, "opacity": 0.95,
+      "border": "1px solid ${colors.cardBorder}" }
+  ]
+}
+
+### מאפייני טקסט חדשים - חובה להשתמש:
+- **textStroke**: {"width": 2, "color": "..."} - לטקסט חלול/מתאר. חובה לשימוש במספרים רקע (01, 02, 03) ובמילים דקורטיביות ענקיות
+- **textTransform**: "uppercase" - לכותרות משנה, tags, labels
+- **gradientFill**: "linear-gradient(135deg, color1, color2)" - לכותרות ראשיות מרכזיות. כשמשתמשים ב-gradientFill, צבע color חייב להיות "transparent"
+- **mixBlendMode**: "screen" או "overlay" - ל-shapes דקורטיביים כדי ליצור שכבות צבע מורכבות
+- **rotation**: עד -15 עד 15 מעלות למילים דקורטיביות ברקע
+
+### חובות לכל שקף:
+1. **Aurora/Mesh background shape** כשכבה ראשונה (zIndex: 0) עם radial-gradient מרובה
+2. **לפחות 1 קו אדריכלי** (shape רזה 1px) לכל שקף
+3. **מספר Hollow** (textStroke) כ-watermark ענק (fontSize 150-350, opacity 0.1-0.2)
+4. **Fake shadow** (shape שחור offset +15px) מתחת לכל כרטיס/card
+5. **סה"כ minimum 4-6 shapes + 2-4 text elements בכל שקף**
 
 החזר JSON:
 {
@@ -876,7 +954,7 @@ ${slidesDescription}
       model: MODEL,
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 8000 },
+        thinkingConfig: { thinkingBudget: 10000 },
       },
     })
 

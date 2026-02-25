@@ -22,16 +22,20 @@ function TextElementView({ element, isEditing, onTextChange }: {
   isEditing?: boolean
   onTextChange?: (content: string) => void
 }) {
+  const isGradientText = !!element.gradientFill
+  const isHollowText = !!element.textStroke && element.color === 'transparent'
+
   const style: React.CSSProperties = {
     width: '100%',
     height: '100%',
     fontSize: element.fontSize,
     fontWeight: element.fontWeight,
-    color: element.color,
+    color: isGradientText ? 'transparent' : element.color,
     textAlign: element.textAlign,
     lineHeight: element.lineHeight || 1.3,
     letterSpacing: element.letterSpacing ? `${element.letterSpacing}px` : undefined,
     textDecoration: element.textDecoration !== 'none' ? element.textDecoration : undefined,
+    textTransform: element.textTransform !== 'none' ? element.textTransform : undefined,
     fontFamily: "'Heebo', sans-serif",
     whiteSpace: 'pre-wrap',
     wordWrap: 'break-word',
@@ -42,6 +46,17 @@ function TextElementView({ element, isEditing, onTextChange }: {
     padding: element.padding ? `${element.padding}px` : undefined,
     outline: 'none',
     cursor: isEditing ? 'text' : 'default',
+    mixBlendMode: element.mixBlendMode !== 'normal' ? element.mixBlendMode : undefined,
+    // Hollow/Stroke Typography
+    ...(element.textStroke ? {
+      WebkitTextStroke: `${element.textStroke.width}px ${element.textStroke.color}`,
+    } : {}),
+    // Gradient text fill (background-clip: text)
+    ...(isGradientText ? {
+      background: element.gradientFill,
+      WebkitBackgroundClip: 'text',
+      backgroundClip: 'text',
+    } : {}),
   }
 
   if (isEditing) {
@@ -137,6 +152,7 @@ function ShapeElementView({ element }: { element: ShapeElement }) {
     borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,
     clipPath: element.clipPath || undefined,
     border: element.border || undefined,
+    mixBlendMode: element.mixBlendMode !== 'normal' ? element.mixBlendMode : undefined,
   }
 
   // Handle gradient or solid fill

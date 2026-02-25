@@ -100,10 +100,11 @@ export async function generateMultiPagePdf(
 
     for (let i = 0; i < htmlPages.length; i++) {
       const page = await browser.newPage()
+      await page.setViewport({ width: 1920, height: 1080 })
       await page.setContent(htmlPages[i], { waitUntil: 'networkidle0' })
       await page.evaluate(() => document.fonts?.ready)
-      // First page: 800ms for initial font load; rest: 300ms (fonts already cached)
-      await new Promise(resolve => setTimeout(resolve, i === 0 ? 800 : 300))
+      // First page: 1200ms for initial font load; rest: 400ms (fonts already cached)
+      await new Promise(resolve => setTimeout(resolve, i === 0 ? 1200 : 400))
 
       const pageBuffer = await page.pdf(pdfOpts)
       await page.close()
@@ -112,6 +113,11 @@ export async function generateMultiPagePdf(
       const copiedPages = await mergedPdf.copyPages(pagePdf, pagePdf.getPageIndices())
       copiedPages.forEach(p => mergedPdf.addPage(p))
     }
+
+    // Add metadata for better editability in external tools
+    mergedPdf.setTitle('Presentation')
+    mergedPdf.setCreator('Leaders pptmaker')
+    mergedPdf.setProducer('Leaders pptmaker - Puppeteer/pdf-lib')
 
     const mergedBuffer = await mergedPdf.save()
     console.log(`[PDF] All ${htmlPages.length} slides rendered successfully`)

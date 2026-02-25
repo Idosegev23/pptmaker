@@ -123,6 +123,11 @@ export interface TextElement extends BaseElement {
   backgroundColor?: string
   borderRadius?: number
   padding?: number
+  // Advanced visual effects
+  textStroke?: { width: number; color: string }
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize'
+  gradientFill?: string // CSS gradient for text fill (uses background-clip: text)
+  mixBlendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'difference' | 'exclusion'
 }
 
 export interface ImageElement extends BaseElement {
@@ -144,6 +149,7 @@ export interface ShapeElement extends BaseElement {
   borderRadius?: number
   clipPath?: string
   border?: string
+  mixBlendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'difference' | 'exclusion'
 }
 
 export type SlideElement = TextElement | ImageElement | ShapeElement
