@@ -77,6 +77,14 @@ interface PremiumDesignSystem extends DesignSystem {
     auroraGradient: string
   }
   motif: { type: string; opacity: number; color: string; implementation: string }
+  creativeDirection?: {
+    visualMetaphor: string
+    visualTension: string
+    oneRule: string
+    colorStory: string
+    typographyVoice: string
+    emotionalArc: string
+  }
 }
 
 interface BatchContext {
@@ -141,6 +149,85 @@ const PACING_MAP: Record<string, PacingDirective> = {
   influencerStrategy: { energy: 'calm', density: 'balanced', surprise: false, maxElements: 12, minWhitespace: 30 },
   influencers: { energy: 'breath', density: 'dense', surprise: false, maxElements: 20, minWhitespace: 15 },
   closing:   { energy: 'finale', density: 'minimal', surprise: true, maxElements: 8, minWhitespace: 45 },
+}
+
+// ─── Anti-Patterns Blacklist ──────────────────────────
+const ANTI_PATTERNS = `
+## ❌ דפוסים אסורים (Anti-Patterns) — הפרה = פסילה:
+1. ❌ טקסט ממורכז בדיוק באמצע המסך (x:960, y:540) — BORING
+2. ❌ כל האלמנטים מיושרים לאותו קו אנכי — שטוח ומת
+3. ❌ 3 כרטיסים זהים ברוחב שווה בשורה — PowerPoint גנרי
+4. ❌ gradient ליניארי פשוט (שמאל→ימין או למעלה→למטה) — 2015
+5. ❌ עיגול מאחורי טקסט כ"הדגשה" — קלישאה
+6. ❌ borderRadius: 8 על הכל — זה UI, לא editorial design
+7. ❌ אייקונים קטנים ליד כל bullet point — PowerPoint vibes
+8. ❌ כל הטקסטים באותו fontSize (למשל הכל 24px) — אין היררכיה
+9. ❌ יותר מ-3 צבעים שונים לטקסט באותו שקף — בלגן
+10. ❌ אלמנטים שממוקמים "בערך" — כל מיקום חייב להיות מכוון ומדויק
+11. ❌ opacity: 0.5 על טקסט קריא — חייב להיות readable
+12. ❌ rotation על body text — רק על דקורטיבי/watermark
+`
+
+// ─── Depth Layering System ───────────────────────────
+const DEPTH_LAYERS = `
+## שכבות עומק (Depth Layers) — כל אלמנט חייב לשבת בשכבה אחת:
+- Layer 0 (zIndex: 0-1):    BACKGROUND — aurora, gradient, texture, full-bleed color
+- Layer 1 (zIndex: 2-3):    DECORATIVE — watermark text, geometric shapes, motif patterns, thin architectural lines
+- Layer 2 (zIndex: 4-5):    STRUCTURE — cards, containers, dividers, image frames
+- Layer 3 (zIndex: 6-8):    CONTENT — body text, data, images, influencer cards
+- Layer 4 (zIndex: 9-10):   HERO — main title, key number, focal element, brand name
+
+חוק: אלמנטים מאותה שכבה לא חופפים (אלא אם אחד מהם decorative עם opacity < 0.3).
+`
+
+// ─── Composition Rules ───────────────────────────────
+const COMPOSITION_RULES = `
+## חוקי קומפוזיציה (Composition Rules):
+
+### Rule of Thirds:
+נקודות העניין הויזואליות חייבות לשבת על אחד מ-4 צמתי ⅓:
+- נקודה A: x=640, y=360
+- נקודה B: x=1280, y=360
+- נקודה C: x=640, y=720
+- נקודה D: x=1280, y=720
+הכותרת הראשית תמיד על נקודה A או B (צד ימין — RTL).
+
+### Diagonal Dominance:
+אלמנטים צריכים ליצור קו אלכסוני מנחה דינמי (מימין-למעלה לשמאל-למטה) — לא ישר ולא סטטי.
+
+### Focal Point Triangle:
+ב-3 האלמנטים הראשיים (title, visual, supporting) — מקמם אותם כמשולש שמקיף את מרכז העניין.
+
+### Scale Contrast (חובה):
+היחס בין הפונט הגדול ביותר לפונט הקטן ביותר בשקף חייב להיות לפחות 5:1.
+למשל: אם הכותרת 96px, caption צריך להיות 18px או פחות.
+שקפי peak (cover, insight, bigIdea, closing): יחס 10:1 לפחות (למשל 300px ו-18px).
+`
+
+// ─── Layout Techniques Palette ────────────────────────
+const LAYOUT_TECHNIQUES = [
+  'Typographic Brutalism',
+  'Editorial Bleed',
+  'Bento Box',
+  'Swiss Grid',
+  'Deconstructed Collage',
+  'Cinematic Widescreen',
+  'Kinetic Typography (frozen)',
+  'Data Art',
+  'Negative Space Dominance',
+  'Split Screen Asymmetry',
+  'Overlay Chaos (controlled)',
+  'Magazine Spread',
+  'Architectural Grid',
+  'Poster Style (single focal)',
+] as const
+
+// ─── Color Temperature ────────────────────────────────
+const TEMPERATURE_MAP: Record<string, 'cold' | 'neutral' | 'warm'> = {
+  cover: 'cold', brief: 'cold', goals: 'neutral', audience: 'neutral',
+  insight: 'warm', strategy: 'neutral', bigIdea: 'warm', approach: 'neutral',
+  deliverables: 'neutral', metrics: 'neutral', influencerStrategy: 'cold',
+  influencers: 'neutral', closing: 'warm',
 }
 
 // ─── Color Helpers ─────────────────────────────────────
@@ -268,7 +355,7 @@ async function generateDesignSystem(
   const requestId = `ds-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Step 1: Design System for "${brand.brandName}"`)
 
-  const prompt = `אתה Art Director ב-Pentagram. צור מערכת עיצוב למצגת WOW עבור "${brand.brandName}".
+  const prompt = `אתה Creative Director + Art Director ב-Sagmeister & Walsh / Pentagram. המשימה: לייצר כיוון קריאטיבי + Design System מלא למצגת ברמת Awwwards עבור "${brand.brandName}".
 
 ## מידע על המותג:
 - תעשייה: ${brand.industry || 'לא ידוע'}
@@ -279,9 +366,22 @@ async function generateDesignSystem(
 - סגנון: ${brand.brandColors.style || 'corporate'}
 - קהל יעד: ${brand.targetAudience || 'מבוגרים 25-45'}
 
-## דרישות:
-צור Design System פרימיום שמכבד את הצבעים המקוריים אבל מעשיר אותם.
-חשוב כמו Creative Director — מה המטאפורה הויזואלית? מה המתח? מה עושה את המצגת הזו מיוחדת?
+═══════════════════════════════
+🧠 PART 1: CREATIVE DIRECTION
+═══════════════════════════════
+חשוב כמו Creative Director. כל מותג חייב להרגיש אחרת. אל תחזור על "מודרני ונקי" — זה ריק מתוכן.
+
+### creativeDirection:
+1. **visualMetaphor** — מטאפורה ויזואלית קונקרטית. לא "מקצועי" אלא "ארכיטקטורה ברוטליסטית של בטון חשוף" או "גלריית אמנות מינימליסטית יפנית" או "מגזין אופנה של שנות ה-90".
+2. **visualTension** — ההפתעה. למשל: "טקסט ענק שבור + מינימליזם יפני" או "נתונים קרים בתוך אסתטיקה חמה אורגנית".
+3. **oneRule** — חוק אחד שכל שקף חייב לקיים. למשל: "תמיד יש אלמנט אחד שחורג מהמסגרת" או "הצבע הראשי מופיע רק כנקודת מיקוד אחת קטנה".
+4. **colorStory** — נרטיב: "מתחילה בחושך וקור, מתחממת באמצע עם פרץ של accent, וחוזרת לאיפוק בסוף".
+5. **typographyVoice** — איך הטיפוגרפיה "מדברת"? למשל: "צורחת — כותרות ענקיות 900 weight לצד גוף רזה 300".
+6. **emotionalArc** — המסע הרגשי: סקרנות → הבנה → התלהבות → ביטחון → רצון לפעול.
+
+═══════════════════════════════
+🎨 PART 2: DESIGN SYSTEM
+═══════════════════════════════
 
 ### צבעים (colors):
 - primary, secondary, accent — מבוססים על צבעי המותג
@@ -295,16 +395,16 @@ async function generateDesignSystem(
 - auroraA, auroraB, auroraC — 3 צבעים ל-mesh gradient
 
 ### טיפוגרפיה (typography):
-- displaySize: 80-140 (שער)
+- displaySize: 80-140 (שער) — חשוב! לא displaySize של 48, זה לכותרות ענקיות
 - headingSize: 48-64
 - subheadingSize: 28-36
 - bodySize: 20-24
 - captionSize: 14-16
-- letterSpacingTight: -5 עד -1 (כותרות)
-- letterSpacingWide: 2 עד 8 (subtitles)
+- letterSpacingTight: -5 עד -1 (כותרות גדולות — tight!)
+- letterSpacingWide: 2 עד 8 (subtitles/labels — spaced out!)
 - lineHeightTight: 0.9-1.05 (כותרות)
 - lineHeightRelaxed: 1.4-1.6 (גוף)
-- weightPairs: [[heading, body]] — למשל [[900,300]] או [[700,400]]
+- weightPairs: [[heading, body]] — למשל [[900,300]] או [[700,400]] — חובה ניגוד חד!
 
 ### מרווחים (spacing):
 - unit: 8, cardPadding: 32-48, cardGap: 24-40, safeMargin: 80
@@ -313,13 +413,13 @@ async function generateDesignSystem(
 - borderRadius: "sharp" / "soft" / "pill" + borderRadiusValue
 - decorativeStyle: "geometric" / "organic" / "minimal" / "brutalist"
 - shadowStyle: "none" / "fake-3d" / "glow"
-- auroraGradient: מחרוזת CSS radial-gradient
+- auroraGradient: מחרוזת CSS מוכנה של radial-gradient mesh מ-3 צבעים
 
 ### מוטיב חוזר (motif):
 - type: (diagonal-lines / dots / circles / angular-cuts / wave / grid-lines / organic-blobs / triangles)
-- opacity: 0.05-0.2, color: צבע, implementation: תיאור
+- opacity: 0.05-0.2, color: צבע, implementation: תיאור CSS
 
-פונט: Heebo. החזר JSON בלבד.`
+פונט: Heebo. החזר JSON בלבד עם שני חלקים: creativeDirection (object) + כל שאר שדות ה-Design System.`
 
   try {
     const response = await ai.models.generateContent({
@@ -390,71 +490,196 @@ async function generateSlidesBatchAST(
   const effects = designSystem.effects
   const motif = designSystem.motif
 
-  const simpleSlideDescs = slides.map((slide, i) => {
-    const globalIndex = batchContext.slideIndex + i
-    const contentJson = JSON.stringify(slide.content, null, 2)
-    return `שקף ${globalIndex + 1}: "${slide.title}" (type: ${slide.slideType})
-${slide.imageUrl ? `תמונה: ${slide.imageUrl}` : 'ללא תמונה — השתמש בצורות וצבעים'}
-תוכן: ${contentJson}`
-  }).join('\n\n')
+  // Creative Direction from Design System (if available)
+  const cd = designSystem.creativeDirection
 
-  const prompt = `אתה Art Director / Creative Director בסוכנות פרסום מובילה.
-אתה מקבל מותג, Design System, ותוכן — ואתה מחליט על הלייאוט, הקומפוזיציה, והאווירה הויזואלית.
+  // ── Build per-slide directives with pacing & layout ──
+  const slidesDescription = slides.map((slide, i) => {
+    const globalIndex = batchContext.slideIndex + i
+    const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
+    const temperature = TEMPERATURE_MAP[slide.slideType] || 'neutral'
+    const contentJson = JSON.stringify(slide.content, null, 2)
+    const hasTension = ['cover', 'insight', 'bigIdea', 'closing'].includes(slide.slideType)
+
+    return `
+═══ שקף ${globalIndex + 1}/${batchContext.totalSlides}: "${slide.title}" (${slide.slideType}) ═══
+🌡️ Temperature: ${temperature} | ⚡ Energy: ${pacing.energy} | 📊 Density: ${pacing.density}
+${hasTension ? '🔥 TENSION POINT — חובה נקודת מתח ויזואלית אחת בשקף הזה!' : ''}
+📐 מקסימום ${pacing.maxElements} אלמנטים | לפחות ${pacing.minWhitespace}% רווח לבן
+${slide.imageUrl ? `🖼️ Image: ${slide.imageUrl} — חובה element מסוג "image"!` : '🚫 אין תמונה — השתמש ב-shapes דקורטיביים, watermarks, טיפוגרפיה דרמטית'}
+תוכן:
+\`\`\`json
+${contentJson}
+\`\`\``
+  }).join('\n')
+
+  const prompt = `אתה ארט דיירקטור גאון ברמת Awwwards / Pentagram / Sagmeister & Walsh.
+המצגת חייבת להיראות כמו **מגזין אופנה פרימיום / editorial design** — לא כמו PowerPoint!
 
 עצב ${slides.length} שקפים למותג "${brandName}".
 
-## זהות המותג (Design System שנוצר עבור המותג הזה)
-Canvas: 1920x1080px | RTL (עברית) | פונט: Heebo
-צבעים: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent} | bg ${colors.background} | text ${colors.text} | cards ${colors.cardBg} | gradients ${colors.gradientStart}→${colors.gradientEnd}
-טיפוגרפיה: display ${typo.displaySize}px | heading ${typo.headingSize}px weight ${typo.weightPairs[0]?.[0] || 800} | body ${typo.bodySize}px weight ${typo.weightPairs[0]?.[1] || 400} | caption ${typo.captionSize}px
-letter-spacing: tight ${typo.letterSpacingTight} (כותרות) | wide ${typo.letterSpacingWide} (labels)
-line-height: tight ${typo.lineHeightTight} (כותרות) | relaxed ${typo.lineHeightRelaxed} (גוף)
-אפקטים: borderRadius ${effects.borderRadiusValue}px (${effects.borderRadius}) | decorativeStyle: ${effects.decorativeStyle} | shadow: ${effects.shadowStyle}
-מוטיב: ${motif.type} | opacity ${motif.opacity} | ${motif.implementation}
-aurora: ${effects.auroraGradient}
+══════════════════════════════════
+🧠 THE CREATIVE BRIEF
+══════════════════════════════════
+${cd ? `
+**מטאפורה ויזואלית:** ${cd.visualMetaphor}
+**מתח ויזואלי:** ${cd.visualTension}
+**חוק-על (כל שקף חייב לקיים):** ${cd.oneRule}
+**סיפור צבע:** ${cd.colorStory}
+**קול טיפוגרפי:** ${cd.typographyVoice}
+**מסע רגשי:** ${cd.emotionalArc}
+` : `חשוב כמו Creative Director — מה המטאפורה הויזואלית של "${brandName}"? מה המתח? מה מפתיע?`}
 
-## התפקיד שלך
-אתה מחליט על הלייאוט של כל שקף. אין תבנית קבועה — אתה בוחר קומפוזיציה, חלוקת שטח, מיקום אלמנטים, גדלי פונט, ו-shapes דקורטיביים בהתאם ל:
-1. **אופי המותג** — המותג הוא ${effects.decorativeStyle}. שמור על השפה הויזואלית הזו בכל שקף
-2. **תוכן השקף** — שקף עם מספר אחד גדול ≠ שקף עם 4 כרטיסים ≠ שקף עם תמונה
-3. **מקצב** — שקפים דרמטיים (שער, תובנה, רעיון) = מינימום אלמנטים, מקסימום impact. שקפי תוכן = יותר צפיפות
-4. **מגוון** — כל שקף חייב להיות שונה מהקודם. שנה: כיוון חלוקה, מיקום כותרת, פרופורציות, שימוש בצבע
+══════════════════════════════════
+🎨 DESIGN SYSTEM
+══════════════════════════════════
+Canvas: 1920×1080px | RTL (עברית) | פונט: Heebo
 
-חשוב כמו Art Director: מה המטאפורה? מה הסיפור הויזואלי? איך המותג הזה מרגיש?
+צבעים: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
+רקע: ${colors.background} | טקסט: ${colors.text} | כרטיסים: ${colors.cardBg}
+מושתק: ${colors.muted} | highlight: ${colors.highlight}
+Aurora: ${effects.auroraGradient}
 
-## כללים טכניים
-- textAlign: "right" תמיד (RTL). כל הטקסט בעברית (חוץ ממספרים ושמות באנגלית)
-- zIndex: 0-1 רקע, 2-3 דקורציה, 4-6 תוכן, 7-10 כותרות
-- אסור: box-shadow, blur, filter
-- חובה בכל שקף: לפחות 1 shape דקורטיבי + כותרת + תוכן
-- תמונות: אם יש imageUrl, חובה image element בגודל ≥40% מהשקף
-- מספרים: כשיש נתון מספרי (budget, reach, followers) — הציג אותו בפונט ענק (80-140px)
-- כותרות HERO (שער, תובנה, רעיון מרכזי): display size (${typo.displaySize}px), letterSpacing ${typo.letterSpacingTight}
-- shapes דקורטיביים: השתמש ב-${motif.type} כמוטיב חוזר, opacity ${motif.opacity}
+טיפוגרפיה: display ${typo.displaySize}px | heading ${typo.headingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
+Spacing tight: ${typo.letterSpacingTight} | wide: ${typo.letterSpacingWide}
+Weight pairs: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
+Line height: tight ${typo.lineHeightTight} | relaxed ${typo.lineHeightRelaxed}
 
-## דוגמה — שקף ברמת WOW (הרמה הזו!):
+Card: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
+Decorative style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle}
+
+Motif: ${motif.type} (opacity: ${motif.opacity}, color: ${motif.color})
+${motif.implementation}
+
+══════════════════════════════════
+📐 COMPOSITION & QUALITY RULES
+══════════════════════════════════
+
+${COMPOSITION_RULES}
+
+${DEPTH_LAYERS}
+
+${ANTI_PATTERNS}
+
+## Micro-Typography:
+- כותרות ענקיות (60px+): letterSpacing: ${typo.letterSpacingTight} (tight!) + lineHeight: ${typo.lineHeightTight}
+- Labels/subtitles: letterSpacing: ${typo.letterSpacingWide} (spaced out!) + fontWeight: ${typo.weightPairs[0]?.[1] || 300}
+- כותרות: fontWeight: ${typo.weightPairs[0]?.[0] || 900} | גוף: fontWeight: ${typo.weightPairs[0]?.[1] || 300}
+- מספרים ענקים (metrics/budget): fontWeight 900, letterSpacing: -4, fontSize 80-140px
+
+## White Space:
+רווח לבן הוא אלמנט עיצובי פעיל. הכותרת הראשית חייבת מרחק של 80px+ מכל אלמנט אחר.
+
+## Visual Anchor:
+כל שקף חייב anchor ויזואלי — האלמנט הראשון שהעין רואה. סדר: anchor → title → details.
+
+## Frozen Motion:
+אלמנטים דקורטיביים שנראים "באמצע תנועה": rotation 3-8°, x קרוב לקצה, clipPath שחותך.
+
+## Layout Techniques (בחר אחת לכל שקף):
+${LAYOUT_TECHNIQUES.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+אסור לחזור על אותה טכניקה יותר מפעמיים! שקפי peak (cover/insight/bigIdea/closing) = הטכניקות הכי דרמטיות.
+
+══════════════════════════════════
+🛠️ EDITORIAL DESIGN RULES (THE WOW FACTOR!)
+══════════════════════════════════
+
+1. **שבור את התבנית:** אף שקף לא נראה כמו PowerPoint עם כותרת ובולטים. לייאוט א-סימטרי!
+2. **Watermarks ענקיים:** בכל שקף — טקסט רקע עצום (200-400px) עם opacity 0.03-0.08, rotation -5 עד -15. זה נותן עומק!
+3. **clip-path / shapes דינמיים:** אל תעשה רק ריבועים. shapes בזווית, עיגולים שגולשים מחוץ למסך, קווים אלכסוניים
+4. **טיפוגרפיה אדירה:** כותרות שחותכות את המסך. textStroke (קו מתאר) לטקסט דקורטיבי. ניגוד חד בין weight 900 ל-300
+5. **מספרים = drama:** נתון של "500K" מקבל fontSize: 120+, accent color, ושטח ענק. הטקסט שמתחתיו קטן ומגזיני
+6. **Gradient overlays:** גרדיאנטים מעל תמונות (linear-gradient to top) כדי שטקסט יבלוט
+7. **קווים ומפרידים אלגנטיים:** קווים דקים (1-2px) ב-accent color, מפרידים בין אזורים, מסגרות חלקיות
+8. **כרטיסים = לא סתם ריבועים:** offset borders, רקעים מדורגים, fake-3d shadow (shape ב-+12px offset)
+
+══════════════════════════════════
+📦 ELEMENT TYPES (JSON FORMAT)
+══════════════════════════════════
+
+### Shape:
+{ "id": "el-X", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
+  "shapeType": "background"|"decorative"|"divider", "fill": "#hex or gradient", "clipPath": "...",
+  "borderRadius": px, "opacity": 0-1, "rotation": degrees, "border": "1px solid rgba(...)" }
+
+### Text:
+{ "id": "el-X", "type": "text", "x": 80, "y": 120, "width": 800, "height": 80, "zIndex": 10,
+  "content": "טקסט", "fontSize": px, "fontWeight": 100-900, "color": "#hex", "textAlign": "right",
+  "role": "title"|"subtitle"|"body"|"caption"|"label"|"decorative", "lineHeight": 0.9-1.6,
+  "letterSpacing": px, "opacity": 0-1, "rotation": degrees,
+  "textStroke": { "width": 2, "color": "#hex" } }
+  *** role "decorative" = watermark text ענק, opacity נמוך, rotation, fontSize 200+ ***
+
+### Image:
+{ "id": "el-X", "type": "image", "x": 960, "y": 0, "width": 960, "height": 1080, "zIndex": 5,
+  "src": "THE_URL", "objectFit": "cover", "borderRadius": px, "clipPath": "..." }
+
+**תמונות קריטי**: אם יש imageUrl לשקף → חובה element מסוג "image" עם src=URL, גודל ≥40% מהשקף
+
+══════════════════════════════════
+🖼️ REFERENCE EXAMPLES (THIS IS WHAT WOW LOOKS LIKE)
+══════════════════════════════════
+
+### דוגמה 1 — שקף שער (Typographic Brutalism):
 \`\`\`json
 {
-  "id": "slide-5", "slideType": "insight", "label": "התובנה",
-  "background": { "type": "gradient", "value": "linear-gradient(135deg, ${colors.background} 0%, ${colors.secondary}dd 100%)" },
+  "id": "slide-1", "slideType": "cover", "label": "שער",
+  "background": { "type": "solid", "value": "${colors.background}" },
   "elements": [
-    { "id": "s-1", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 80% 30%, ${colors.accent}15 0%, transparent 60%)", "opacity": 1 },
-    { "id": "s-2", "type": "shape", "x": 1400, "y": -200, "width": 800, "height": 800, "zIndex": 1, "shapeType": "decorative", "fill": "${colors.primary}", "opacity": 0.06, "borderRadius": 999, "rotation": 0 },
-    { "id": "s-3", "type": "shape", "x": 100, "y": 180, "width": 6, "height": 200, "zIndex": 3, "shapeType": "decorative", "fill": "${colors.accent}", "opacity": 0.9 },
-    { "id": "t-1", "type": "text", "x": 140, "y": 120, "width": 300, "height": 40, "zIndex": 8, "content": "THE INSIGHT", "fontSize": 16, "fontWeight": 400, "color": "${colors.accent}", "textAlign": "right", "role": "label", "letterSpacing": 8 },
-    { "id": "t-2", "type": "text", "x": 140, "y": 200, "width": 1200, "height": 300, "zIndex": 10, "content": "הצרכן הישראלי מחפש חוויה אמיתית — לא עוד פרסומת", "fontSize": 72, "fontWeight": 800, "color": "${colors.text}", "textAlign": "right", "role": "title", "lineHeight": 1.05, "letterSpacing": -3 },
-    { "id": "t-3", "type": "text", "x": 140, "y": 530, "width": 700, "height": 100, "zIndex": 7, "content": "מקור: מחקר שוק 2024 | n=2,400", "fontSize": 18, "fontWeight": 400, "color": "${colors.muted}", "textAlign": "right", "role": "caption", "lineHeight": 1.5 },
-    { "id": "s-4", "type": "shape", "x": 140, "y": 660, "width": 200, "height": 2, "zIndex": 3, "shapeType": "divider", "fill": "${colors.accent}", "opacity": 0.4 }
+    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 20% 30%, ${colors.primary}50 0%, transparent 50%), radial-gradient(circle at 80% 80%, ${colors.accent}50 0%, transparent 50%)", "opacity": 0.7 },
+    { "id": "watermark", "type": "text", "x": -150, "y": 180, "width": 2200, "height": 500, "zIndex": 2, "content": "BRAND", "fontSize": 380, "fontWeight": 900, "color": "transparent", "textAlign": "center", "lineHeight": 0.9, "letterSpacing": -8, "opacity": 0.12, "rotation": -8, "textStroke": { "width": 2, "color": "#ffffff" }, "role": "decorative" },
+    { "id": "line", "type": "shape", "x": 160, "y": 620, "width": 340, "height": 1, "zIndex": 2, "shapeType": "decorative", "fill": "${colors.text}30", "opacity": 1 },
+    { "id": "accent-circle", "type": "shape", "x": 1450, "y": -80, "width": 400, "height": 400, "zIndex": 2, "shapeType": "decorative", "fill": "${colors.accent}", "clipPath": "circle(50%)", "opacity": 0.12 },
+    { "id": "title", "type": "text", "x": 120, "y": 380, "width": 900, "height": 200, "zIndex": 10, "content": "שם המותג", "fontSize": ${typo.displaySize}, "fontWeight": 900, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.0, "letterSpacing": -4, "role": "title" },
+    { "id": "subtitle", "type": "text", "x": 120, "y": 610, "width": 600, "height": 50, "zIndex": 8, "content": "הצעת שיתוף פעולה", "fontSize": 22, "fontWeight": 300, "color": "${colors.text}70", "textAlign": "right", "letterSpacing": 6, "role": "subtitle" },
+    { "id": "date", "type": "text", "x": 120, "y": 680, "width": 300, "height": 30, "zIndex": 8, "content": "ינואר 2025", "fontSize": 16, "fontWeight": 300, "color": "${colors.text}40", "textAlign": "right", "letterSpacing": 3, "role": "caption" }
   ]
 }
 \`\`\`
 
-${batchContext.previousSlidesVisualSummary ? `## שקפים שכבר נוצרו (הבאים חייבים להיות שונים בלייאוט!):\n${batchContext.previousSlidesVisualSummary}` : ''}
+### דוגמה 2 — שקף מדדים (Bento Box + Data Art):
+\`\`\`json
+{
+  "id": "slide-10", "slideType": "metrics", "label": "מדדים",
+  "background": { "type": "solid", "value": "${colors.background}" },
+  "elements": [
+    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 50% 50%, ${colors.cardBg} 0%, ${colors.background} 70%)", "opacity": 1 },
+    { "id": "wm", "type": "text", "x": 800, "y": 600, "width": 1400, "height": 500, "zIndex": 1, "content": "DATA", "fontSize": 300, "fontWeight": 900, "color": "transparent", "textAlign": "center", "opacity": 0.04, "rotation": -12, "textStroke": { "width": 2, "color": "${colors.text}" }, "role": "decorative" },
+    { "id": "label", "type": "text", "x": 120, "y": 80, "width": 400, "height": 30, "zIndex": 8, "content": "יעדים ומדדים", "fontSize": 14, "fontWeight": 400, "color": "${colors.accent}", "textAlign": "right", "letterSpacing": 4, "role": "label" },
+    { "id": "title", "type": "text", "x": 120, "y": 120, "width": 800, "height": 80, "zIndex": 10, "content": "המספרים שמאחורי התוכנית", "fontSize": 56, "fontWeight": 800, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.1, "letterSpacing": -2, "role": "title" },
+    { "id": "c1-shadow", "type": "shape", "x": 135, "y": 275, "width": 520, "height": 320, "zIndex": 4, "shapeType": "decorative", "fill": "#000000", "borderRadius": 24, "opacity": 0.15 },
+    { "id": "c1", "type": "shape", "x": 120, "y": 260, "width": 520, "height": 320, "zIndex": 5, "shapeType": "decorative", "fill": "${colors.cardBg}", "borderRadius": 24, "opacity": 1, "border": "1px solid ${colors.text}10" },
+    { "id": "c1-num", "type": "text", "x": 160, "y": 290, "width": 440, "height": 120, "zIndex": 8, "content": "2.5M", "fontSize": 88, "fontWeight": 900, "color": "${colors.accent}", "textAlign": "right", "lineHeight": 1, "letterSpacing": -3, "role": "body" },
+    { "id": "c1-lbl", "type": "text", "x": 160, "y": 420, "width": 440, "height": 40, "zIndex": 8, "content": "חשיפות צפויות", "fontSize": 22, "fontWeight": 400, "color": "${colors.text}80", "textAlign": "right", "role": "body" },
+    { "id": "c2-shadow", "type": "shape", "x": 695, "y": 275, "width": 520, "height": 320, "zIndex": 4, "shapeType": "decorative", "fill": "#000000", "borderRadius": 24, "opacity": 0.15 },
+    { "id": "c2", "type": "shape", "x": 680, "y": 260, "width": 520, "height": 320, "zIndex": 5, "shapeType": "decorative", "fill": "${colors.cardBg}", "borderRadius": 24, "opacity": 1, "border": "1px solid ${colors.text}10" },
+    { "id": "c2-num", "type": "text", "x": 720, "y": 290, "width": 440, "height": 120, "zIndex": 8, "content": "12.4%", "fontSize": 88, "fontWeight": 900, "color": "${colors.highlight}", "textAlign": "right", "lineHeight": 1, "letterSpacing": -3, "role": "body" },
+    { "id": "c2-lbl", "type": "text", "x": 720, "y": 420, "width": 440, "height": 40, "zIndex": 8, "content": "אחוז מעורבות", "fontSize": 22, "fontWeight": 400, "color": "${colors.text}80", "textAlign": "right", "role": "body" }
+  ]
+}
+\`\`\`
 
-## שקפים ליצירה
-${simpleSlideDescs}
+⚠️ צור עיצוב **שונה לחלוטין** מהדוגמאות — הן רק ברמת האיכות, לא בסגנון.
 
-החזר JSON: { "slides": [{ "id": "slide-N", "slideType": "TYPE", "label": "שם", "background": { "type": "solid"|"gradient", "value": "..." }, "elements": [...] }] }`
+══════════════════════════════════
+📝 CONTEXT FROM PREVIOUS SLIDES
+══════════════════════════════════
+${batchContext.previousSlidesVisualSummary || 'זה הבאצ׳ הראשון — אין הקשר קודם.'}
+
+══════════════════════════════════
+📋 SLIDES TO CREATE
+══════════════════════════════════
+${slidesDescription}
+
+══════════════════════════════════
+⚙️ TECHNICAL RULES
+══════════════════════════════════
+- textAlign: "right" תמיד (RTL). כל הטקסט בעברית
+- zIndex layering: 0-1 רקע, 2-3 דקורציה, 4-5 מבנה, 6-8 תוכן, 9-10 hero
+- 🚫 אסור: box-shadow, backdrop-filter, filter: blur
+- ✅ Fake 3D: shape ב-x+12,y+12 fill:#000 opacity:0.12-0.18
+
+החזר JSON: { "slides": [{ "id": "slide-N", "slideType": "TYPE", "label": "שם בעברית", "background": { "type": "solid"|"gradient", "value": "..." }, "elements": [...] }] }`
 
   try {
     const response = await ai.models.generateContent({
@@ -754,22 +979,31 @@ interface PremiumProposalData {
 
 function buildSlideBatches(
   data: PremiumProposalData,
-  config: { images?: { coverImage?: string; brandImage?: string; audienceImage?: string; activityImage?: string } } = {},
+  config: {
+    images?: { coverImage?: string; brandImage?: string; audienceImage?: string; activityImage?: string }
+    extraImages?: { id: string; url: string; placement: string }[]
+  } = {},
 ): SlideContentInput[][] {
   const currency = data.currency === 'USD' ? '$' : data.currency === 'EUR' ? '€' : '₪'
+
+  // Build a map of extra images by placement for easy lookup
+  const extraByPlacement: Record<string, string> = {}
+  for (const img of config.extraImages || []) {
+    if (img.url && img.placement) extraByPlacement[img.placement] = img.url
+  }
 
   const batch1: SlideContentInput[] = [
     { slideType: 'cover', title: 'שער', content: { brandName: data.brandName, campaignSubtitle: data.campaignSubtitle || data.strategyHeadline || 'הצעת שיתוף פעולה', issueDate: data.issueDate || new Date().toLocaleDateString('he-IL') }, imageUrl: config.images?.coverImage },
     { slideType: 'brief', title: 'למה התכנסנו?', content: { headline: 'למה התכנסנו?', brandBrief: data.brandBrief || '', painPoints: data.brandPainPoints || [], objective: data.brandObjective || '' }, imageUrl: config.images?.brandImage },
-    { slideType: 'goals', title: 'מטרות הקמפיין', content: { headline: 'מטרות הקמפיין', goals: data.goalsDetailed || (data.goals || []).map(g => ({ title: g, description: '' })) } },
+    { slideType: 'goals', title: 'מטרות הקמפיין', content: { headline: 'מטרות הקמפיין', goals: data.goalsDetailed || (data.goals || []).map(g => ({ title: g, description: '' })) }, imageUrl: extraByPlacement['goals'] },
     { slideType: 'audience', title: 'קהל היעד', content: { headline: 'קהל היעד', gender: data.targetGender || '', ageRange: data.targetAgeRange || '', description: data.targetDescription || '', behavior: data.targetBehavior || '', insights: data.targetInsights || [] }, imageUrl: config.images?.audienceImage },
-    { slideType: 'insight', title: 'התובנה המרכזית', content: { headline: 'התובנה המרכזית', keyInsight: data.keyInsight || '', source: data.insightSource || '', data: data.insightData || '' } },
+    { slideType: 'insight', title: 'התובנה המרכזית', content: { headline: 'התובנה המרכזית', keyInsight: data.keyInsight || '', source: data.insightSource || '', data: data.insightData || '' }, imageUrl: extraByPlacement['insight'] },
   ]
 
   const batch2: SlideContentInput[] = [
-    { slideType: 'strategy', title: 'האסטרטגיה', content: { headline: 'האסטרטגיה', strategyHeadline: data.strategyHeadline || '', description: data.strategyDescription || '', pillars: data.strategyPillars || [] } },
+    { slideType: 'strategy', title: 'האסטרטגיה', content: { headline: 'האסטרטגיה', strategyHeadline: data.strategyHeadline || '', description: data.strategyDescription || '', pillars: data.strategyPillars || [] }, imageUrl: extraByPlacement['strategy'] },
     { slideType: 'bigIdea', title: 'הרעיון המרכזי', content: { headline: data.activityTitle || 'הרעיון המרכזי', concept: data.activityConcept || '', description: data.activityDescription || '' }, imageUrl: config.images?.activityImage || config.images?.brandImage },
-    { slideType: 'approach', title: 'הגישה שלנו', content: { headline: 'הגישה שלנו', approaches: data.activityApproach || [], differentiator: data.activityDifferentiator || '' } },
+    { slideType: 'approach', title: 'הגישה שלנו', content: { headline: 'הגישה שלנו', approaches: data.activityApproach || [], differentiator: data.activityDifferentiator || '' }, imageUrl: extraByPlacement['approach'] },
     { slideType: 'deliverables', title: 'תוצרים', content: { headline: 'תוצרים', deliverables: data.deliverablesDetailed || (data.deliverables || []).map(d => ({ type: d, quantity: 1, description: '' })), summary: data.deliverablesSummary || '' } },
     { slideType: 'metrics', title: 'יעדים ומדדים', content: { headline: 'יעדים ומדדים', budget: data.budget ? `${currency}${formatNum(data.budget)}` : '', reach: formatNum(data.potentialReach), engagement: formatNum(data.potentialEngagement), impressions: formatNum(data.estimatedImpressions), cpe: data.cpe ? `${currency}${data.cpe.toFixed(1)}` : '', explanation: data.metricsExplanation || '' } },
   ]
