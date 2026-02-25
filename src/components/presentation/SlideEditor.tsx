@@ -14,6 +14,7 @@ interface SlideEditorProps {
   onElementSelect: (id: string | null) => void
   onElementUpdate: (id: string, changes: Partial<SlideElement>) => void
   onElementDelete?: (id: string) => void
+  onDuplicateElement?: (id: string) => void
 }
 
 function getBackgroundStyle(bg: Slide['background']): React.CSSProperties {
@@ -37,6 +38,7 @@ export default function SlideEditor({
   onElementSelect,
   onElementUpdate,
   onElementDelete,
+  onDuplicateElement,
 }: SlideEditorProps) {
   const [editingTextId, setEditingTextId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -48,6 +50,7 @@ export default function SlideEditor({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (editingTextId) return // Don't handle keys while editing text
 
+      // Delete/Backspace — delete selected element
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElementId) {
         const el = slide.elements.find(el => el.id === selectedElementId)
         if (el && !el.locked) {
@@ -55,17 +58,41 @@ export default function SlideEditor({
           onElementDelete?.(selectedElementId)
         }
       }
+
+      // Escape — deselect
       if (e.key === 'Escape') {
         onElementSelect(null)
         setEditingTextId(null)
       }
+
+      // Ctrl+D — duplicate selected element
+      if ((e.metaKey || e.ctrlKey) && e.key === 'd' && selectedElementId) {
+        e.preventDefault()
+        onDuplicateElement?.(selectedElementId)
+      }
+
+      // Arrow keys — nudge selected element
+      if (selectedElementId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        const el = slide.elements.find(el => el.id === selectedElementId)
+        if (el && !el.locked) {
+          e.preventDefault()
+          const step = e.shiftKey ? 10 : 1
+          const changes: Partial<SlideElement> = {}
+          switch (e.key) {
+            case 'ArrowUp': changes.y = el.y - step; break
+            case 'ArrowDown': changes.y = el.y + step; break
+            case 'ArrowLeft': changes.x = el.x - step; break
+            case 'ArrowRight': changes.x = el.x + step; break
+          }
+          onElementUpdate(selectedElementId, changes)
+        }
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedElementId, editingTextId, slide.elements, onElementSelect, onElementDelete])
+  }, [selectedElementId, editingTextId, slide.elements, onElementSelect, onElementDelete, onDuplicateElement, onElementUpdate])
 
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    // Only deselect if clicking directly on the canvas (not on an element)
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.canvas === 'true') {
       onElementSelect(null)
       setEditingTextId(null)

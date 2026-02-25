@@ -16,8 +16,13 @@ type EditorAction =
   | { type: 'UPDATE_ELEMENT'; slideIndex: number; elementId: string; changes: Partial<SlideElement> }
   | { type: 'ADD_ELEMENT'; slideIndex: number; element: SlideElement }
   | { type: 'DELETE_ELEMENT'; slideIndex: number; elementId: string }
+  | { type: 'DUPLICATE_ELEMENT'; slideIndex: number; elementId: string }
   | { type: 'UPDATE_SLIDE_BACKGROUND'; slideIndex: number; background: SlideBackground }
   | { type: 'REPLACE_SLIDE'; slideIndex: number; slide: Slide }
+  | { type: 'ADD_SLIDE'; slide: Slide; atIndex?: number }
+  | { type: 'DUPLICATE_SLIDE'; slideIndex: number }
+  | { type: 'DELETE_SLIDE'; slideIndex: number }
+  | { type: 'REORDER_SLIDES'; fromIndex: number; toIndex: number }
   | { type: 'SET_PRESENTATION'; presentation: Presentation }
   | { type: 'UNDO' }
   | { type: 'REDO' }
@@ -35,6 +40,19 @@ interface EditorState {
 }
 
 const MAX_UNDO = 30
+
+// ─── Helpers ─────────────────────────────────────────
+
+function generateId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function pushUndo(state: EditorState): { undoStack: Presentation[]; redoStack: Presentation[] } {
+  return {
+    undoStack: [...state.undoStack.slice(-MAX_UNDO + 1), state.presentation],
+    redoStack: [],
+  }
+}
 
 // ─── Reducer ─────────────────────────────────────────
 
@@ -66,8 +84,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return {
         ...state,
         presentation: newPresentation,
-        undoStack: [...state.undoStack.slice(-MAX_UNDO + 1), state.presentation],
-        redoStack: [],
+        ...pushUndo(state),
         isDirty: true,
       }
     }
@@ -83,8 +100,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         presentation: newPresentation,
         selectedElementId: action.element.id,
-        undoStack: [...state.undoStack.slice(-MAX_UNDO + 1), state.presentation],
-        redoStack: [],
+        ...pushUndo(state),
         isDirty: true,
       }
     }
@@ -100,8 +116,31 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         presentation: newPresentation,
         selectedElementId: state.selectedElementId === action.elementId ? null : state.selectedElementId,
-        undoStack: [...state.undoStack.slice(-MAX_UNDO + 1), state.presentation],
-        redoStack: [],
+        ...pushUndo(state),
+        isDirty: true,
+      }
+    }
+
+    case 'DUPLICATE_ELEMENT': {
+      const newPresentation = structuredClone(state.presentation)
+      const slide = newPresentation.slides[action.slideIndex]
+      if (!slide) return state
+
+      const srcElement = slide.elements.find(e => e.id === action.elementId)
+      if (!srcElement) return state
+
+      const cloned = structuredClone(srcElement)
+      cloned.id = generateId('el')
+      cloned.x += 20
+      cloned.y += 20
+
+      slide.elements.push(cloned)
+
+      return {
+        ...state,
+        presentation: newPresentation,
+        selectedElementId: cloned.id,
+        ...pushUndo(state),
         isDirty: true,
       }
     }
@@ -116,8 +155,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return {
         ...state,
         presentation: newPresentation,
-        undoStack: [...state.undoStack.slice(-MAX_UNDO + 1), state.presentation],
-        redoStack: [],
+        ...pushUndo(state),
         isDirty: true,
       }
     }
@@ -130,8 +168,82 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         presentation: newPresentation,
         selectedElementId: null,
-        undoStack: [...state.undoStack.slice(-MAX_UNDO + 1), state.presentation],
-        redoStack: [],
+        ...pushUndo(state),
+        isDirty: true,
+      }
+    }
+
+    case 'ADD_SLIDE': {
+      const newPresentation = structuredClone(state.presentation)
+      const insertAt = action.atIndex !== undefined ? action.atIndex : newPresentation.slides.length
+      newPresentation.slides.splice(insertAt, 0, action.slide)
+
+      return {
+        ...state,
+        presentation: newPresentation,
+        selectedSlideIndex: insertAt,
+        selectedElementId: null,
+        ...pushUndo(state),
+        isDirty: true,
+      }
+    }
+
+    case 'DUPLICATE_SLIDE': {
+      const newPresentation = structuredClone(state.presentation)
+      const srcSlide = newPresentation.slides[action.slideIndex]
+      if (!srcSlide) return state
+
+      const clonedSlide = structuredClone(srcSlide)
+      clonedSlide.id = generateId('slide')
+      // Generate new IDs for all elements
+      clonedSlide.elements = clonedSlide.elements.map(el => ({
+        ...el,
+        id: generateId('el'),
+      }))
+
+      const insertAt = action.slideIndex + 1
+      newPresentation.slides.splice(insertAt, 0, clonedSlide)
+
+      return {
+        ...state,
+        presentation: newPresentation,
+        selectedSlideIndex: insertAt,
+        selectedElementId: null,
+        ...pushUndo(state),
+        isDirty: true,
+      }
+    }
+
+    case 'DELETE_SLIDE': {
+      if (state.presentation.slides.length <= 1) return state
+
+      const newPresentation = structuredClone(state.presentation)
+      newPresentation.slides.splice(action.slideIndex, 1)
+
+      const newIndex = action.slideIndex >= newPresentation.slides.length
+        ? newPresentation.slides.length - 1
+        : action.slideIndex
+
+      return {
+        ...state,
+        presentation: newPresentation,
+        selectedSlideIndex: newIndex,
+        selectedElementId: null,
+        ...pushUndo(state),
+        isDirty: true,
+      }
+    }
+
+    case 'REORDER_SLIDES': {
+      const newPresentation = structuredClone(state.presentation)
+      const [moved] = newPresentation.slides.splice(action.fromIndex, 1)
+      newPresentation.slides.splice(action.toIndex, 0, moved)
+
+      return {
+        ...state,
+        presentation: newPresentation,
+        selectedSlideIndex: action.toIndex,
+        ...pushUndo(state),
         isDirty: true,
       }
     }
@@ -197,7 +309,7 @@ export function usePresentationEditor(initialPresentation: Presentation) {
   const selectedSlide = state.presentation.slides[state.selectedSlideIndex] || null
   const selectedElement = selectedSlide?.elements.find(e => e.id === state.selectedElementId) || null
 
-  // ─── Actions
+  // ─── Element Actions
   const selectSlide = useCallback((index: number) => {
     dispatch({ type: 'SELECT_SLIDE', index })
   }, [])
@@ -231,6 +343,15 @@ export function usePresentationEditor(initialPresentation: Presentation) {
     })
   }, [state.selectedSlideIndex])
 
+  const duplicateElement = useCallback((elementId: string) => {
+    dispatch({
+      type: 'DUPLICATE_ELEMENT',
+      slideIndex: state.selectedSlideIndex,
+      elementId,
+    })
+  }, [state.selectedSlideIndex])
+
+  // ─── Slide Actions
   const updateSlideBackground = useCallback((background: SlideBackground) => {
     dispatch({
       type: 'UPDATE_SLIDE_BACKGROUND',
@@ -241,6 +362,22 @@ export function usePresentationEditor(initialPresentation: Presentation) {
 
   const replaceSlide = useCallback((slideIndex: number, slide: Slide) => {
     dispatch({ type: 'REPLACE_SLIDE', slideIndex, slide })
+  }, [])
+
+  const addSlide = useCallback((slide: Slide, atIndex?: number) => {
+    dispatch({ type: 'ADD_SLIDE', slide, atIndex })
+  }, [])
+
+  const duplicateSlide = useCallback((index: number) => {
+    dispatch({ type: 'DUPLICATE_SLIDE', slideIndex: index })
+  }, [])
+
+  const deleteSlide = useCallback((index: number) => {
+    dispatch({ type: 'DELETE_SLIDE', slideIndex: index })
+  }, [])
+
+  const reorderSlides = useCallback((fromIndex: number, toIndex: number) => {
+    dispatch({ type: 'REORDER_SLIDES', fromIndex, toIndex })
   }, [])
 
   const setPresentation = useCallback((presentation: Presentation) => {
@@ -294,17 +431,28 @@ export function usePresentationEditor(initialPresentation: Presentation) {
     canUndo: state.undoStack.length > 0,
     canRedo: state.redoStack.length > 0,
 
-    // Actions
+    // Element Actions
     selectSlide,
     selectElement,
     updateElement,
     addElement,
     deleteElement,
+    duplicateElement,
+
+    // Slide Actions
     updateSlideBackground,
     replaceSlide,
+    addSlide,
+    duplicateSlide,
+    deleteSlide,
+    reorderSlides,
     setPresentation,
+
+    // History
     undo,
     redo,
+
+    // Persistence
     save,
     saveNow,
   }

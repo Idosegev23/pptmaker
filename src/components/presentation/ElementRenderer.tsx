@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect } from 'react'
 import type {
   SlideElement,
   TextElement,
@@ -23,7 +23,23 @@ function TextElementView({ element, isEditing, onTextChange }: {
   onTextChange?: (content: string) => void
 }) {
   const isGradientText = !!element.gradientFill
-  const isHollowText = !!element.textStroke && element.color === 'transparent'
+
+  // Dynamically load custom font if specified
+  useEffect(() => {
+    if (element.fontFamily && element.fontFamily !== 'Heebo') {
+      const encodedFont = encodeURIComponent(element.fontFamily)
+      const linkId = `font-${encodedFont}`
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link')
+        link.id = linkId
+        link.rel = 'stylesheet'
+        link.href = `https://fonts.googleapis.com/css2?family=${encodedFont}:wght@300;400;500;600;700;800;900&display=swap`
+        document.head.appendChild(link)
+      }
+    }
+  }, [element.fontFamily])
+
+  const fontFamily = element.fontFamily || 'Heebo'
 
   const style: React.CSSProperties = {
     width: '100%',
@@ -36,7 +52,7 @@ function TextElementView({ element, isEditing, onTextChange }: {
     letterSpacing: element.letterSpacing ? `${element.letterSpacing}px` : undefined,
     textDecoration: element.textDecoration !== 'none' ? element.textDecoration : undefined,
     textTransform: element.textTransform !== 'none' ? element.textTransform : undefined,
-    fontFamily: "'Heebo', sans-serif",
+    fontFamily: `'${fontFamily}', sans-serif`,
     whiteSpace: 'pre-wrap',
     wordWrap: 'break-word',
     overflow: 'hidden',

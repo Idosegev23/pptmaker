@@ -56,7 +56,12 @@ export async function POST(request: NextRequest) {
       const astHtmlPages = presentationToHtmlSlides(astPresentation)
       console.log(`[PDF] Converted AST to ${astHtmlPages.length} HTML pages`)
 
-      const pdfBuffer = await generateMultiPagePdf(astHtmlPages, { format: '16:9' })
+      const brandNameStr = (documentData.brandName as string) || ''
+      const pdfBuffer = await generateMultiPagePdf(astHtmlPages, {
+        format: '16:9',
+        title: astPresentation.title || brandNameStr || 'Presentation',
+        brandName: brandNameStr,
+      })
       console.log(`[PDF] Generated PDF, size: ${pdfBuffer.length} bytes`)
 
       const fileName = `proposal_${document.id}_${Date.now()}.pdf`
@@ -197,7 +202,12 @@ export async function POST(request: NextRequest) {
     console.log(`[PDF] Rendering ${htmlPages.length} slides...`)
     
     // Generate multi-page PDF in 16:9 format
-    const pdfBuffer = await generateMultiPagePdf(htmlPages, { format: '16:9' })
+    const legacyBrandName = (documentData.brandName as string) || ''
+    const pdfBuffer = await generateMultiPagePdf(htmlPages, {
+      format: '16:9',
+      title: legacyBrandName || 'Proposal',
+      brandName: legacyBrandName,
+    })
     
     console.log(`[PDF] Generated PDF, size: ${pdfBuffer.length} bytes`)
 

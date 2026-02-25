@@ -119,6 +119,7 @@ export interface TextElement extends BaseElement {
   content: string
   fontSize: number
   fontWeight: FontWeight
+  fontFamily?: string // Override designSystem font for this element
   color: string
   textAlign: 'right' | 'center' | 'left'
   lineHeight?: number

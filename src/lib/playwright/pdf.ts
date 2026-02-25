@@ -4,6 +4,8 @@ import chromium from '@sparticuz/chromium'
 export interface PdfOptions {
   format?: 'A4' | '16:9'
   landscape?: boolean
+  title?: string
+  brandName?: string
 }
 
 /**
@@ -100,7 +102,7 @@ export async function generateMultiPagePdf(
 
     for (let i = 0; i < htmlPages.length; i++) {
       const page = await browser.newPage()
-      await page.setViewport({ width: 1920, height: 1080 })
+      await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 2 })
       await page.setContent(htmlPages[i], { waitUntil: 'networkidle0' })
       await page.evaluate(() => document.fonts?.ready)
       // First page: 1200ms for initial font load; rest: 400ms (fonts already cached)
@@ -114,10 +116,15 @@ export async function generateMultiPagePdf(
       copiedPages.forEach(p => mergedPdf.addPage(p))
     }
 
-    // Add metadata for better editability in external tools
-    mergedPdf.setTitle('Presentation')
+    // Add rich metadata for better editability in external tools
+    mergedPdf.setTitle(options.title || 'Presentation')
+    mergedPdf.setAuthor(options.brandName || 'Leaders')
+    mergedPdf.setSubject('Proposal Presentation')
+    mergedPdf.setKeywords(['proposal', 'presentation', options.brandName].filter(Boolean) as string[])
     mergedPdf.setCreator('Leaders pptmaker')
     mergedPdf.setProducer('Leaders pptmaker - Puppeteer/pdf-lib')
+    mergedPdf.setCreationDate(new Date())
+    mergedPdf.setModificationDate(new Date())
 
     const mergedBuffer = await mergedPdf.save()
     console.log(`[PDF] All ${htmlPages.length} slides rendered successfully`)

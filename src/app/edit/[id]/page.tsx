@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import type { Presentation, Slide, SlideElement } from '@/types/presentation'
+import type { Presentation, Slide, SlideElement, TextElement, ShapeElement, ImageElement, ShapeType } from '@/types/presentation'
 import { isTextElement } from '@/types/presentation'
 import { usePresentationEditor } from '@/hooks/usePresentationEditor'
 import SlideEditor from '@/components/presentation/SlideEditor'
 import SlideViewer from '@/components/presentation/SlideViewer'
 import PropertiesPanel from '@/components/presentation/PropertiesPanel'
 import ImageSourceModal from '@/components/presentation/ImageSourceModal'
+import EditorToolbar from '@/components/presentation/EditorToolbar'
 import GoogleDriveSaveButton from '@/components/google-drive-save-button'
 
 // ─── Empty presentation (placeholder while loading) ────────
@@ -26,6 +27,10 @@ const EMPTY_PRESENTATION: Presentation = {
 
 type PageState = 'loading' | 'generating' | 'ready' | 'error'
 
+function generateId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export default function PresentationEditorPage() {
   const params = useParams()
   const documentId = params.id as string
@@ -37,7 +42,10 @@ export default function PresentationEditorPage() {
   const [showProperties, setShowProperties] = useState(true)
   const [imageModalElementId, setImageModalElementId] = useState<string | null>(null)
   const [imageModalTab, setImageModalTab] = useState<'upload' | 'url' | 'ai'>('upload')
+  const [imageModalMode, setImageModalMode] = useState<'replace' | 'add'>('replace')
   const [aiRewriteState, setAiRewriteState] = useState<{ elementId: string; loading: boolean } | null>(null)
+  const [aiDesignInstruction, setAiDesignInstruction] = useState('')
+  const [isRegenerating, setIsRegenerating] = useState(false)
 
   const editor = usePresentationEditor(EMPTY_PRESENTATION)
   const slideContainerRef = useRef<HTMLDivElement>(null)
@@ -54,7 +62,6 @@ export default function PresentationEditorPage() {
     try {
       setPageState('loading')
 
-      // Fetch document data
       const res = await fetch(`/api/documents/${documentId}`)
       if (!res.ok) throw new Error('Document not found')
 
@@ -63,7 +70,6 @@ export default function PresentationEditorPage() {
       const docData = doc.data as Record<string, unknown>
       setBrandName((docData.brandName as string) || doc.title || 'הצעת מחיר')
 
-      // Check if AST presentation already exists
       const existing = docData._presentation as Presentation | undefined
       if (existing && existing.slides?.length > 0) {
         console.log(`[Editor] Loaded AST presentation with ${existing.slides.length} slides`)
@@ -72,7 +78,6 @@ export default function PresentationEditorPage() {
         return
       }
 
-      // No AST → need to generate one
       console.log('[Editor] No AST found, generating presentation...')
       setPageState('generating')
 
@@ -82,17 +87,12 @@ export default function PresentationEditorPage() {
         body: JSON.stringify({ documentId, generateAST: true }),
       })
 
-      if (!genRes.ok) {
-        // Fallback: try to generate AST from the generate-proposal pipeline
-        throw new Error('Could not generate slides')
-      }
+      if (!genRes.ok) throw new Error('Could not generate slides')
 
       const genData = await genRes.json()
 
-      // Check if the preview-slides returned an AST presentation
       if (genData.presentation) {
         editor.setPresentation(genData.presentation)
-        // Save the AST to the document
         await fetch(`/api/documents/${documentId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -102,7 +102,6 @@ export default function PresentationEditorPage() {
         return
       }
 
-      // If we only got HTML slides, show error prompting re-generation
       setError('המצגת עדיין בפורמט ישן. יש ליצור אותה מחדש מתוך ה-Wizard.')
       setPageState('error')
     } catch (err) {
@@ -166,7 +165,6 @@ export default function PresentationEditorPage() {
 
   // ─── Download PDF ────────────────────────────────────
   const downloadPdf = useCallback(async () => {
-    // Save current state first
     await editor.saveNow(documentId)
     setIsGeneratingPdf(true)
 
@@ -241,8 +239,9 @@ export default function PresentationEditorPage() {
     }
   }, [editor, brandName])
 
-  // ─── Regenerate slide ────────────────────────────────
-  const handleRegenerateSlide = useCallback(async () => {
+  // ─── Regenerate slide with AI ────────────────────────
+  const handleRegenerateSlide = useCallback(async (instruction?: string) => {
+    setIsRegenerating(true)
     try {
       const res = await fetch('/api/regenerate-slide', {
         method: 'POST',
@@ -250,36 +249,134 @@ export default function PresentationEditorPage() {
         body: JSON.stringify({
           documentId,
           slideIndex: editor.selectedSlideIndex,
+          instruction: instruction || aiDesignInstruction || undefined,
         }),
       })
 
       const data = await res.json()
       if (data.slide) {
         editor.replaceSlide(editor.selectedSlideIndex, data.slide as Slide)
+        setAiDesignInstruction('')
       }
     } catch (err) {
       console.error('Regenerate slide error:', err)
+    } finally {
+      setIsRegenerating(false)
     }
-  }, [documentId, editor])
+  }, [documentId, editor, aiDesignInstruction])
 
-  // ─── Image replace ──────────────────────────────────
+  // ─── Toolbar: Add elements ───────────────────────────
+  const designSystem = editor.presentation.designSystem
+
+  const handleAddText = useCallback(() => {
+    const element: TextElement = {
+      id: generateId('el'),
+      type: 'text',
+      x: 660, y: 440, width: 600, height: 200,
+      zIndex: 100,
+      fontSize: 36, fontWeight: 400,
+      color: designSystem.colors.text,
+      textAlign: 'right',
+      content: 'טקסט חדש',
+      role: 'body',
+      lineHeight: 1.4,
+    }
+    editor.addElement(element)
+  }, [editor, designSystem])
+
+  const handleAddShape = useCallback((shapeType: ShapeType) => {
+    let element: ShapeElement
+    switch (shapeType) {
+      case 'circle':
+        element = {
+          id: generateId('el'), type: 'shape',
+          x: 810, y: 390, width: 300, height: 300, zIndex: 50,
+          shapeType: 'circle', fill: designSystem.colors.accent, borderRadius: 9999,
+        }
+        break
+      case 'line':
+        element = {
+          id: generateId('el'), type: 'shape',
+          x: 460, y: 530, width: 1000, height: 4, zIndex: 50,
+          shapeType: 'line', fill: designSystem.colors.primary, borderRadius: 0,
+        }
+        break
+      default:
+        element = {
+          id: generateId('el'), type: 'shape',
+          x: 660, y: 390, width: 600, height: 300, zIndex: 50,
+          shapeType: 'rectangle', fill: designSystem.colors.cardBg, borderRadius: 16,
+        }
+    }
+    editor.addElement(element)
+  }, [editor, designSystem])
+
+  const handleAddImage = useCallback(() => {
+    setImageModalMode('add')
+    setImageModalElementId('__new__')
+    setImageModalTab('upload')
+  }, [])
+
+  const handleDuplicateElement = useCallback(() => {
+    if (editor.selectedElementId) {
+      editor.duplicateElement(editor.selectedElementId)
+    }
+  }, [editor])
+
+  const handleDeleteElement = useCallback(() => {
+    if (editor.selectedElementId) {
+      editor.deleteElement(editor.selectedElementId)
+    }
+  }, [editor])
+
+  // ─── Slide management ────────────────────────────────
+  const handleAddSlide = useCallback(() => {
+    const slides = editor.presentation.slides
+    const newSlide: Slide = {
+      id: generateId('slide'),
+      slideType: 'brief',
+      label: `שקף ${slides.length + 1}`,
+      background: { type: 'solid', value: designSystem.colors.background },
+      elements: [],
+    }
+    editor.addSlide(newSlide, editor.selectedSlideIndex + 1)
+  }, [editor, designSystem])
+
+  const handleDuplicateSlide = useCallback((index: number, e: React.MouseEvent) => {
+    e.stopPropagation()
+    editor.duplicateSlide(index)
+  }, [editor])
+
+  const handleDeleteSlide = useCallback((index: number, e: React.MouseEvent) => {
+    e.stopPropagation()
+    editor.deleteSlide(index)
+  }, [editor])
+
+  // ─── Image replace/add ───────────────────────────────
   const imageModalElementIdRef = useRef<string | null>(null)
-  // Keep ref in sync with state for use in callbacks
   useEffect(() => {
     imageModalElementIdRef.current = imageModalElementId
   }, [imageModalElementId])
 
   const handleImageSelected = useCallback((url: string) => {
     const elementId = imageModalElementIdRef.current
-    console.log('[Editor] handleImageSelected called:', { url: url?.slice(0, 60), elementId, slideIndex: editor.selectedSlideIndex })
-    if (elementId) {
+    console.log('[Editor] handleImageSelected called:', { url: url?.slice(0, 60), elementId, mode: imageModalMode })
+
+    if (imageModalMode === 'add') {
+      const element: ImageElement = {
+        id: generateId('el'),
+        type: 'image',
+        x: 560, y: 290, width: 800, height: 500, zIndex: 60,
+        src: url, alt: '', objectFit: 'cover', borderRadius: 12,
+      }
+      editor.addElement(element)
+    } else if (elementId) {
       editor.updateElement(elementId, { src: url } as Partial<SlideElement>)
       console.log('[Editor] Image element updated:', elementId)
-      setImageModalElementId(null)
-    } else {
-      console.warn('[Editor] No imageModalElementId — image not placed')
     }
-  }, [editor])
+    setImageModalElementId(null)
+    setImageModalMode('replace')
+  }, [editor, imageModalMode])
 
   // ─── Loading state ──────────────────────────────────
   if (pageState === 'loading' || pageState === 'generating') {
@@ -348,7 +445,6 @@ export default function PresentationEditorPage() {
   // ─── Thumbnail scale ────────────────────────────────
   const thumbScale = 140 / 1920
   const slides = editor.presentation.slides
-  const designSystem = editor.presentation.designSystem
 
   return (
     <div className="h-screen bg-[#0a0a0f] flex flex-col overflow-hidden">
@@ -356,91 +452,49 @@ export default function PresentationEditorPage() {
       <header className="bg-[#0f0f18]/90 backdrop-blur-md border-b border-white/5 z-50 flex-shrink-0" dir="rtl">
         <div className="max-w-[1800px] mx-auto px-5 py-2.5">
           <div className="flex items-center justify-between">
-            {/* Left: nav + title */}
             <div className="flex items-center gap-3">
-              <Link
-                href="/documents"
-                className="text-gray-500 hover:text-white transition-colors text-xs flex items-center gap-1"
-              >
+              <Link href="/documents" className="text-gray-500 hover:text-white transition-colors text-xs flex items-center gap-1">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
                 חזרה
               </Link>
               <div className="h-4 w-px bg-white/10" />
               <h1 className="text-white/90 font-medium text-sm">{brandName}</h1>
               <span className="text-gray-600 text-xs bg-white/5 px-2 py-0.5 rounded">{slides.length} שקפים</span>
-              {editor.isDirty && (
-                <span className="text-yellow-500/70 text-xs animate-pulse">שומר...</span>
-              )}
-              {aiRewriteState?.loading && (
-                <span className="text-purple-400/70 text-xs animate-pulse">AI כותב...</span>
-              )}
+              {editor.isDirty && <span className="text-yellow-500/70 text-xs animate-pulse">שומר...</span>}
+              {aiRewriteState?.loading && <span className="text-purple-400/70 text-xs animate-pulse">AI כותב...</span>}
+              {isRegenerating && <span className="text-purple-400/70 text-xs animate-pulse">AI מעצב שקף...</span>}
             </div>
 
-            {/* Right: controls */}
             <div className="flex items-center gap-2">
-              {/* Undo/Redo */}
               <div className="flex items-center gap-0.5 px-1">
-                <button
-                  onClick={editor.undo}
-                  disabled={!editor.canUndo}
-                  className="p-1.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
-                  title="בטל (Ctrl+Z)"
-                >
+                <button onClick={editor.undo} disabled={!editor.canUndo} className="p-1.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors" title="בטל (Ctrl+Z)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
                 </button>
-                <button
-                  onClick={editor.redo}
-                  disabled={!editor.canRedo}
-                  className="p-1.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
-                  title="בצע שוב (Ctrl+Shift+Z)"
-                >
+                <button onClick={editor.redo} disabled={!editor.canRedo} className="p-1.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors" title="בצע שוב (Ctrl+Shift+Z)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>
                 </button>
               </div>
 
-              {/* Slide counter */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-lg">
-                <button
-                  onClick={() => editor.selectSlide(Math.max(0, editor.selectedSlideIndex - 1))}
-                  disabled={editor.selectedSlideIndex === 0}
-                  className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors"
-                >
+                <button onClick={() => editor.selectSlide(Math.max(0, editor.selectedSlideIndex - 1))} disabled={editor.selectedSlideIndex === 0} className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
                 <span className="text-white/70 text-xs font-medium tabular-nums min-w-[40px] text-center" dir="ltr">
                   {editor.selectedSlideIndex + 1} / {slides.length}
                 </span>
-                <button
-                  onClick={() => editor.selectSlide(Math.min(slides.length - 1, editor.selectedSlideIndex + 1))}
-                  disabled={editor.selectedSlideIndex === slides.length - 1}
-                  className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors"
-                >
+                <button onClick={() => editor.selectSlide(Math.min(slides.length - 1, editor.selectedSlideIndex + 1))} disabled={editor.selectedSlideIndex === slides.length - 1} className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
               </div>
 
-              {/* Properties panel toggle */}
-              <button
-                onClick={() => setShowProperties(p => !p)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  showProperties
-                    ? 'text-white bg-white/20 ring-1 ring-white/30'
-                    : 'text-gray-400 bg-white/5 hover:bg-white/10 hover:text-white'
-                }`}
-              >
+              <button onClick={() => setShowProperties(p => !p)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${showProperties ? 'text-white bg-white/20 ring-1 ring-white/30' : 'text-gray-400 bg-white/5 hover:bg-white/10 hover:text-white'}`}>
                 {showProperties ? 'סגור פאנל' : 'פאנל עריכה'}
               </button>
 
-              {/* Download PDF */}
-              <button
-                onClick={downloadPdf}
-                disabled={isGeneratingPdf}
-                className="px-4 py-1.5 text-xs font-medium text-black bg-white rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              <button onClick={downloadPdf} disabled={isGeneratingPdf} className="px-4 py-1.5 text-xs font-medium text-black bg-white rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 {isGeneratingPdf ? 'מייצר...' : 'הורד PDF'}
               </button>
 
-              {/* Save to Drive */}
               <GoogleDriveSaveButton
                 getFileData={getProposalPdf}
                 onSaved={(result) => window.open(result.webViewLink, '_blank')}
@@ -453,49 +507,85 @@ export default function PresentationEditorPage() {
         </div>
       </header>
 
+      {/* ── Toolbar ───────────────────────────────────── */}
+      <EditorToolbar
+        onAddText={handleAddText}
+        onAddShape={handleAddShape}
+        onAddImage={handleAddImage}
+        onDuplicate={handleDuplicateElement}
+        onDelete={handleDeleteElement}
+        selectedElement={editor.selectedElement}
+      />
+
       {/* ── Main content ─────────────────────────────── */}
       <div className="flex-1 flex min-h-0" dir="ltr">
         {/* Thumbnails sidebar */}
         <div
-          className="w-[160px] flex-shrink-0 bg-[#0f0f18]/50 border-r border-white/5 overflow-y-auto py-3 px-2"
-          ref={thumbnailsRef}
+          className="w-[160px] flex-shrink-0 bg-[#0f0f18]/50 border-r border-white/5 overflow-y-auto py-3 px-2 flex flex-col"
           style={{ scrollbarWidth: 'thin', scrollbarColor: '#222 transparent' }}
         >
-          {slides.map((slide, index) => (
-            <button
-              key={slide.id}
-              onClick={() => editor.selectSlide(index)}
-              className={`w-full mb-2 rounded-lg overflow-hidden transition-all ${
-                index === editor.selectedSlideIndex
-                  ? 'ring-2 ring-white/80 ring-offset-1 ring-offset-[#0a0a0f] shadow-lg shadow-white/5'
-                  : 'opacity-50 hover:opacity-80'
-              }`}
-              style={{ aspectRatio: '16/9', position: 'relative' }}
-              title={`${slide.label} (${index + 1})`}
-            >
-              <div style={{ position: 'absolute', top: 0, left: 0 }}>
-                <SlideViewer
-                  slide={slide}
-                  designSystem={designSystem}
-                  scale={thumbScale}
-                />
+          <div ref={thumbnailsRef} className="flex-1">
+            {slides.map((slide, index) => (
+              <div key={slide.id} className="relative group mb-2">
+                <button
+                  onClick={() => editor.selectSlide(index)}
+                  className={`w-full rounded-lg overflow-hidden transition-all ${
+                    index === editor.selectedSlideIndex
+                      ? 'ring-2 ring-white/80 ring-offset-1 ring-offset-[#0a0a0f] shadow-lg shadow-white/5'
+                      : 'opacity-50 hover:opacity-80'
+                  }`}
+                  style={{ aspectRatio: '16/9', position: 'relative' }}
+                  title={`${slide.label} (${index + 1})`}
+                >
+                  <div style={{ position: 'absolute', top: 0, left: 0 }}>
+                    <SlideViewer slide={slide} designSystem={designSystem} scale={thumbScale} />
+                  </div>
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent pt-3 pb-1 text-center" style={{ zIndex: 1 }}>
+                    <span className="text-[9px] text-white/80 font-medium">{index + 1}</span>
+                  </div>
+                </button>
+
+                {/* Slide action buttons (visible on hover) */}
+                <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 2 }}>
+                  <button
+                    onClick={(e) => handleDuplicateSlide(index, e)}
+                    className="w-5 h-5 rounded bg-black/60 backdrop-blur-sm text-white/70 hover:text-white flex items-center justify-center"
+                    title="שכפל שקף"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  </button>
+                  {slides.length > 1 && (
+                    <button
+                      onClick={(e) => handleDeleteSlide(index, e)}
+                      className="w-5 h-5 rounded bg-black/60 backdrop-blur-sm text-red-400/70 hover:text-red-300 flex items-center justify-center"
+                      title="מחק שקף"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
-              <div
-                className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent pt-3 pb-1 text-center"
-                style={{ zIndex: 1 }}
-              >
-                <span className="text-[9px] text-white/80 font-medium">{index + 1}</span>
-              </div>
-            </button>
-          ))}
+            ))}
+          </div>
+
+          {/* Add slide button */}
+          <button
+            onClick={handleAddSlide}
+            className="w-full mt-2 py-2.5 border-2 border-dashed border-white/10 rounded-lg text-gray-500 hover:text-white hover:border-white/30 transition-colors text-xs flex items-center justify-center gap-1"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            הוסף שקף
+          </button>
         </div>
 
         {/* Main slide area */}
-        <div
-          ref={slideContainerRef}
-          className="flex-1 flex items-center justify-center overflow-hidden"
-          style={{ background: '#0a0a0f' }}
-        >
+        <div ref={slideContainerRef} className="flex-1 flex items-center justify-center overflow-hidden" style={{ background: '#0a0a0f' }}>
           {editor.selectedSlide && (
             <div
               className="rounded-xl shadow-2xl shadow-black/60"
@@ -514,6 +604,7 @@ export default function PresentationEditorPage() {
                 onElementSelect={editor.selectElement}
                 onElementUpdate={editor.updateElement}
                 onElementDelete={editor.deleteElement}
+                onDuplicateElement={editor.duplicateElement}
               />
             </div>
           )}
@@ -529,9 +620,12 @@ export default function PresentationEditorPage() {
             onElementUpdate={editor.updateElement}
             onBackgroundUpdate={editor.updateSlideBackground}
             onClose={() => setShowProperties(false)}
-            onImageReplace={(elementId, tab) => { setImageModalElementId(elementId); setImageModalTab(tab || 'upload') }}
+            onImageReplace={(elementId, tab) => { setImageModalMode('replace'); setImageModalElementId(elementId); setImageModalTab(tab || 'upload') }}
             onAIRewrite={handleAIRewrite}
-            onRegenerateSlide={handleRegenerateSlide}
+            onRegenerateSlide={() => handleRegenerateSlide()}
+            aiDesignInstruction={aiDesignInstruction}
+            onAiDesignInstructionChange={setAiDesignInstruction}
+            isRegenerating={isRegenerating}
           />
         )}
       </div>
@@ -539,7 +633,7 @@ export default function PresentationEditorPage() {
       {/* Image source modal */}
       <ImageSourceModal
         isOpen={imageModalElementId !== null}
-        onClose={() => setImageModalElementId(null)}
+        onClose={() => { setImageModalElementId(null); setImageModalMode('replace') }}
         onImageSelected={handleImageSelected}
         designSystem={designSystem}
         documentId={documentId}

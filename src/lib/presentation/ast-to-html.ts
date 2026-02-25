@@ -39,8 +39,9 @@ function renderBackground(bg: Slide['background']): string {
   }
 }
 
-function renderTextElement(el: TextElement): string {
+function renderTextElement(el: TextElement, defaultFont: string): string {
   const isGradientText = !!el.gradientFill
+  const fontFamily = el.fontFamily || defaultFont || 'Heebo'
   const styles = [
     `position: absolute`,
     `left: ${el.x}px`,
@@ -56,7 +57,7 @@ function renderTextElement(el: TextElement): string {
     `word-wrap: break-word`,
     `overflow: hidden`,
     `direction: rtl`,
-    `font-family: 'Heebo', sans-serif`,
+    `font-family: '${fontFamily}', sans-serif`,
   ]
 
   if (el.lineHeight) styles.push(`line-height: ${el.lineHeight}`)
@@ -135,10 +136,10 @@ function renderShapeElement(el: ShapeElement): string {
   return `<div style="${styles.join('; ')}"></div>`
 }
 
-function renderElement(el: SlideElement): string {
+function renderElement(el: SlideElement, defaultFont: string): string {
   switch (el.type) {
     case 'text':
-      return renderTextElement(el)
+      return renderTextElement(el, defaultFont)
     case 'image':
       return renderImageElement(el)
     case 'shape':
@@ -152,23 +153,35 @@ function renderElement(el: SlideElement): string {
  * Convert a single Slide AST to a self-contained HTML document.
  */
 export function slideToHtml(slide: Slide, designSystem: DesignSystem): string {
-  const fontFamily = designSystem.fonts.heading || 'Heebo'
+  const headingFont = designSystem.fonts.heading || 'Heebo'
+  const bodyFont = designSystem.fonts.body || headingFont
   const bgCSS = renderBackground(slide.background)
   const elementsHtml = slide.elements
     .sort((a, b) => a.zIndex - b.zIndex)
-    .map(renderElement)
+    .map(el => renderElement(el, headingFont))
     .join('\n    ')
+
+  // Collect all unique fonts used in this slide (designSystem + per-element overrides)
+  const usedFonts = new Set<string>([headingFont, bodyFont])
+  for (const el of slide.elements) {
+    if (el.type === 'text' && (el as TextElement).fontFamily) {
+      usedFonts.add((el as TextElement).fontFamily!)
+    }
+  }
+  const fontLinks = Array.from(usedFonts)
+    .map(f => `family=${encodeURIComponent(f)}:wght@300;400;500;600;700;800;900`)
+    .join('&')
 
   return `<!DOCTYPE html>
 <html dir="${designSystem.direction}" lang="he">
 <head>
   <meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFamily)}:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?${fontLinks}&display=swap" rel="stylesheet">
   <style>
     @page { size: ${W}px ${H}px; margin: 0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: '${fontFamily}', sans-serif;
+      font-family: '${headingFont}', sans-serif;
       direction: ${designSystem.direction};
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
