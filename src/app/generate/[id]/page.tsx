@@ -146,14 +146,14 @@ export default function GeneratePage() {
         }
       }
 
-      // 4. Generate slides (always regenerate fresh)
+      // 4. Generate AST presentation (for the new editor)
       setStage('slides')
-      console.log('[Generate] Generating AI slides...')
+      console.log('[Generate] Generating AST presentation...')
 
       const slideRes = await fetch('/api/preview-slides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId }),
+        body: JSON.stringify({ documentId, generateAST: true }),
       })
 
       if (!slideRes.ok) {
