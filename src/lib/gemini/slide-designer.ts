@@ -2004,6 +2004,244 @@ export async function renderLoopFeedback(
 }
 
 // ═══════════════════════════════════════════════════════════
+//  STAGED PIPELINE (Vercel-friendly — each stage < 120s)
+// ═══════════════════════════════════════════════════════════
+
+/** Intermediate state stored between API calls */
+export interface PipelineFoundation {
+  creativeDirection: CreativeDirection
+  designSystem: PremiumDesignSystem
+  layoutStrategy: Record<string, LayoutDirective>
+  batches: SlideContentInput[][]
+  brandName: string
+  clientLogo: string
+  leadersLogo: string
+  totalSlides: number
+}
+
+export interface BatchResult {
+  slides: Slide[]
+  visualSummary: string
+  slideIndex: number
+}
+
+/**
+ * Stages 1-3: Creative Direction + Design System + Layout Strategy + batch preparation.
+ * Runs in ~60-80s — well within Vercel timeout.
+ */
+export async function pipelineFoundation(
+  data: Record<string, unknown>,
+  config: {
+    accentColor?: string
+    brandLogoUrl?: string
+    leadersLogoUrl?: string
+    clientLogoUrl?: string
+    images?: { coverImage?: string; brandImage?: string; audienceImage?: string; activityImage?: string }
+    extraImages?: { id: string; url: string; placement: string }[]
+    imageStrategy?: { conceptSummary?: string; visualDirection?: string; styleGuide?: string }
+  } = {}
+): Promise<PipelineFoundation> {
+  const requestId = `found-${Date.now()}`
+  console.log(`[ArtDirector][${requestId}] Staged pipeline: Foundation (stages 1-3)`)
+
+  const d = data as PremiumProposalData
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const leadersLogo = config.leadersLogoUrl || `${supabaseUrl}/storage/v1/object/public/assets/logos/leaders-logo-black.png`
+  const clientLogo = config.clientLogoUrl || d._scraped?.logoUrl || config.brandLogoUrl || ''
+
+  const brandColors = d._brandColors || {
+    primary: config.accentColor || '#E94560',
+    secondary: '#1A1A2E',
+    accent: config.accentColor || '#E94560',
+    style: 'corporate',
+    mood: 'מקצועי',
+  }
+
+  const brandInput: BrandDesignInput = {
+    brandName: d.brandName || 'Unknown',
+    industry: d._brandResearch?.industry || '',
+    brandPersonality: d._brandResearch?.brandPersonality || [],
+    brandColors,
+    logoUrl: clientLogo || undefined,
+    coverImageUrl: config.images?.coverImage || undefined,
+    targetAudience: d.targetDescription || '',
+  }
+
+  // Stage 1: Creative Direction
+  console.log(`[ArtDirector][${requestId}] Stage 1/3: Creative Direction`)
+  const creativeDirection = await generateCreativeDirection(brandInput)
+
+  // Stage 2: Design System
+  console.log(`[ArtDirector][${requestId}] Stage 2/3: Design System`)
+  const designSystem = await generatePremiumDesignSystem(brandInput, creativeDirection)
+
+  // Prepare slide content batches
+  const currency = d.currency === 'USD' ? '$' : d.currency === 'EUR' ? '€' : '₪'
+
+  const batch1: SlideContentInput[] = [
+    { slideType: 'cover', title: 'שער', content: { brandName: d.brandName, campaignSubtitle: d.campaignSubtitle || d.strategyHeadline || 'הצעת שיתוף פעולה', issueDate: d.issueDate || new Date().toLocaleDateString('he-IL') }, imageUrl: config.images?.coverImage },
+    { slideType: 'brief', title: 'למה התכנסנו?', content: { headline: 'למה התכנסנו?', brandBrief: d.brandBrief || '', painPoints: d.brandPainPoints || [], objective: d.brandObjective || '' }, imageUrl: config.images?.brandImage },
+    { slideType: 'goals', title: 'מטרות הקמפיין', content: { headline: 'מטרות הקמפיין', goals: d.goalsDetailed || (d.goals || []).map(g => ({ title: g, description: '' })) } },
+    { slideType: 'audience', title: 'קהל היעד', content: { headline: 'קהל היעד', gender: d.targetGender || '', ageRange: d.targetAgeRange || '', description: d.targetDescription || '', behavior: d.targetBehavior || '', insights: d.targetInsights || [] }, imageUrl: config.images?.audienceImage },
+    { slideType: 'insight', title: 'התובנה המרכזית', content: { headline: 'התובנה המרכזית', keyInsight: d.keyInsight || '', source: d.insightSource || '', data: d.insightData || '' } },
+  ]
+
+  const batch2: SlideContentInput[] = [
+    { slideType: 'strategy', title: 'האסטרטגיה', content: { headline: 'האסטרטגיה', strategyHeadline: d.strategyHeadline || '', description: d.strategyDescription || '', pillars: d.strategyPillars || [] } },
+    { slideType: 'bigIdea', title: 'הרעיון המרכזי', content: { headline: d.activityTitle || 'הרעיון המרכזי', concept: d.activityConcept || '', description: d.activityDescription || '' }, imageUrl: config.images?.activityImage || config.images?.brandImage },
+    { slideType: 'approach', title: 'הגישה שלנו', content: { headline: 'הגישה שלנו', approaches: d.activityApproach || [], differentiator: d.activityDifferentiator || '' } },
+    { slideType: 'deliverables', title: 'תוצרים', content: { headline: 'תוצרים', deliverables: d.deliverablesDetailed || (d.deliverables || []).map(del => ({ type: del, quantity: 1, description: '' })), summary: d.deliverablesSummary || '' } },
+    { slideType: 'metrics', title: 'יעדים ומדדים', content: { headline: 'יעדים ומדדים', budget: d.budget ? `${currency}${formatNum(d.budget)}` : '', reach: formatNum(d.potentialReach), engagement: formatNum(d.potentialEngagement), impressions: formatNum(d.estimatedImpressions), cpe: d.cpe ? `${currency}${d.cpe.toFixed(1)}` : '', explanation: d.metricsExplanation || '' } },
+  ]
+
+  const influencers = d.enhancedInfluencers || d.scrapedInfluencers?.map(i => ({
+    name: i.name || i.username || '', username: i.username || '', profilePicUrl: i.profilePicUrl || '',
+    categories: [] as string[], followers: i.followers || 0, engagementRate: i.engagementRate || 0,
+  })) || []
+  const aiRecs = d.influencerResearch?.recommendations || []
+
+  const batch3: SlideContentInput[] = [
+    { slideType: 'influencerStrategy', title: 'אסטרטגיית משפיענים', content: { headline: 'אסטרטגיית משפיענים', strategy: d.influencerStrategy || '', criteria: d.influencerCriteria || [], guidelines: d.contentGuidelines || [] } },
+  ]
+  if (influencers.length > 0 || aiRecs.length > 0) {
+    batch3.push({
+      slideType: 'influencers', title: 'משפיענים מומלצים',
+      content: {
+        headline: 'משפיענים מומלצים',
+        influencers: influencers.slice(0, 6).map(inf => ({ name: inf.name, username: inf.username, profilePicUrl: inf.profilePicUrl, followers: formatNum(inf.followers), engagementRate: `${inf.engagementRate?.toFixed(1) || '0'}%`, categories: inf.categories?.join(', ') || '' })),
+        aiRecommendations: aiRecs.slice(0, 6).map((rec: { name?: string; handle?: string; followers?: string; engagement?: string; whyRelevant?: string; profilePicUrl?: string }) => ({ name: rec.name || '', handle: rec.handle || '', followers: rec.followers || '', engagement: rec.engagement || '', reason: rec.whyRelevant || '', profilePicUrl: rec.profilePicUrl || '' })),
+      },
+    })
+  }
+  batch3.push({ slideType: 'closing', title: 'סיום', content: { brandName: d.brandName || '', headline: "LET'S CREATE TOGETHER", subheadline: `נשמח להתחיל לעבוד עם ${d.brandName}` } })
+
+  const allBatches = [batch1, batch2, batch3]
+  const allSlideTypes = allBatches.flat().map(s => s.slideType)
+
+  // Stage 3: Layout Strategy
+  console.log(`[ArtDirector][${requestId}] Stage 3/3: Layout Strategy`)
+  const layoutStrategy = await generateLayoutStrategy(allSlideTypes, creativeDirection, brandInput)
+
+  const foundation: PipelineFoundation = {
+    creativeDirection,
+    designSystem,
+    layoutStrategy,
+    batches: allBatches,
+    brandName: d.brandName || '',
+    clientLogo,
+    leadersLogo,
+    totalSlides: allBatches.flat().length,
+  }
+
+  console.log(`[ArtDirector][${requestId}] Foundation complete: ${foundation.totalSlides} slides across ${allBatches.length} batches`)
+  return foundation
+}
+
+/**
+ * Stage 4 (per batch): Generate one batch of slides. Runs in ~40-60s.
+ */
+export async function pipelineBatch(
+  foundation: PipelineFoundation,
+  batchIndex: number,
+  previousContext: BatchResult | null,
+): Promise<BatchResult> {
+  const requestId = `batch-${batchIndex}-${Date.now()}`
+  const batch = foundation.batches[batchIndex]
+  if (!batch) throw new Error(`Invalid batch index: ${batchIndex}`)
+
+  const slideIndex = previousContext?.slideIndex ?? 0
+  const visualSummary = previousContext?.visualSummary ?? ''
+
+  console.log(`[ArtDirector][${requestId}] Batch ${batchIndex + 1}/${foundation.batches.length} (${batch.length} slides)`)
+
+  try {
+    const batchSlides = await generateSlidesBatchAST(
+      foundation.designSystem, batch, batchIndex, foundation.brandName,
+      foundation.creativeDirection, foundation.layoutStrategy,
+      {
+        previousSlidesVisualSummary: visualSummary,
+        slideIndex,
+        totalSlides: foundation.totalSlides,
+        creativeDirection: foundation.creativeDirection,
+      },
+      foundation.clientLogo, foundation.leadersLogo,
+    )
+
+    const newVisualSummary = visualSummary + batchSlides.map((s, i) => {
+      const elCount = s.elements?.length || 0
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const hasImage = s.elements?.some((e: any) => e.type === 'image') || false
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const maxFontSize = Math.max(...(s.elements?.filter((e: any) => e.type === 'text').map((e: any) => e.fontSize || 0) || [0]))
+      return `שקף ${slideIndex + i + 1} (${s.slideType}): ${elCount} elements, maxFont: ${maxFontSize}px, hasImage: ${hasImage}`
+    }).join('\n') + '\n'
+
+    console.log(`[ArtDirector][${requestId}] Batch ${batchIndex + 1} done: ${batchSlides.length} slides`)
+    return { slides: batchSlides, visualSummary: newVisualSummary, slideIndex: slideIndex + batch.length }
+  } catch (error) {
+    console.error(`[ArtDirector][${requestId}] Batch ${batchIndex + 1} failed:`, error)
+    const fallbackSlides: Slide[] = []
+    for (let i = 0; i < batch.length; i++) {
+      fallbackSlides.push(createFallbackSlide(batch[i], foundation.designSystem, slideIndex + i))
+    }
+    return { slides: fallbackSlides, visualSummary, slideIndex: slideIndex + batch.length }
+  }
+}
+
+/**
+ * Stage 5+6: Validate, auto-fix, consistency check, assemble final Presentation.
+ * Runs locally (no AI calls) — very fast.
+ */
+export function pipelineFinalize(
+  foundation: PipelineFoundation,
+  allSlides: Slide[],
+): Presentation {
+  const requestId = `final-${Date.now()}`
+  console.log(`[ArtDirector][${requestId}] Finalizing: ${allSlides.length} slides`)
+
+  if (allSlides.length === 0) throw new Error('No slides to finalize')
+
+  // Stage 5: Quality Validation + Auto-fix
+  const validatedSlides: Slide[] = []
+  let totalScore = 0
+
+  for (const slide of allSlides) {
+    const pacing = PACING_MAP[slide.slideType as string] || PACING_MAP.brief
+    const result = validateSlide(slide, foundation.designSystem, pacing)
+    totalScore += result.score
+
+    if (result.issues.some(i => i.severity === 'critical' && i.autoFixable)) {
+      const fixed = autoFixSlide(slide, result.issues, foundation.designSystem)
+      validatedSlides.push(fixed)
+    } else {
+      validatedSlides.push(slide)
+    }
+  }
+
+  const avgScore = Math.round(totalScore / allSlides.length)
+
+  // Visual Consistency Check
+  const finalSlides = checkVisualConsistency(validatedSlides, foundation.designSystem)
+
+  console.log(`[ArtDirector][${requestId}] Finalized: ${finalSlides.length} slides, avg quality: ${avgScore}/100`)
+
+  return {
+    id: `pres-${Date.now()}`,
+    title: foundation.brandName || 'הצעת מחיר',
+    designSystem: foundation.designSystem,
+    slides: finalSlides,
+    metadata: {
+      brandName: foundation.brandName,
+      createdAt: new Date().toISOString(),
+      version: 2,
+      pipeline: 'art-director-v2-staged',
+      qualityScore: avgScore,
+      creativeDirection: foundation.creativeDirection.visualMetaphor,
+    },
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 //  COMPATIBILITY WRAPPER: generateAISlides (HTML output)
 //  Used by /api/pdf, /api/preview-slides, /api/export-pptx
 // ═══════════════════════════════════════════════════════════

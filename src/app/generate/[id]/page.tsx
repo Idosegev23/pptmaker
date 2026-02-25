@@ -4,7 +4,32 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 
-type GenerationStage = 'loading' | 'research' | 'visuals' | 'slides' | 'done' | 'error'
+type GenerationStage =
+  | 'loading'
+  | 'research'
+  | 'visuals'
+  | 'foundation'
+  | 'batch_0'
+  | 'batch_1'
+  | 'batch_2'
+  | 'finalize'
+  | 'done'
+  | 'error'
+
+const TIPS = [
+  'הארט דיירקטור שלנו מעצב כל שקף בנפרד עם תשומת לב לפרטים',
+  'כל מצגת עוברת 6 שלבי עיבוד — כמו סטודיו עיצוב אמיתי',
+  'אנחנו משתמשים ב-32 טכניקות עיצוב מתקדמות',
+  'כל שקף מקבל Layout Strategy ייחודי בהתאם לתוכן שלו',
+  'מערכת הבדיקה שלנו מוודאת ניגודיות, היררכיה ואיזון ויזואלי',
+  'צבעי המותג מנותחים ומותאמים לנגישות WCAG',
+  'הטיפוגרפיה מותאמת אוטומטית לעברית RTL',
+  'כל שקף מקבל ציון איכות ותיקונים אוטומטיים',
+  'המערכת בוחרת טכניקת לייאאוט שונה לכל שקף — Brutalism, Bento, Swiss Grid',
+  'המצגת שלך תהיה ברמת Awwwards — עיצוב שזוכה בפרסים',
+  'אנחנו מייצרים שכבות עומק — 5 רמות Z-Index לעומק ויזואלי',
+  'מערכת הפייסינג שלנו יוצרת מסע רגשי לאורך המצגת',
+]
 
 export default function GeneratePage() {
   const params = useParams()
@@ -14,19 +39,36 @@ export default function GeneratePage() {
   const [stage, setStage] = useState<GenerationStage>('loading')
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
+  const [tipIndex, setTipIndex] = useState(0)
+  const [slideProgress, setSlideProgress] = useState({ done: 0, total: 0 })
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tipRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const generationStartedRef = useRef(false)
 
   // Elapsed timer
   useEffect(() => {
-    if (stage !== 'done' && stage !== 'error' && stage !== 'loading') {
-      setElapsed(0)
-      elapsedRef.current = setInterval(() => setElapsed(prev => prev + 1), 1000)
+    const stageStr: string = stage
+    if (stageStr !== 'done' && stageStr !== 'error' && stageStr !== 'loading') {
+      if (!elapsedRef.current) {
+        setElapsed(0)
+        elapsedRef.current = setInterval(() => setElapsed(prev => prev + 1), 1000)
+      }
     } else if (elapsedRef.current) {
       clearInterval(elapsedRef.current)
+      elapsedRef.current = null
     }
-    return () => { if (elapsedRef.current) clearInterval(elapsedRef.current) }
+    return () => {
+      if (elapsedRef.current) clearInterval(elapsedRef.current)
+    }
   }, [stage])
+
+  // Tips rotation
+  useEffect(() => {
+    tipRef.current = setInterval(() => {
+      setTipIndex(prev => (prev + 1) % TIPS.length)
+    }, 6000)
+    return () => { if (tipRef.current) clearInterval(tipRef.current) }
+  }, [])
 
   const runGeneration = useCallback(async () => {
     if (generationStartedRef.current) return
@@ -79,7 +121,6 @@ export default function GeneratePage() {
           }).then(res => res.ok ? res.json() : Promise.reject('Influencer research failed')),
         ])
 
-        // Save research results
         const patchData: Record<string, unknown> = {
           _pipelineStatus: { ...pipelineStatus, research: 'complete' },
         }
@@ -100,15 +141,13 @@ export default function GeneratePage() {
       }
 
       // 3. Run visual assets generation
-      if (pipelineStatus.visualAssets === 'pending' || pipelineStatus.visualAssets !== 'complete') {
+      if (pipelineStatus.visualAssets !== 'complete') {
         setStage('visuals')
         console.log('[Generate] Generating visual assets...')
 
-        // Re-fetch document to get latest data (including research results)
         const freshDocRes = await fetch(`/api/documents/${documentId}`)
         const freshDocData = await freshDocRes.json()
         const freshData = freshDocData.document?.data || freshDocData.data || {}
-
         const websiteUrl = freshData._brandResearch?.website || freshData._extractedData?.brand?.website || null
 
         try {
@@ -146,23 +185,83 @@ export default function GeneratePage() {
         }
       }
 
-      // 4. Generate AST presentation (for the new editor)
-      setStage('slides')
-      console.log('[Generate] Generating AST presentation...')
+      // 4. Check for cached presentation (skip if already generated)
+      const cachedCheckRes = await fetch(`/api/documents/${documentId}`)
+      const cachedCheckData = await cachedCheckRes.json()
+      const cachedData = cachedCheckData.document?.data || cachedCheckData.data || {}
 
-      const slideRes = await fetch('/api/preview-slides', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId, generateAST: true }),
-      })
-
-      if (!slideRes.ok) {
-        const slideErr = await slideRes.json()
-        throw new Error(slideErr.error || 'Slide generation failed')
+      if (cachedData._presentation?.slides?.length > 0) {
+        console.log('[Generate] Using cached presentation')
+        setStage('done')
+        setTimeout(() => router.push(`/edit/${documentId}`), 1500)
+        return
       }
 
-      const slideData = await slideRes.json()
-      console.log(`[Generate] Generated ${slideData.slideCount} slides`)
+      // 5. STAGED SLIDE GENERATION
+
+      // Stage 5a: Foundation (Creative Direction + Design System + Layout Strategy)
+      setStage('foundation')
+      console.log('[Generate] Running foundation (stages 1-3)...')
+      const foundationRes = await fetch('/api/generate-slides-stage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId, stage: 'foundation' }),
+      })
+
+      if (!foundationRes.ok) {
+        const err = await foundationRes.json()
+        throw new Error(err.details || err.error || 'Foundation failed')
+      }
+
+      const foundationData = await foundationRes.json()
+      const batchCount = foundationData.batchCount || 3
+      const totalSlides = foundationData.totalSlides || 12
+      setSlideProgress({ done: 0, total: totalSlides })
+      console.log(`[Generate] Foundation complete: ${batchCount} batches, ${totalSlides} slides`)
+
+      // Stage 5b: Generate slide batches sequentially
+      let slidesAccumulated = 0
+      const batchSizes: number[] = foundationData.batchSizes || [5, 5, 2]
+
+      for (let b = 0; b < batchCount; b++) {
+        const batchStage = `batch_${b}` as GenerationStage
+        setStage(batchStage)
+        console.log(`[Generate] Running batch ${b + 1}/${batchCount}...`)
+
+        const batchRes = await fetch('/api/generate-slides-stage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId, stage: 'batch', batchIndex: b }),
+        })
+
+        if (!batchRes.ok) {
+          const err = await batchRes.json()
+          throw new Error(err.details || err.error || `Batch ${b + 1} failed`)
+        }
+
+        const batchData = await batchRes.json()
+        slidesAccumulated = batchData.totalSlidesAccumulated || (slidesAccumulated + (batchSizes[b] || 0))
+        setSlideProgress({ done: slidesAccumulated, total: totalSlides })
+        console.log(`[Generate] Batch ${b + 1} done: ${batchData.slidesGenerated} slides (total: ${slidesAccumulated})`)
+      }
+
+      // Stage 5c: Finalize (validation + assembly)
+      setStage('finalize')
+      console.log('[Generate] Finalizing presentation...')
+      const finalizeRes = await fetch('/api/generate-slides-stage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId, stage: 'finalize' }),
+      })
+
+      if (!finalizeRes.ok) {
+        const err = await finalizeRes.json()
+        throw new Error(err.details || err.error || 'Finalize failed')
+      }
+
+      const finalData = await finalizeRes.json()
+      setSlideProgress({ done: totalSlides, total: totalSlides })
+      console.log(`[Generate] Finalized: ${finalData.slideCount} slides, quality: ${finalData.qualityScore}/100`)
 
       // Update pipeline status
       await fetch(`/api/documents/${documentId}`, {
@@ -178,11 +277,9 @@ export default function GeneratePage() {
         }),
       })
 
-      // Done - redirect to slide viewer
+      // Done — redirect to editor
       setStage('done')
-      setTimeout(() => {
-        router.push(`/edit/${documentId}`)
-      }, 1500)
+      setTimeout(() => router.push(`/edit/${documentId}`), 1500)
     } catch (err) {
       console.error('[Generate] Error:', err)
       setStage('error')
@@ -194,38 +291,57 @@ export default function GeneratePage() {
     runGeneration()
   }, [runGeneration])
 
-  const stageLabel = {
+  // ── Stage display metadata ──────────────────────────────
+
+  const stageStr: string = stage
+
+  const stageLabel: Record<string, string> = {
     loading: 'טוען נתונים...',
     research: 'מחקר מותג ומשפיענים',
     visuals: 'יצירת שפה ויזואלית ותמונות',
-    slides: 'עיצוב שקפי המצגת',
+    foundation: 'בניית כיוון קריאייטיבי ומערכת עיצוב',
+    batch_0: 'עיצוב שקפים — קבוצה 1',
+    batch_1: 'עיצוב שקפים — קבוצה 2',
+    batch_2: 'עיצוב שקפים — קבוצה 3',
+    finalize: 'בדיקת איכות והרכבה סופית',
     done: 'המצגת מוכנה!',
     error: 'שגיאה',
   }
 
-  const stageSubtitle = {
+  const stageSubtitle: Record<string, string> = {
     loading: 'מכין את כל הנתונים',
     research: 'סורק את הרשת למחקר שוק ואיתור משפיעני מפתח',
     visuals: 'מרנדר שפה ויזואלית ותמונות ברזולוציית 4K',
-    slides: 'סוכן ה-AI מעצב כל שקף בנפרד',
+    foundation: 'ארט דיירקטור AI בונה כיוון קריאייטיבי, מערכת עיצוב ואסטרטגיית לייאאוט',
+    batch_0: 'שער, בריף, מטרות, קהל יעד, תובנה מרכזית',
+    batch_1: 'אסטרטגיה, רעיון מרכזי, גישה, תוצרים, מדדים',
+    batch_2: 'אסטרטגיית משפיענים, משפיענים מומלצים, סיום',
+    finalize: 'מוודא ניגודיות, היררכיה, איזון ויזואלי ועקביות',
     done: 'מנווט לתצוגת מצגת...',
     error: 'משהו השתבש',
   }
 
-  const stages = [
+  // Progress steps — 7 visual steps
+  const progressSteps = [
     { key: 'research', label: 'מחקר' },
     { key: 'visuals', label: 'ויזואליה' },
-    { key: 'slides', label: 'עיצוב שקפים' },
+    { key: 'foundation', label: 'כיוון קריאייטיבי' },
+    { key: 'batch_0', label: 'שקפים 1' },
+    { key: 'batch_1', label: 'שקפים 2' },
+    { key: 'batch_2', label: 'שקפים 3' },
+    { key: 'finalize', label: 'בדיקות' },
   ]
 
   function getStepStatus(stepKey: string): 'pending' | 'active' | 'done' {
-    const order = ['research', 'visuals', 'slides', 'done']
+    const order = ['research', 'visuals', 'foundation', 'batch_0', 'batch_1', 'batch_2', 'finalize', 'done']
     const stepIdx = order.indexOf(stepKey)
-    const currentIdx = order.indexOf(stage)
+    const currentIdx = order.indexOf(stageStr)
     if (currentIdx > stepIdx) return 'done'
     if (currentIdx === stepIdx) return 'active'
     return 'pending'
   }
+
+  const showTimer = stageStr !== 'done' && stageStr !== 'error' && stageStr !== 'loading'
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#f4f5f7] font-sans flex flex-col">
@@ -244,27 +360,27 @@ export default function GeneratePage() {
 
       {/* Main content */}
       <div className="flex-1 flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-[700px]">
+        <div className="w-full max-w-[800px]">
           {/* Hero Card */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0f172a] via-[#1e1b4b] to-[#020617] text-white p-8 md:p-10 shadow-2xl border border-white/10">
             {/* Decorative rings */}
-            <svg className="absolute top-0 left-0 w-full h-full opacity-15 pointer-events-none" viewBox="0 0 700 400" fill="none">
-              <circle cx="550" cy="200" r="100" stroke="#f2cc0d" strokeWidth="1.5" className="animate-[spin_20s_linear_infinite] origin-[550px_200px]" strokeDasharray="10 20" />
-              <circle cx="550" cy="200" r="160" stroke="#f2cc0d" strokeWidth="0.8" opacity="0.3" />
+            <svg className="absolute top-0 left-0 w-full h-full opacity-15 pointer-events-none" viewBox="0 0 800 500" fill="none">
+              <circle cx="650" cy="250" r="100" stroke="#f2cc0d" strokeWidth="1.5" className="animate-[spin_20s_linear_infinite] origin-[650px_250px]" strokeDasharray="10 20" />
+              <circle cx="650" cy="250" r="160" stroke="#f2cc0d" strokeWidth="0.8" opacity="0.3" />
             </svg>
 
             <div className="relative z-10">
               {/* Header row */}
-              <div className="flex items-start justify-between mb-8">
+              <div className="flex items-start justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-extrabold tracking-tight">
-                    {stage === 'done' ? 'המצגת שלך מוכנה!' : stageLabel[stage]}
+                    {stageStr === 'done' ? 'המצגת שלך מוכנה!' : (stageLabel[stageStr] || stage)}
                   </h2>
                   <p className="text-[#94a3b8] text-sm mt-1 font-medium">
-                    {stageSubtitle[stage]}
+                    {stageSubtitle[stageStr] || ''}
                   </p>
                 </div>
-                {stage !== 'done' && stage !== 'error' && stage !== 'loading' && (
+                {showTimer && (
                   <div className="text-left shrink-0 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/5">
                     <div className="text-3xl font-mono font-bold tabular-nums text-[#f2cc0d] drop-shadow-[0_0_8px_rgba(242,204,13,0.5)]">
                       {Math.floor(elapsed / 60).toString().padStart(2, '0')}:{(elapsed % 60).toString().padStart(2, '0')}
@@ -274,55 +390,76 @@ export default function GeneratePage() {
                 )}
               </div>
 
-              {/* Progress Steps */}
-              <div className="flex items-center gap-2 mb-6">
-                {stages.map((step, i) => {
+              {/* Slide counter (during batch generation) */}
+              {slideProgress.total > 0 && stageStr !== 'done' && (
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-l from-[#f2cc0d] to-[#f59e0b] transition-all duration-1000 ease-out"
+                      style={{ width: `${Math.round((slideProgress.done / slideProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[#f2cc0d] text-sm font-bold tabular-nums shrink-0">
+                    {slideProgress.done}/{slideProgress.total} שקפים
+                  </span>
+                </div>
+              )}
+
+              {/* Progress Steps — horizontal pills */}
+              <div className="flex items-center gap-1 mb-6 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+                {progressSteps.map((step, i) => {
                   const status = getStepStatus(step.key)
                   return (
-                    <div key={step.key} className="flex items-center gap-2 flex-1">
-                      <div className="flex items-center gap-3 shrink-0">
-                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold transition-all duration-500 ${
+                    <div key={step.key} className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold transition-all duration-500 ${
                           status === 'done'
-                            ? 'bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                            ? 'bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/30'
                             : status === 'active'
-                            ? 'bg-[#f2cc0d] text-[#0f172a] shadow-[0_0_20px_rgba(242,204,13,0.4)] scale-110'
-                            : 'bg-white/5 text-white/30 border border-white/5'
+                            ? 'bg-[#f2cc0d] text-[#0f172a] shadow-[0_0_15px_rgba(242,204,13,0.4)] scale-110'
+                            : 'bg-white/5 text-white/25 border border-white/5'
                         }`}>
                           {status === 'done' ? (
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                             </svg>
                           ) : status === 'active' ? (
                             <div className="relative flex items-center justify-center w-full h-full">
-                              <div className="absolute inset-0 rounded-2xl border-2 border-[#0f172a] border-t-transparent animate-spin" />
-                              <span>{i + 1}</span>
+                              <div className="absolute inset-0 rounded-xl border-2 border-[#0f172a] border-t-transparent animate-spin" />
+                              <span className="text-[10px]">{i + 1}</span>
                             </div>
                           ) : (
-                            <span>{i + 1}</span>
+                            <span className="text-[10px]">{i + 1}</span>
                           )}
                         </div>
-                        <span className={`text-sm font-bold hidden sm:inline tracking-wide ${
+                        <span className={`text-xs font-bold hidden md:inline tracking-wide whitespace-nowrap ${
                           status === 'done' ? 'text-[#10b981]' :
                           status === 'active' ? 'text-[#f2cc0d]' :
-                          'text-white/30'
+                          'text-white/25'
                         }`}>{step.label}</span>
                       </div>
-                      {i < 2 && (
-                        <div className="flex-1 h-1.5 rounded-full relative overflow-hidden bg-white/5">
-                          <div className={`absolute inset-y-0 right-0 transition-all duration-1000 ease-out ${
-                            status === 'done'
-                              ? 'left-0 bg-gradient-to-l from-[#10b981] to-[#047857]'
-                              : 'left-full bg-[#f2cc0d]'
-                          }`} />
-                        </div>
+                      {i < progressSteps.length - 1 && (
+                        <div className="w-3 h-0.5 rounded-full mx-0.5 transition-colors duration-500" style={{
+                          backgroundColor: status === 'done' ? '#10b98140' : 'rgba(255,255,255,0.08)',
+                        }} />
                       )}
                     </div>
                   )
                 })}
               </div>
 
+              {/* Tips rotation */}
+              {showTimer && (
+                <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 transition-all duration-500">
+                  <div className="flex items-start gap-2">
+                    <span className="text-[#f2cc0d] text-sm shrink-0">💡</span>
+                    <p className="text-white/60 text-sm leading-relaxed">{TIPS[tipIndex]}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Done celebration */}
-              {stage === 'done' && (
+              {stageStr === 'done' && (
                 <div className="text-center py-4 animate-in fade-in zoom-in-95 duration-500">
                   <div className="w-16 h-16 rounded-full bg-[#10b981]/20 mx-auto mb-4 flex items-center justify-center">
                     <svg className="w-8 h-8 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -336,7 +473,7 @@ export default function GeneratePage() {
           </div>
 
           {/* Error state */}
-          {stage === 'error' && error && (
+          {stageStr === 'error' && error && (
             <div className="bg-red-50 border-2 border-red-200 text-red-800 rounded-2xl p-6 mt-6 shadow-sm">
               <div className="flex items-center gap-3 font-bold text-lg mb-2 text-red-600">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -351,6 +488,7 @@ export default function GeneratePage() {
                   onClick={() => {
                     setStage('loading')
                     setError(null)
+                    setSlideProgress({ done: 0, total: 0 })
                     generationStartedRef.current = false
                     runGeneration()
                   }}
