@@ -3,72 +3,125 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import type { Presentation, Slide, SlideElement } from '@/types/presentation'
+import { isTextElement } from '@/types/presentation'
+import { usePresentationEditor } from '@/hooks/usePresentationEditor'
+import SlideEditor from '@/components/presentation/SlideEditor'
+import SlideViewer from '@/components/presentation/SlideViewer'
+import PropertiesPanel from '@/components/presentation/PropertiesPanel'
+import ImageSourceModal from '@/components/presentation/ImageSourceModal'
 
-export default function SlideViewerPage() {
+// ─── Empty presentation (placeholder while loading) ────────
+const EMPTY_PRESENTATION: Presentation = {
+  id: '',
+  title: '',
+  designSystem: {
+    colors: { primary: '#E94560', secondary: '#0F3460', accent: '#16213E', background: '#1a1a2e', text: '#FFFFFF', cardBg: '#16213E', cardBorder: '#0F3460' },
+    fonts: { heading: 'Heebo', body: 'Heebo' },
+    direction: 'rtl',
+  },
+  slides: [],
+}
+
+type PageState = 'loading' | 'generating' | 'ready' | 'error'
+
+export default function PresentationEditorPage() {
   const params = useParams()
-  const [slides, setSlides] = useState<string[]>([])
-  const [currentSlide, setCurrentSlide] = useState(0)
-  const [brandName, setBrandName] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
+  const documentId = params.id as string
+
+  const [pageState, setPageState] = useState<PageState>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [brandName, setBrandName] = useState('')
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
-  const [isGeneratingPptx, setIsGeneratingPptx] = useState(false)
-  const [documentTitle, setDocumentTitle] = useState('')
-  const thumbnailsRef = useRef<HTMLDivElement>(null)
+  const [showProperties, setShowProperties] = useState(true)
+  const [imageModalElementId, setImageModalElementId] = useState<string | null>(null)
+  const [imageModalTab, setImageModalTab] = useState<'upload' | 'url' | 'ai'>('upload')
+  const [aiRewriteState, setAiRewriteState] = useState<{ elementId: string; loading: boolean } | null>(null)
+
+  const editor = usePresentationEditor(EMPTY_PRESENTATION)
   const slideContainerRef = useRef<HTMLDivElement>(null)
+  const thumbnailsRef = useRef<HTMLDivElement>(null)
   const [slideScale, setSlideScale] = useState(0.5)
 
-  // Load slides from API
+  // ─── Load document ───────────────────────────────────
   useEffect(() => {
-    loadSlides()
+    loadDocument()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id])
+  }, [documentId])
 
-  const loadSlides = async () => {
+  const loadDocument = async () => {
     try {
-      setIsLoading(true)
-      const res = await fetch('/api/preview-slides', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId: params.id }),
-      })
+      setPageState('loading')
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to load slides')
-      }
+      // Fetch document data
+      const res = await fetch(`/api/documents/${documentId}`)
+      if (!res.ok) throw new Error('Document not found')
 
       const data = await res.json()
-      setSlides(data.slides)
-      setBrandName(data.brandName)
-      setDocumentTitle(data.brandName || 'הצעת מחיר')
+      const doc = data.document
+      const docData = doc.data as Record<string, unknown>
+      setBrandName((docData.brandName as string) || doc.title || 'הצעת מחיר')
+
+      // Check if AST presentation already exists
+      const existing = docData._presentation as Presentation | undefined
+      if (existing && existing.slides?.length > 0) {
+        console.log(`[Editor] Loaded AST presentation with ${existing.slides.length} slides`)
+        editor.setPresentation(existing)
+        setPageState('ready')
+        return
+      }
+
+      // No AST → need to generate one
+      console.log('[Editor] No AST found, generating presentation...')
+      setPageState('generating')
+
+      const genRes = await fetch('/api/preview-slides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId, generateAST: true }),
+      })
+
+      if (!genRes.ok) {
+        // Fallback: try to generate AST from the generate-proposal pipeline
+        throw new Error('Could not generate slides')
+      }
+
+      const genData = await genRes.json()
+
+      // Check if the preview-slides returned an AST presentation
+      if (genData.presentation) {
+        editor.setPresentation(genData.presentation)
+        // Save the AST to the document
+        await fetch(`/api/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ _presentation: genData.presentation }),
+        })
+        setPageState('ready')
+        return
+      }
+
+      // If we only got HTML slides, show error prompting re-generation
+      setError('המצגת עדיין בפורמט ישן. יש ליצור אותה מחדש מתוך ה-Wizard.')
+      setPageState('error')
     } catch (err) {
-      console.error('Error loading slides:', err)
-      setError(err instanceof Error ? err.message : 'שגיאה בטעינת השקפים')
-    } finally {
-      setIsLoading(false)
+      console.error('[Editor] Load error:', err)
+      setError(err instanceof Error ? err.message : 'שגיאה בטעינת המצגת')
+      setPageState('error')
     }
   }
 
-  // Keyboard navigation
+  // ─── Auto-save on changes ────────────────────────────
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-        e.preventDefault()
-        setCurrentSlide(prev => Math.max(0, prev - 1))
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-        e.preventDefault()
-        setCurrentSlide(prev => Math.min(slides.length - 1, prev + 1))
-      }
+    if (editor.isDirty && pageState === 'ready') {
+      editor.save(documentId)
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [slides.length])
+  }, [editor, editor.isDirty, documentId, pageState])
 
-  // Calculate slide scale to fit container
+  // ─── Calculate slide scale ───────────────────────────
   useEffect(() => {
     const container = slideContainerRef.current
-    if (!container || slides.length === 0) return
+    if (!container || pageState !== 'ready') return
 
     const updateScale = () => {
       const rect = container.getBoundingClientRect()
@@ -84,29 +137,43 @@ export default function SlideViewerPage() {
     const observer = new ResizeObserver(updateScale)
     observer.observe(container)
     return () => observer.disconnect()
-  }, [slides.length])
+  }, [pageState, showProperties])
 
-  // Scroll thumbnail into view
+  // ─── Scroll thumbnail into view ──────────────────────
   useEffect(() => {
     if (thumbnailsRef.current) {
-      const thumb = thumbnailsRef.current.children[currentSlide] as HTMLElement
-      if (thumb) {
-        thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      const thumb = thumbnailsRef.current.children[editor.selectedSlideIndex] as HTMLElement
+      if (thumb) thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [editor.selectedSlideIndex])
+
+  // ─── Keyboard shortcuts (undo/redo) ──────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) {
+          editor.redo()
+        } else {
+          editor.undo()
+        }
       }
     }
-  }, [currentSlide])
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [editor])
 
-  // Download PDF
+  // ─── Download PDF ────────────────────────────────────
   const downloadPdf = useCallback(async () => {
+    // Save current state first
+    await editor.saveNow(documentId)
     setIsGeneratingPdf(true)
+
     try {
       const response = await fetch('/api/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentId: params.id,
-          action: 'download',
-        }),
+        body: JSON.stringify({ documentId, action: 'download' }),
       })
 
       if (!response.ok) throw new Error('PDF generation failed')
@@ -115,7 +182,7 @@ export default function SlideViewerPage() {
       const url = window.URL.createObjectURL(blob)
       const a = window.document.createElement('a')
       a.href = url
-      a.download = `${documentTitle || 'proposal'}.pdf`
+      a.download = `${brandName || 'proposal'}.pdf`
       a.click()
       window.URL.revokeObjectURL(url)
     } catch (err) {
@@ -124,53 +191,89 @@ export default function SlideViewerPage() {
     } finally {
       setIsGeneratingPdf(false)
     }
-  }, [params.id, documentTitle])
+  }, [documentId, brandName, editor])
 
-  // Download PPTX
-  const downloadPptx = useCallback(async () => {
-    setIsGeneratingPptx(true)
+  // ─── AI Rewrite ──────────────────────────────────────
+  const handleAIRewrite = useCallback(async (elementId: string, currentText: string) => {
+    setAiRewriteState({ elementId, loading: true })
+
     try {
-      const response = await fetch('/api/export-pptx', {
+      const element = editor.selectedSlide?.elements.find(e => e.id === elementId)
+      const role = element && isTextElement(element) ? element.role : undefined
+
+      const res = await fetch('/api/copilot/rewrite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId: params.id }),
+        body: JSON.stringify({
+          currentText,
+          elementRole: role,
+          slideLabel: editor.selectedSlide?.label,
+          brandName,
+        }),
       })
 
-      if (!response.ok) throw new Error('PPTX generation failed')
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = window.document.createElement('a')
-      a.href = url
-      a.download = `${documentTitle || 'proposal'}.pptx`
-      a.click()
-      window.URL.revokeObjectURL(url)
+      const data = await res.json()
+      if (data.text) {
+        editor.updateElement(elementId, { content: data.text } as Partial<SlideElement>)
+      }
     } catch (err) {
-      console.error('PPTX error:', err)
-      alert('שגיאה ביצירת ה-PPTX')
+      console.error('AI rewrite error:', err)
     } finally {
-      setIsGeneratingPptx(false)
+      setAiRewriteState(null)
     }
-  }, [params.id, documentTitle])
+  }, [editor, brandName])
 
-  // Loading state
-  if (isLoading) {
+  // ─── Regenerate slide ────────────────────────────────
+  const handleRegenerateSlide = useCallback(async () => {
+    try {
+      const res = await fetch('/api/regenerate-slide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId,
+          slideIndex: editor.selectedSlideIndex,
+        }),
+      })
+
+      const data = await res.json()
+      if (data.slide) {
+        editor.replaceSlide(editor.selectedSlideIndex, data.slide as Slide)
+      }
+    } catch (err) {
+      console.error('Regenerate slide error:', err)
+    }
+  }, [documentId, editor])
+
+  // ─── Image replace ──────────────────────────────────
+  const handleImageSelected = useCallback((url: string) => {
+    if (imageModalElementId) {
+      editor.updateElement(imageModalElementId, { src: url } as Partial<SlideElement>)
+      setImageModalElementId(null)
+    }
+  }, [imageModalElementId, editor])
+
+  // ─── Loading state ──────────────────────────────────
+  if (pageState === 'loading' || pageState === 'generating') {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
         <div className="text-center">
           <div className="relative w-16 h-16 mx-auto mb-6">
-            <div className="absolute inset-0 rounded-full border-2 border-gray-800"></div>
-            <div className="absolute inset-0 rounded-full border-2 border-t-white animate-spin"></div>
+            <div className="absolute inset-0 rounded-full border-2 border-gray-800" />
+            <div className="absolute inset-0 rounded-full border-2 border-t-white animate-spin" />
           </div>
-          <p className="text-gray-400 text-base" dir="rtl">מעצב מצגת עם AI...</p>
-          <p className="text-gray-600 text-xs mt-1" dir="rtl">זה יכול לקחת עד דקה בפעם הראשונה</p>
+          <p className="text-gray-400 text-base" dir="rtl">
+            {pageState === 'generating' ? 'מעצב מצגת עם AI...' : 'טוען מצגת...'}
+          </p>
+          {pageState === 'generating' && (
+            <p className="text-gray-600 text-xs mt-1" dir="rtl">זה יכול לקחת עד דקה בפעם הראשונה</p>
+          )}
         </div>
       </div>
     )
   }
 
-  // Error state
-  if (error) {
+  // ─── Error state ────────────────────────────────────
+  if (pageState === 'error') {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center" dir="rtl">
         <div className="text-center max-w-md">
@@ -179,7 +282,7 @@ export default function SlideViewerPage() {
           <p className="text-gray-400 mb-6 text-sm">{error}</p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={() => { setError(null); setIsLoading(true); loadSlides() }}
+              onClick={() => { setError(null); loadDocument() }}
               className="px-5 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
             >
               נסה שוב
@@ -196,13 +299,14 @@ export default function SlideViewerPage() {
     )
   }
 
-  if (slides.length === 0) {
+  // ─── No slides state ────────────────────────────────
+  if (editor.presentation.slides.length === 0) {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center" dir="rtl">
         <div className="text-center">
           <p className="text-gray-400 text-base mb-4">לא נמצאו שקפים</p>
           <Link
-            href={`/wizard/${params.id}`}
+            href={`/wizard/${documentId}`}
             className="px-5 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
           >
             חזרה ל-Wizard
@@ -212,18 +316,18 @@ export default function SlideViewerPage() {
     )
   }
 
-  const scaledW = Math.round(1920 * slideScale)
-  const scaledH = Math.round(1080 * slideScale)
-
-  // Thumbnail scale: button is ~140px wide, iframe is 1920px
+  // ─── Thumbnail scale ────────────────────────────────
   const thumbScale = 140 / 1920
+  const slides = editor.presentation.slides
+  const designSystem = editor.presentation.designSystem
 
   return (
     <div className="h-screen bg-[#0a0a0f] flex flex-col overflow-hidden">
-      {/* Header - RTL for Hebrew */}
+      {/* ── Header ───────────────────────────────────── */}
       <header className="bg-[#0f0f18]/90 backdrop-blur-md border-b border-white/5 z-50 flex-shrink-0" dir="rtl">
         <div className="max-w-[1800px] mx-auto px-5 py-2.5">
           <div className="flex items-center justify-between">
+            {/* Left: nav + title */}
             <div className="flex items-center gap-3">
               <Link
                 href="/documents"
@@ -232,45 +336,73 @@ export default function SlideViewerPage() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
                 חזרה
               </Link>
-              <div className="h-4 w-px bg-white/10"></div>
-              <h1 className="text-white/90 font-medium text-sm">{brandName || 'הצעת מחיר'}</h1>
+              <div className="h-4 w-px bg-white/10" />
+              <h1 className="text-white/90 font-medium text-sm">{brandName}</h1>
               <span className="text-gray-600 text-xs bg-white/5 px-2 py-0.5 rounded">{slides.length} שקפים</span>
+              {editor.isDirty && (
+                <span className="text-yellow-500/70 text-xs animate-pulse">שומר...</span>
+              )}
+              {aiRewriteState?.loading && (
+                <span className="text-purple-400/70 text-xs animate-pulse">AI כותב...</span>
+              )}
             </div>
 
+            {/* Right: controls */}
             <div className="flex items-center gap-2">
+              {/* Undo/Redo */}
+              <div className="flex items-center gap-0.5 px-1">
+                <button
+                  onClick={editor.undo}
+                  disabled={!editor.canUndo}
+                  className="p-1.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
+                  title="בטל (Ctrl+Z)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                </button>
+                <button
+                  onClick={editor.redo}
+                  disabled={!editor.canRedo}
+                  className="p-1.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
+                  title="בצע שוב (Ctrl+Shift+Z)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>
+                </button>
+              </div>
+
+              {/* Slide counter */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-lg">
                 <button
-                  onClick={() => setCurrentSlide(prev => Math.max(0, prev - 1))}
-                  disabled={currentSlide === 0}
+                  onClick={() => editor.selectSlide(Math.max(0, editor.selectedSlideIndex - 1))}
+                  disabled={editor.selectedSlideIndex === 0}
                   className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
                 <span className="text-white/70 text-xs font-medium tabular-nums min-w-[40px] text-center" dir="ltr">
-                  {currentSlide + 1} / {slides.length}
+                  {editor.selectedSlideIndex + 1} / {slides.length}
                 </span>
                 <button
-                  onClick={() => setCurrentSlide(prev => Math.min(slides.length - 1, prev + 1))}
-                  disabled={currentSlide === slides.length - 1}
+                  onClick={() => editor.selectSlide(Math.min(slides.length - 1, editor.selectedSlideIndex + 1))}
+                  disabled={editor.selectedSlideIndex === slides.length - 1}
                   className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
               </div>
 
-              <Link
-                href={`/wizard/${params.id}`}
-                className="px-3 py-1.5 text-xs font-medium text-gray-400 bg-white/5 rounded-lg hover:bg-white/10 hover:text-white transition-colors"
-              >
-                עריכה
-              </Link>
+              {/* Properties panel toggle */}
               <button
-                onClick={downloadPptx}
-                disabled={isGeneratingPptx}
-                className="px-4 py-1.5 text-xs font-medium text-gray-300 bg-white/10 rounded-lg hover:bg-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setShowProperties(p => !p)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  showProperties
+                    ? 'text-white bg-white/20 ring-1 ring-white/30'
+                    : 'text-gray-400 bg-white/5 hover:bg-white/10 hover:text-white'
+                }`}
               >
-                {isGeneratingPptx ? 'מייצר...' : 'הורד PPTX'}
+                {showProperties ? 'סגור פאנל' : 'פאנל עריכה'}
               </button>
+
+              {/* Download PDF */}
               <button
                 onClick={downloadPdf}
                 disabled={isGeneratingPdf}
@@ -283,44 +415,33 @@ export default function SlideViewerPage() {
         </div>
       </header>
 
-      {/* Main content - LTR for correct iframe scaling (thumbnails left, slide right) */}
+      {/* ── Main content ─────────────────────────────── */}
       <div className="flex-1 flex min-h-0" dir="ltr">
-        {/* Thumbnails sidebar - left side */}
+        {/* Thumbnails sidebar */}
         <div
           className="w-[160px] flex-shrink-0 bg-[#0f0f18]/50 border-r border-white/5 overflow-y-auto py-3 px-2"
           ref={thumbnailsRef}
           style={{ scrollbarWidth: 'thin', scrollbarColor: '#222 transparent' }}
         >
-          {slides.map((slideHtml, index) => (
+          {slides.map((slide, index) => (
             <button
-              key={index}
-              onClick={() => setCurrentSlide(index)}
+              key={slide.id}
+              onClick={() => editor.selectSlide(index)}
               className={`w-full mb-2 rounded-lg overflow-hidden transition-all ${
-                index === currentSlide
+                index === editor.selectedSlideIndex
                   ? 'ring-2 ring-white/80 ring-offset-1 ring-offset-[#0a0a0f] shadow-lg shadow-white/5'
                   : 'opacity-50 hover:opacity-80'
               }`}
               style={{ aspectRatio: '16/9', position: 'relative' }}
+              title={`${slide.label} (${index + 1})`}
             >
-              <iframe
-                srcDoc={slideHtml}
-                className="pointer-events-none"
-                tabIndex={-1}
-                title={`thumbnail ${index + 1}`}
-                sandbox="allow-same-origin"
-                loading="lazy"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: 1920,
-                  height: 1080,
-                  transform: `scale(${thumbScale})`,
-                  transformOrigin: 'top left',
-                  background: '#fff',
-                  border: 'none',
-                }}
-              />
+              <div style={{ position: 'absolute', top: 0, left: 0 }}>
+                <SlideViewer
+                  slide={slide}
+                  designSystem={designSystem}
+                  scale={thumbScale}
+                />
+              </div>
               <div
                 className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent pt-3 pb-1 text-center"
                 style={{ zIndex: 1 }}
@@ -337,36 +458,56 @@ export default function SlideViewerPage() {
           className="flex-1 flex items-center justify-center overflow-hidden"
           style={{ background: '#0a0a0f' }}
         >
-          <div
-            className="rounded-xl shadow-2xl shadow-black/60"
-            style={{
-              width: scaledW,
-              height: scaledH,
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            <iframe
-              key={currentSlide}
-              srcDoc={slides[currentSlide]}
-              sandbox="allow-same-origin"
-              title={`שקף ${currentSlide + 1}`}
+          {editor.selectedSlide && (
+            <div
+              className="rounded-xl shadow-2xl shadow-black/60"
               style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: 1920,
-                height: 1080,
-                transform: `scale(${slideScale})`,
-                transformOrigin: 'top left',
-                background: '#fff',
-                border: 'none',
-                display: 'block',
+                width: Math.round(1920 * slideScale),
+                height: Math.round(1080 * slideScale),
+                position: 'relative',
+                overflow: 'hidden',
               }}
-            />
-          </div>
+            >
+              <SlideEditor
+                slide={editor.selectedSlide}
+                designSystem={designSystem}
+                scale={slideScale}
+                selectedElementId={editor.selectedElementId}
+                onElementSelect={editor.selectElement}
+                onElementUpdate={editor.updateElement}
+                onElementDelete={editor.deleteElement}
+              />
+            </div>
+          )}
         </div>
+
+        {/* Properties panel */}
+        {showProperties && editor.selectedSlide && (
+          <PropertiesPanel
+            slide={editor.selectedSlide}
+            selectedElement={editor.selectedElement}
+            designSystem={designSystem}
+            documentId={documentId}
+            onElementUpdate={editor.updateElement}
+            onBackgroundUpdate={editor.updateSlideBackground}
+            onClose={() => setShowProperties(false)}
+            onImageReplace={(elementId, tab) => { setImageModalElementId(elementId); setImageModalTab(tab || 'upload') }}
+            onAIRewrite={handleAIRewrite}
+            onRegenerateSlide={handleRegenerateSlide}
+          />
+        )}
       </div>
+
+      {/* Image source modal */}
+      <ImageSourceModal
+        isOpen={imageModalElementId !== null}
+        onClose={() => setImageModalElementId(null)}
+        onImageSelected={handleImageSelected}
+        designSystem={designSystem}
+        documentId={documentId}
+        slideLabel={editor.selectedSlide?.label}
+        initialTab={imageModalTab}
+      />
     </div>
   )
 }

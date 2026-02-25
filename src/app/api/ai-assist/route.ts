@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '@/lib/utils/json-cleanup'
 
 export const maxDuration = 60
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 // Use flash model for speed - these are small, focused tasks (<3s response)
-const FAST_MODEL = 'gemini-2.0-flash'
+const FAST_MODEL = 'gemini-3-flash-preview'
 
 type AiAssistAction =
   | 'generate_goal_description'
@@ -57,9 +57,10 @@ export async function POST(request: NextRequest) {
       model: FAST_MODEL,
       contents: prompt,
       config: {
-        // Gemini doesn't allow responseMimeType with googleSearch tool
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        // Gemini 3 supports structured outputs with tools
         ...(useGrounding
-          ? { tools: [{ googleSearch: {} }] }
+          ? { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' }
           : { responseMimeType: 'application/json' }),
       },
     })

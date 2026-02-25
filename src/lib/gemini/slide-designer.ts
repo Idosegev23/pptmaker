@@ -11,6 +11,13 @@
 
 import { GoogleGenAI } from '@google/genai'
 import { parseGeminiJson } from '@/lib/utils/json-cleanup'
+import type {
+  Presentation,
+  Slide,
+  DesignSystem,
+  SlideType,
+} from '@/types/presentation'
+// AST-to-HTML conversion available via: import { presentationToHtmlSlides } from '@/lib/presentation/ast-to-html'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 const MODEL = 'gemini-3.1-pro-preview'
@@ -636,4 +643,414 @@ export async function generateAISlides(
     console.error(`[SlideDesigner][${requestId}] AI slide generation failed entirely:`, error)
     throw error
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// AST-BASED PRESENTATION GENERATION (New Architecture)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Generate design system as structured DesignSystem object
+ */
+async function generateDesignSystemAST(
+  brand: BrandDesignInput
+): Promise<DesignSystem> {
+  const requestId = `ds-ast-${Date.now()}`
+  console.log(`[SlideDesigner][${requestId}] Generating AST design system for: ${brand.brandName}`)
+
+  const prompt = `אתה מעצב מצגות ברמה עולמית. צור ערכת עיצוב למותג "${brand.brandName}".
+
+מידע על המותג:
+- תעשייה: ${brand.industry || 'לא ידוע'}
+- אישיות: ${brand.brandPersonality?.join(', ') || 'מקצועי'}
+- צבע ראשי: ${brand.brandColors.primary}
+- צבע משני: ${brand.brandColors.secondary}
+- צבע הדגשה: ${brand.brandColors.accent}
+- סגנון: ${brand.brandColors.style || 'corporate'}
+- אווירה: ${brand.brandColors.mood || 'מקצועי'}
+- קהל יעד: ${brand.targetAudience || 'מבוגרים 25-45'}
+
+צור ערכת צבעים מלאה ויחודית בהתבסס על צבעי המותג.
+
+החזר JSON:
+{
+  "colors": {
+    "primary": "#hex - הצבע הראשי של המותג",
+    "secondary": "#hex - צבע משני (רקעים כהים)",
+    "accent": "#hex - צבע הדגשה",
+    "background": "#hex - רקע ברירת מחדל לשקפים",
+    "text": "#hex - צבע טקסט ברירת מחדל",
+    "cardBg": "#hex - רקע כרטיסים",
+    "cardBorder": "#hex - גבול כרטיסים"
+  },
+  "fonts": {
+    "heading": "Heebo",
+    "body": "Heebo"
+  },
+  "direction": "rtl"
+}`
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      },
+    })
+
+    const text = response.text || ''
+    const parsed = parseGeminiJson<DesignSystem>(text)
+
+    if (parsed?.colors?.primary) {
+      console.log(`[SlideDesigner][${requestId}] AST design system generated`)
+      return {
+        colors: parsed.colors,
+        fonts: parsed.fonts || { heading: 'Heebo', body: 'Heebo' },
+        direction: parsed.direction || 'rtl',
+      }
+    }
+
+    throw new Error('Invalid design system response')
+  } catch (error) {
+    console.error(`[SlideDesigner][${requestId}] AST design system failed:`, error)
+    // Fallback to brand colors
+    return {
+      colors: {
+        primary: brand.brandColors.primary,
+        secondary: brand.brandColors.secondary,
+        accent: brand.brandColors.accent,
+        background: brand.brandColors.background || '#0f0f1e',
+        text: brand.brandColors.text || '#ffffff',
+        cardBg: brand.brandColors.background || '#1a1a2e',
+        cardBorder: brand.brandColors.primary + '30',
+      },
+      fonts: { heading: 'Heebo', body: 'Heebo' },
+      direction: 'rtl',
+    }
+  }
+}
+
+/**
+ * Generate slides as JSON AST (array of Slide objects)
+ */
+async function generateSlidesBatchAST(
+  designSystem: DesignSystem,
+  slides: SlideContentInput[],
+  batchIndex: number,
+  brandName: string,
+  logoUrl?: string,
+  leadersLogoUrl?: string,
+): Promise<Slide[]> {
+  const requestId = `sb-ast-${batchIndex}-${Date.now()}`
+  console.log(`[SlideDesigner][${requestId}] Generating AST batch ${batchIndex + 1}: ${slides.map(s => s.slideType).join(', ')}`)
+
+  const slidesDescription = slides.map((slide, i) => {
+    const contentJson = JSON.stringify(slide.content, null, 2)
+    return `
+### שקף ${i + 1}: ${slide.title} (סוג: ${slide.slideType})
+${slide.imageUrl ? `תמונה זמינה: ${slide.imageUrl}` : 'אין תמונה'}
+תוכן:
+\`\`\`json
+${contentJson}
+\`\`\``
+  }).join('\n')
+
+  const colors = designSystem.colors
+  const prompt = `אתה מעצב מצגות מקצועי ברמה עולמית. צור שקפים כ-JSON עבור "${brandName}".
+
+## ערכת עיצוב:
+- צבע ראשי: ${colors.primary}
+- צבע משני: ${colors.secondary}
+- צבע הדגשה: ${colors.accent}
+- רקע: ${colors.background}
+- טקסט: ${colors.text}
+- רקע כרטיס: ${colors.cardBg}
+- גבול כרטיס: ${colors.cardBorder}
+- פונט: Heebo
+- כיוון: RTL (עברית)
+
+## לוגואים:
+${logoUrl ? `- לוגו לקוח: ${logoUrl}` : '- אין לוגו לקוח'}
+${leadersLogoUrl ? `- לוגו Leaders: ${leadersLogoUrl}` : ''}
+
+## שקפים ליצירה:
+${slidesDescription}
+
+## הוראות קריטיות:
+
+1. קנבס: 1920×1080 פיקסלים. כל אלמנט ממוקם באופן אבסולוטי עם x, y, width, height.
+2. Safe Zone: טקסט ותוכן חייבים להישאר בתוך 80px margins (x >= 80, y >= 80, x+width <= 1840, y+height <= 1000).
+3. אלמנטים דקורטיביים (shapes) יכולים לחרוג מ-Safe Zone.
+4. כל הטקסט בעברית, textAlign: "right" (RTL).
+5. מספרים ואחוזים: textAlign: "left" עם כיוון LTR.
+6. חובה לכלול את כל שדות התוכן - אסור לדלג על מידע.
+7. כותרות: fontSize 48-72, fontWeight 700-900, color ייחודי.
+8. גוף: fontSize 20-28, fontWeight 400-500.
+9. מספרים/מדדים: fontSize 48-80, fontWeight 800-900, color accent.
+10. תמונות: objectFit "cover", borderRadius 16-32.
+11. שימוש נרחב ב-shapes דקורטיביים: gradients, clip-paths, עיגולים, קווים.
+
+## כללי Layout לפי סוג:
+- **cover**: רקע gradient דרמטי. שם מותג בטייפ ענק (80-120px) ממורכז. כותרת משנית מתחת. shape דקורטיבי. לוגואים בפינות.
+- **brief**: חלוקה 60/40. צד ימין: כותרת + טקסט. צד שמאל: תמונה (אם יש) או shape דקורטיבי.
+- **goals**: 3-4 כרטיסים ב-grid (shapes כרקע + text elements). כל כרטיס: כותרת bold + תיאור.
+- **audience**: כרטיס פרסונה מרכזי. נתונים בצד. תמונה אם זמינה.
+- **insight**: טקסט תובנה גדול ומרכזי עם עיצוב דרמטי. מקור + נתון תומך.
+- **strategy**: 3 עמודים שווים. כל pillar: shape רקע + כותרת + תיאור.
+- **bigIdea**: כותרת ענקית ממורכזת + תיאור + תמונה גדולה.
+- **approach**: צעדים מחוברים (3-4 שלבים). כל שלב: כותרת + תיאור.
+- **deliverables**: רשימת תוצרים מעוצבת. כל פריט: סוג + כמות + תיאור.
+- **metrics**: 4 תיבות מספרים בשורה עם ערכים ענקיים. מתחת: הסבר.
+- **influencerStrategy**: קריטריונים + הנחיות ברשימה מעוצבת.
+- **influencers**: grid של כרטיסי משפיענים. כל כרטיס: תמונה עגולה + שם + handle + נתונים.
+- **closing**: כותרת ממורכזת ענקית. עיצוב מינימלי. לוגואים בפוטר.
+
+## Anti-patterns (אסור):
+- טקסט קטן מ-18px
+- שטח ריק גדול ללא תוכן
+- יותר מ-6 אלמנטים אנכית
+- zIndex בלי הגיון (רקע=0-5, תוכן=10-50, overlay=60+)
+
+## מבנה JSON לכל שקף:
+{
+  "id": "slide-{N}",
+  "slideType": "cover|brief|goals|...",
+  "label": "שם השקף בעברית",
+  "background": { "type": "solid|gradient|image", "value": "CSS value or URL" },
+  "elements": [
+    {
+      "id": "el-{unique}", "type": "shape",
+      "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
+      "shapeType": "decorative", "fill": "linear-gradient(135deg, #1a1a2e, #16213e)",
+      "clipPath": "...", "borderRadius": 0, "opacity": 0.5
+    },
+    {
+      "id": "el-{unique}", "type": "text",
+      "x": 80, "y": 120, "width": 800, "height": 80, "zIndex": 10,
+      "content": "כותרת", "fontSize": 56, "fontWeight": 700,
+      "color": "#ffffff", "textAlign": "right", "role": "title"
+    },
+    {
+      "id": "el-{unique}", "type": "image",
+      "x": 960, "y": 200, "width": 880, "height": 600, "zIndex": 5,
+      "src": "URL", "objectFit": "cover", "borderRadius": 24, "alt": "תיאור"
+    }
+  ]
+}
+
+החזר JSON:
+{
+  "slides": [ {slide1}, {slide2}, ... ]
+}`
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: {
+        thinkingConfig: { thinkingBudget: 5000 },
+      },
+    })
+
+    const text = response.text || ''
+    const parsed = parseGeminiJson<{ slides: Slide[] }>(text)
+
+    if (parsed?.slides?.length > 0) {
+      console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} AST slides`)
+
+      // Validate and fix slide data
+      const validSlides = parsed.slides.map((slide, i) => ({
+        id: slide.id || `slide-${batchIndex * 5 + i}`,
+        slideType: (slide.slideType || slides[i]?.slideType || 'closing') as SlideType,
+        label: slide.label || slides[i]?.title || `שקף ${batchIndex * 5 + i + 1}`,
+        background: slide.background || { type: 'solid' as const, value: colors.background },
+        elements: (slide.elements || []).map((el, j) => ({
+          ...el,
+          id: el.id || `el-${batchIndex * 5 + i}-${j}`,
+        })),
+      }))
+
+      return validSlides
+    }
+
+    throw new Error('No slides in AST response')
+  } catch (error) {
+    console.error(`[SlideDesigner][${requestId}] AST batch generation failed:`, error)
+    throw error
+  }
+}
+
+/**
+ * Main entry point for AST-based presentation generation.
+ * Returns a complete Presentation object.
+ */
+export async function generateAIPresentation(
+  data: PremiumProposalData,
+  config: {
+    accentColor?: string
+    brandLogoUrl?: string
+    leadersLogoUrl?: string
+    clientLogoUrl?: string
+    images?: { coverImage?: string; brandImage?: string; audienceImage?: string; activityImage?: string }
+    extraImages?: { id: string; url: string; placement: string }[]
+    imageStrategy?: { conceptSummary?: string; visualDirection?: string; styleGuide?: string }
+  } = {}
+): Promise<Presentation> {
+  const requestId = `ai-pres-${Date.now()}`
+  console.log(`[SlideDesigner][${requestId}] Starting AST presentation generation for: ${data.brandName}`)
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const leadersLogo = config.leadersLogoUrl || `${supabaseUrl}/storage/v1/object/public/assets/logos/leaders-logo-black.png`
+  const clientLogo = config.clientLogoUrl || data._scraped?.logoUrl || config.brandLogoUrl || ''
+
+  try {
+    // Step 1: Generate Design System
+    const brandColors = data._brandColors || {
+      primary: config.accentColor || '#E94560',
+      secondary: '#1A1A2E',
+      accent: config.accentColor || '#E94560',
+      style: 'corporate',
+      mood: 'מקצועי',
+    }
+
+    const designSystem = await generateDesignSystemAST({
+      brandName: data.brandName || 'Unknown',
+      industry: data._brandResearch?.industry || '',
+      brandPersonality: data._brandResearch?.brandPersonality || [],
+      brandColors,
+      logoUrl: clientLogo || undefined,
+      coverImageUrl: config.images?.coverImage || undefined,
+      targetAudience: data.targetDescription || '',
+    })
+
+    // Step 2: Build slide content batches (same logic as HTML version)
+    const formatNum = (n?: number) => {
+      if (!n) return '0'
+      if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
+      if (n >= 1000) return `${Math.round(n / 1000)}K`
+      return n.toString()
+    }
+
+    const currency = data.currency === 'USD' ? '$' : data.currency === 'EUR' ? '€' : '₪'
+
+    // Same batch building as generateAISlides...
+    const batch1: SlideContentInput[] = [
+      { slideType: 'cover', title: 'שער', content: { brandName: data.brandName, campaignSubtitle: data.campaignSubtitle || data.strategyHeadline || 'הצעת שיתוף פעולה', issueDate: data.issueDate || new Date().toLocaleDateString('he-IL') }, imageUrl: config.images?.coverImage },
+      { slideType: 'brief', title: 'למה התכנסנו?', content: { headline: 'למה התכנסנו?', brandBrief: data.brandBrief || '', painPoints: data.brandPainPoints || [], objective: data.brandObjective || '' }, imageUrl: config.images?.brandImage },
+      { slideType: 'goals', title: 'מטרות הקמפיין', content: { headline: 'מטרות הקמפיין', goals: data.goalsDetailed || (data.goals || []).map(g => ({ title: g, description: '' })) } },
+      { slideType: 'audience', title: 'קהל היעד', content: { headline: 'קהל היעד', gender: data.targetGender || '', ageRange: data.targetAgeRange || '', description: data.targetDescription || '', behavior: data.targetBehavior || '', insights: data.targetInsights || [] }, imageUrl: config.images?.audienceImage },
+      { slideType: 'insight', title: 'התובנה המרכזית', content: { headline: 'התובנה המרכזית', keyInsight: data.keyInsight || '', source: data.insightSource || '', data: data.insightData || '' } },
+    ]
+
+    const batch2: SlideContentInput[] = [
+      { slideType: 'strategy', title: 'האסטרטגיה', content: { headline: 'האסטרטגיה', strategyHeadline: data.strategyHeadline || '', description: data.strategyDescription || '', pillars: data.strategyPillars || [] } },
+      { slideType: 'bigIdea', title: 'הרעיון המרכזי', content: { headline: data.activityTitle || 'הרעיון המרכזי', concept: data.activityConcept || '', description: data.activityDescription || '' }, imageUrl: config.images?.activityImage || config.images?.brandImage },
+      { slideType: 'approach', title: 'הגישה שלנו', content: { headline: 'הגישה שלנו', approaches: data.activityApproach || [], differentiator: data.activityDifferentiator || '' } },
+      { slideType: 'deliverables', title: 'תוצרים', content: { headline: 'תוצרים', deliverables: data.deliverablesDetailed || (data.deliverables || []).map(d => ({ type: d, quantity: 1, description: '' })), summary: data.deliverablesSummary || '' } },
+      { slideType: 'metrics', title: 'יעדים ומדדים', content: { headline: 'יעדים ומדדים', budget: data.budget ? `${currency}${formatNum(data.budget)}` : '', reach: formatNum(data.potentialReach), engagement: formatNum(data.potentialEngagement), impressions: formatNum(data.estimatedImpressions), cpe: data.cpe ? `${currency}${data.cpe.toFixed(1)}` : '', explanation: data.metricsExplanation || '' } },
+    ]
+
+    const influencers = data.enhancedInfluencers || data.scrapedInfluencers?.map(i => ({
+      name: i.name || i.username || '', username: i.username || '', profilePicUrl: i.profilePicUrl || '',
+      categories: [] as string[], followers: i.followers || 0, engagementRate: i.engagementRate || 0,
+    })) || []
+    const aiRecs = data.influencerResearch?.recommendations || []
+
+    const batch3: SlideContentInput[] = [
+      { slideType: 'influencerStrategy', title: 'אסטרטגיית משפיענים', content: { headline: 'אסטרטגיית משפיענים', strategy: data.influencerStrategy || '', criteria: data.influencerCriteria || [], guidelines: data.contentGuidelines || [] } },
+    ]
+
+    if (influencers.length > 0 || aiRecs.length > 0) {
+      batch3.push({
+        slideType: 'influencers', title: 'משפיענים מומלצים',
+        content: {
+          headline: 'משפיענים מומלצים',
+          influencers: influencers.slice(0, 6).map(inf => ({ name: inf.name, username: inf.username, profilePicUrl: inf.profilePicUrl, followers: formatNum(inf.followers), engagementRate: `${inf.engagementRate?.toFixed(1) || '0'}%`, categories: inf.categories?.join(', ') || '' })),
+          aiRecommendations: aiRecs.slice(0, 6).map((rec: { name?: string; handle?: string; followers?: string; engagement?: string; whyRelevant?: string; profilePicUrl?: string }) => ({ name: rec.name || '', handle: rec.handle || '', followers: rec.followers || '', engagement: rec.engagement || '', reason: rec.whyRelevant || '', profilePicUrl: rec.profilePicUrl || '' })),
+        },
+      })
+    }
+
+    batch3.push({ slideType: 'closing', title: 'סיום', content: { brandName: data.brandName || '', headline: "LET'S CREATE TOGETHER", subheadline: `נשמח להתחיל לעבוד עם ${data.brandName}` } })
+
+    // Step 3: Generate all batches in parallel
+    console.log(`[SlideDesigner][${requestId}] Generating 3 AST batches in parallel`)
+
+    const [result1, result2, result3] = await Promise.allSettled([
+      generateSlidesBatchAST(designSystem, batch1, 0, data.brandName || '', clientLogo, leadersLogo),
+      generateSlidesBatchAST(designSystem, batch2, 1, data.brandName || '', clientLogo, leadersLogo),
+      generateSlidesBatchAST(designSystem, batch3, 2, data.brandName || '', clientLogo, leadersLogo),
+    ])
+
+    const allSlides: Slide[] = []
+    let failedBatches = 0
+
+    const batchResults = [result1, result2, result3]
+    for (let i = 0; i < batchResults.length; i++) {
+      const result = batchResults[i]
+      if (result.status === 'fulfilled' && result.value.length > 0) {
+        allSlides.push(...result.value)
+      } else {
+        failedBatches++
+        console.error(`[SlideDesigner][${requestId}] AST Batch ${i + 1} failed:`, result.status === 'rejected' ? result.reason : 'empty')
+      }
+    }
+
+    if (allSlides.length === 0) {
+      throw new Error('All AST batches failed - no slides generated')
+    }
+
+    const presentation: Presentation = {
+      id: `pres-${Date.now()}`,
+      title: data.brandName || 'הצעת מחיר',
+      designSystem,
+      slides: allSlides,
+      metadata: {
+        brandName: data.brandName,
+        createdAt: new Date().toISOString(),
+        version: 1,
+      },
+    }
+
+    console.log(`[SlideDesigner][${requestId}] AST presentation generated: ${allSlides.length} slides (${failedBatches} batches failed)`)
+    return presentation
+
+  } catch (error) {
+    console.error(`[SlideDesigner][${requestId}] AST presentation generation failed:`, error)
+    throw error
+  }
+}
+
+/**
+ * Generate a single slide AST using the existing design system.
+ * Used for regenerating individual slides in the editor.
+ */
+export async function regenerateSingleSlide(
+  designSystem: DesignSystem,
+  slideContent: SlideContentInput,
+  brandName: string,
+  instruction?: string,
+  logoUrl?: string,
+  leadersLogoUrl?: string,
+): Promise<Slide> {
+  const requestId = `regen-${Date.now()}`
+  console.log(`[SlideDesigner][${requestId}] Regenerating single slide: ${slideContent.slideType}`)
+
+  const extraInstruction = instruction ? `\n\nהנחיה נוספת מהמשתמש: ${instruction}` : ''
+
+  const slides = await generateSlidesBatchAST(
+    designSystem,
+    [{ ...slideContent, title: slideContent.title + extraInstruction }],
+    0,
+    brandName,
+    logoUrl,
+    leadersLogoUrl,
+  )
+
+  if (slides.length === 0) {
+    throw new Error('Failed to regenerate slide')
+  }
+
+  return slides[0]
 }

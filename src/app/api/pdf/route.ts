@@ -7,6 +7,8 @@ import { renderProposalToHtml } from '@/templates/quote/proposal-template'
 import { generatePremiumProposalSlides } from '@/templates/quote/premium-proposal-template'
 import { generateAISlides } from '@/lib/gemini/slide-designer'
 import { generateProposalImages } from '@/lib/gemini/proposal-images'
+import { presentationToHtmlSlides } from '@/lib/presentation/ast-to-html'
+import type { Presentation } from '@/types/presentation'
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 
 export async function POST(request: NextRequest) {
@@ -45,7 +47,42 @@ export async function POST(request: NextRequest) {
 
     // Get document data
     const documentData = document.data as Record<string, unknown>
-    
+
+    // ─── AST Presentation path ─────────────────────────────
+    // If `_presentation` exists, use the AST pipeline (convert AST → HTML → PDF)
+    const astPresentation = documentData._presentation as Presentation | undefined
+    if (astPresentation && astPresentation.slides?.length > 0) {
+      console.log(`[PDF] Using AST presentation with ${astPresentation.slides.length} slides`)
+      const astHtmlPages = presentationToHtmlSlides(astPresentation)
+      console.log(`[PDF] Converted AST to ${astHtmlPages.length} HTML pages`)
+
+      const pdfBuffer = await generateMultiPagePdf(astHtmlPages, { format: '16:9' })
+      console.log(`[PDF] Generated PDF, size: ${pdfBuffer.length} bytes`)
+
+      const fileName = `proposal_${document.id}_${Date.now()}.pdf`
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true })
+      if (uploadError) console.error('Upload error:', uploadError)
+
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName)
+      await supabase
+        .from('documents')
+        .update({ pdf_url: urlData.publicUrl, status: 'generated' })
+        .eq('id', documentId)
+
+      if (action === 'download') {
+        return new NextResponse(new Uint8Array(pdfBuffer), {
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${fileName}"`,
+          },
+        })
+      }
+      return NextResponse.json({ success: true, pdfUrl: urlData.publicUrl })
+    }
+    // ─── END AST path ──────────────────────────────────────
+
     // Check if this is an auto-proposal with rich data
     const isAutoProposal = !!documentData._brandResearch || !!documentData._brandColors || !!documentData.influencerResearch
     

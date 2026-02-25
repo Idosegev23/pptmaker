@@ -1,0 +1,126 @@
+'use client'
+
+import React from 'react'
+import type {
+  SlideElement,
+  TextElement,
+  ImageElement,
+  ShapeElement,
+  DesignSystem,
+} from '@/types/presentation'
+import { isTextElement, isImageElement, isShapeElement } from '@/types/presentation'
+
+interface ElementRendererProps {
+  element: SlideElement
+  designSystem: DesignSystem
+  isEditing?: boolean
+  onTextChange?: (content: string) => void
+}
+
+function TextElementView({ element, isEditing, onTextChange }: {
+  element: TextElement
+  isEditing?: boolean
+  onTextChange?: (content: string) => void
+}) {
+  const style: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    fontSize: element.fontSize,
+    fontWeight: element.fontWeight,
+    color: element.color,
+    textAlign: element.textAlign,
+    lineHeight: element.lineHeight || 1.3,
+    letterSpacing: element.letterSpacing ? `${element.letterSpacing}px` : undefined,
+    textDecoration: element.textDecoration !== 'none' ? element.textDecoration : undefined,
+    fontFamily: "'Heebo', sans-serif",
+    whiteSpace: 'pre-wrap',
+    wordWrap: 'break-word',
+    overflow: 'hidden',
+    direction: 'rtl',
+    backgroundColor: element.backgroundColor || undefined,
+    borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,
+    padding: element.padding ? `${element.padding}px` : undefined,
+    outline: 'none',
+    cursor: isEditing ? 'text' : 'default',
+  }
+
+  if (isEditing) {
+    return (
+      <div
+        contentEditable
+        suppressContentEditableWarning
+        style={style}
+        onBlur={(e) => onTextChange?.(e.currentTarget.textContent || '')}
+        dangerouslySetInnerHTML={{ __html: element.content }}
+      />
+    )
+  }
+
+  return <div style={style}>{element.content}</div>
+}
+
+function ImageElementView({ element }: { element: ImageElement }) {
+  const containerStyle: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,
+    clipPath: element.clipPath || undefined,
+    border: element.border || undefined,
+  }
+
+  return (
+    <div style={containerStyle}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={element.src}
+        alt={element.alt || ''}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: element.objectFit,
+          display: 'block',
+        }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+        draggable={false}
+      />
+    </div>
+  )
+}
+
+function ShapeElementView({ element }: { element: ShapeElement }) {
+  const style: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,
+    clipPath: element.clipPath || undefined,
+    border: element.border || undefined,
+  }
+
+  // Handle gradient or solid fill
+  if (element.fill.includes('gradient') || element.fill.includes('linear') || element.fill.includes('radial')) {
+    style.background = element.fill
+  } else {
+    style.backgroundColor = element.fill
+  }
+
+  return <div style={style} />
+}
+
+export default function ElementRenderer({
+  element,
+  designSystem: _designSystem,
+  isEditing,
+  onTextChange,
+}: ElementRendererProps) {
+  if (isTextElement(element)) {
+    return <TextElementView element={element} isEditing={isEditing} onTextChange={onTextChange} />
+  }
+  if (isImageElement(element)) {
+    return <ImageElementView element={element} />
+  }
+  if (isShapeElement(element)) {
+    return <ShapeElementView element={element} />
+  }
+  return null
+}
