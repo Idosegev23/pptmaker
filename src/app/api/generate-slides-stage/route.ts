@@ -15,9 +15,9 @@ export const maxDuration = 300
  * POST /api/generate-slides-stage
  *
  * Staged slide generation pipeline — each call runs one stage:
- *   - stage: 'foundation' → Stages 1-3 (Creative Direction + Design System + Layout Strategy)
- *   - stage: 'batch' + batchIndex → Stage 4 (one batch of slides)
- *   - stage: 'finalize' → Stage 5+6 (validation + assembly)
+ *   - stage: 'foundation' → Design System + batch preparation
+ *   - stage: 'batch' + batchIndex → One batch of AST slides
+ *   - stage: 'finalize' → Validation + assembly
  *
  * Intermediate results are cached in the document's _pipeline field.
  */

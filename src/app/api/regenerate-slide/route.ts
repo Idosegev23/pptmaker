@@ -63,28 +63,15 @@ export async function POST(request: NextRequest) {
       content: documentData,
     }
 
-    // Extract creative direction and layout strategy from stored presentation metadata
-    const creativeDirection = presentation._creativeDirection || {
-      visualMetaphor: 'מינימליסטי מקצועי',
-      oneRule: 'WOW factor in every slide',
-      colorUsage: 'brand-first',
-      typographyStrategy: 'contrast-pairs',
-      signatureElement: 'geometric shapes',
-    }
-
-    const layoutStrategy = presentation._layoutStrategy || {}
-
     console.log(`[${requestId}] Regenerating: type=${slideType}, label=${slideLabel}`)
 
     const newSlide = await regenerateSingleSlide(
       presentation.designSystem,
       slideContent,
       brandName,
-      creativeDirection,
-      layoutStrategy,
+      undefined,
+      undefined,
       instruction,
-      logoUrl,
-      scrapedAssets?.logoUrl,
     )
 
     console.log(`[${requestId}] Regenerated slide with ${newSlide.elements.length} elements`)
