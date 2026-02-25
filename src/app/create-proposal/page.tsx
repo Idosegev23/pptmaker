@@ -280,7 +280,7 @@ export default function CreateProposalPage() {
       setStage('done')
 
       setTimeout(() => {
-        router.push(`/wizard/${docId}`)
+        router.push(`/research/${docId}`)
       }, 1500)
     } catch (err) {
       console.error('[Create Proposal] Error:', err)

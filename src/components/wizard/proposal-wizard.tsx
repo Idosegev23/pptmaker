@@ -45,7 +45,7 @@ import StepDeliverables from './steps/step-deliverables'
 import StepQuantities from './steps/step-quantities'
 import StepMediaTargets from './steps/step-media-targets'
 import StepInfluencers from './steps/step-influencers'
-import StepResearch from './steps/step-research'
+// Research step removed — now handled by /research/[id] page before wizard
 
 // ---------- Types ----------
 
@@ -64,9 +64,8 @@ export interface StepProps {
 
 // ---------- Step component map ----------
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const STEP_COMPONENTS: Record<WizardStepId, ComponentType<any>> = {
+const STEP_COMPONENTS: Partial<Record<WizardStepId, ComponentType<any>>> = {
   brief: StepBrief,
-  research: StepResearch,
   goals: StepGoals,
   target_audience: StepTargetAudience,
   key_insight: StepKeyInsight,
@@ -304,34 +303,6 @@ export default function ProposalWizard({
     // Mark as complete and go next
     dispatch({ type: 'MARK_STEP_COMPLETE', step: state.currentStep })
 
-    // When leaving research step with results → enrich subsequent steps + save research to document
-    if (state.currentStep === 'research') {
-      const researchData = state.stepData.research
-      if (researchData?.researchPhase === 'complete' && (researchData.brandResearch || researchData.influencerStrategy)) {
-        console.log('[Wizard] Enriching steps with research data')
-        const enriched = enrichStepData(state.stepData, researchData.brandResearch, researchData.influencerStrategy)
-        for (const [stepId, stepData] of Object.entries(enriched)) {
-          if (stepData && stepId !== 'research') {
-            dispatch({ type: 'UPDATE_STEP_DATA', step: stepId as WizardStepId, data: stepData })
-          }
-        }
-
-        // Persist research results to document
-        const patchPayload: Record<string, unknown> = {
-          _pipelineStatus: { research: 'complete' },
-        }
-        if (researchData.brandResearch) patchPayload._brandResearch = researchData.brandResearch
-        if (researchData.influencerStrategy) patchPayload._influencerStrategy = researchData.influencerStrategy
-        if (researchData.brandColors) patchPayload._brandColors = researchData.brandColors
-
-        fetch(`/api/documents/${documentId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patchPayload),
-        }).catch(err => console.error('[Wizard] Failed to save research to document:', err))
-      }
-    }
-
     // Save before navigating
     if (state.isDirty) {
       saveToServer(state)
@@ -415,7 +386,7 @@ export default function ProposalWizard({
         _cachedSlides: null, // Invalidate - will regenerate on visual generation page
         _pipelineStatus: {
           textGeneration: 'complete',
-          research: state.stepData.research?.researchPhase === 'complete' ? 'complete' : 'pending',
+          research: 'complete',
           visualAssets: 'pending',
           slideGeneration: 'pending',
         },
@@ -532,7 +503,6 @@ export default function ProposalWizard({
                 onChange={handleStepDataChange}
                 errors={stepErrors}
                 briefContext={`${state.stepData.brief?.brandName || ''}: ${state.stepData.brief?.brandBrief || ''}`}
-                {...(state.currentStep === 'research' ? { documentId, brandName } : {})}
               />
             )}
           </div>
