@@ -213,6 +213,17 @@ export function wizardDataToProposalData(
   }
   if (stepData.research?.influencerStrategy) {
     data._influencerStrategy = stepData.research.influencerStrategy
+    // Also map to influencerResearch so slide-designer can find recommendations
+    data.influencerResearch = stepData.research.influencerStrategy
+    // Fill influencer criteria/guidelines from research if not set by user
+    if (!data.influencerCriteria && stepData.research.influencerStrategy.contentThemes?.length) {
+      data.influencerCriteria = stepData.research.influencerStrategy.contentThemes.map(
+        (t: { theme?: string } | string) => typeof t === 'string' ? t : t.theme || ''
+      ).filter(Boolean)
+    }
+    if (!data.influencerStrategy && stepData.research.influencerStrategy.strategySummary) {
+      data.influencerStrategy = stepData.research.influencerStrategy.strategySummary
+    }
   }
   if (stepData.research?.brandColors) {
     data._brandColors = stepData.research.brandColors

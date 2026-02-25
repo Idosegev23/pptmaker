@@ -778,10 +778,12 @@ function buildSlideBatches(
     name: i.name || i.username || '', username: i.username || '', profilePicUrl: i.profilePicUrl || '',
     categories: [] as string[], followers: i.followers || 0, engagementRate: i.engagementRate || 0,
   })) || []
-  const aiRecs = data.influencerResearch?.recommendations || []
+  // Research saves as _influencerStrategy, wizard maps to influencerResearch — check both
+  const researchStrategy = data._influencerStrategy || data.influencerResearch
+  const aiRecs = researchStrategy?.recommendations || []
 
   const batch3: SlideContentInput[] = [
-    { slideType: 'influencerStrategy', title: 'אסטרטגיית משפיענים', content: { headline: 'אסטרטגיית משפיענים', strategy: data.influencerStrategy || '', criteria: data.influencerCriteria || [], guidelines: data.contentGuidelines || [] } },
+    { slideType: 'influencerStrategy', title: 'אסטרטגיית משפיענים', content: { headline: 'אסטרטגיית משפיענים', strategy: data.influencerStrategy || researchStrategy?.strategySummary || '', criteria: data.influencerCriteria || researchStrategy?.contentThemes?.map((t: { theme?: string }) => t.theme || t) || [], guidelines: data.contentGuidelines || [] } },
   ]
   if (influencers.length > 0 || aiRecs.length > 0) {
     batch3.push({

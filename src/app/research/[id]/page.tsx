@@ -62,6 +62,9 @@ export default function ResearchPage() {
   const [brandDone, setBrandDone] = useState(false)
   const [influencerDone, setInfluencerDone] = useState(false)
   const [subStageMsg, setSubStageMsg] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [researchResults, setResearchResults] = useState<{ brand: any; influencer: any; colors: any } | null>(null)
+  const [showResults, setShowResults] = useState(false)
 
   const startedRef = useRef(false)
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -224,9 +227,10 @@ export default function ResearchPage() {
         console.error('[Research] Failed to save research data')
       }
 
-      // Done
+      // Done — save results for display
+      setResearchResults({ brand: brandResearch, influencer: influencerStrategy, colors })
       setStage('done')
-      setTimeout(() => router.push(`/wizard/${documentId}`), 1500)
+      setShowResults(true)
     } catch (err) {
       console.error('[Research] Error:', err)
       setStage('error')
@@ -252,6 +256,25 @@ export default function ResearchPage() {
     if (currentIdx === stepIdx) return 'active'
     return 'pending'
   }, [stage])
+
+  // Download research as JSON file
+  const downloadResearch = useCallback(() => {
+    if (!researchResults) return
+    const content = {
+      brandName,
+      researchDate: new Date().toLocaleDateString('he-IL'),
+      brandResearch: researchResults.brand,
+      influencerStrategy: researchResults.influencer,
+      brandColors: researchResults.colors,
+    }
+    const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `research-${brandName || 'report'}-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [researchResults, brandName])
 
   const activeTips = useMemo(() => GENERIC_TIPS, [])
   const stageStr: string = stage
@@ -459,8 +482,8 @@ export default function ResearchPage() {
                   </div>
                 )}
 
-                {/* Done state */}
-                {stageStr === 'done' && (
+                {/* Done state — show results */}
+                {stageStr === 'done' && !showResults && (
                   <div className="bg-[#10b981]/10 backdrop-blur-md border border-[#10b981]/30 rounded-2xl p-6 text-center animate-in zoom-in-95 duration-500">
                     <div className="w-16 h-16 rounded-full bg-[#10b981]/20 mx-auto mb-4 flex items-center justify-center">
                       <svg className="w-8 h-8 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -526,7 +549,328 @@ export default function ResearchPage() {
             </div>
           </div>
         )}
+
+        {/* ═══ RESEARCH RESULTS ═══ */}
+        {showResults && researchResults && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* Action bar */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-extrabold text-[#212529]">תוצאות המחקר</h2>
+              <div className="flex gap-3">
+                <button
+                  onClick={downloadResearch}
+                  className="flex items-center gap-2 bg-white border border-[#dfdfdf] text-[#6b7281] rounded-full px-5 py-2.5 text-sm font-medium hover:bg-gray-50 hover:text-[#212529] hover:shadow-sm transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  הורד מחקר
+                </button>
+                <button
+                  onClick={() => router.push(`/wizard/${documentId}`)}
+                  className="flex items-center gap-2 bg-[#f2cc0d] text-[#0f172a] rounded-full px-6 py-2.5 text-sm font-bold hover:scale-105 transition-transform shadow-md"
+                >
+                  המשך לעריכת ההצעה
+                  <svg className="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* ── Brand Research ── */}
+            {researchResults.brand && (
+              <ResearchSection title="מחקר מותג" icon="🏢" defaultOpen>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {researchResults.brand.industry && (
+                    <InfoCard label="תעשייה" value={researchResults.brand.industry} />
+                  )}
+                  {researchResults.brand.marketPosition && (
+                    <InfoCard label="מיקום בשוק" value={researchResults.brand.marketPosition} />
+                  )}
+                  {researchResults.brand.pricePositioning && (
+                    <InfoCard label="מיצוב מחיר" value={researchResults.brand.pricePositioning} />
+                  )}
+                  {researchResults.brand.founded && (
+                    <InfoCard label="שנת הקמה" value={researchResults.brand.founded} />
+                  )}
+                </div>
+                {researchResults.brand.companyDescription && (
+                  <div className="mt-4">
+                    <p className="text-xs font-bold text-[#6b7281] uppercase tracking-wider mb-1">תיאור המותג</p>
+                    <p className="text-sm text-[#212529] leading-relaxed whitespace-pre-line">{researchResults.brand.companyDescription}</p>
+                  </div>
+                )}
+                {researchResults.brand.brandPersonality?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-bold text-[#6b7281] uppercase tracking-wider mb-2">אישיות המותג</p>
+                    <div className="flex flex-wrap gap-2">
+                      {researchResults.brand.brandPersonality.map((p: string, i: number) => (
+                        <span key={i} className="bg-[#f2cc0d]/10 text-[#8a7000] px-3 py-1 rounded-full text-xs font-semibold border border-[#f2cc0d]/20">{p}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {researchResults.brand.uniqueSellingPoints?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-bold text-[#6b7281] uppercase tracking-wider mb-2">יתרונות תחרותיים</p>
+                    <ul className="space-y-1">
+                      {researchResults.brand.uniqueSellingPoints.map((usp: string, i: number) => (
+                        <li key={i} className="text-sm text-[#212529] flex items-start gap-2">
+                          <span className="text-[#f2cc0d] mt-1">●</span>{usp}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {researchResults.brand.competitors?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-bold text-[#6b7281] uppercase tracking-wider mb-2">מתחרים</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {researchResults.brand.competitors.slice(0, 6).map((c: { name: string; description?: string; differentiator?: string }, i: number) => (
+                        <div key={i} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                          <p className="font-bold text-sm text-[#212529]">{c.name}</p>
+                          {c.differentiator && <p className="text-xs text-[#6b7281] mt-1">{c.differentiator}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </ResearchSection>
+            )}
+
+            {/* ── Target Audience ── */}
+            {researchResults.brand?.targetDemographics && (
+              <ResearchSection title="קהל יעד" icon="👥">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {researchResults.brand.targetDemographics.primaryAudience?.gender && (
+                    <InfoCard label="מגדר" value={researchResults.brand.targetDemographics.primaryAudience.gender} />
+                  )}
+                  {researchResults.brand.targetDemographics.primaryAudience?.ageRange && (
+                    <InfoCard label="טווח גילאים" value={researchResults.brand.targetDemographics.primaryAudience.ageRange} />
+                  )}
+                  {researchResults.brand.targetDemographics.primaryAudience?.socioeconomic && (
+                    <InfoCard label="סוציו-אקונומי" value={researchResults.brand.targetDemographics.primaryAudience.socioeconomic} />
+                  )}
+                  {researchResults.brand.targetDemographics.primaryAudience?.lifestyle && (
+                    <InfoCard label="סגנון חיים" value={researchResults.brand.targetDemographics.primaryAudience.lifestyle} />
+                  )}
+                </div>
+                {researchResults.brand.targetDemographics.primaryAudience?.interests?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-bold text-[#6b7281] uppercase tracking-wider mb-2">תחומי עניין</p>
+                    <div className="flex flex-wrap gap-2">
+                      {researchResults.brand.targetDemographics.primaryAudience.interests.map((interest: string, i: number) => (
+                        <span key={i} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold border border-blue-100">{typeof interest === 'string' ? interest : JSON.stringify(interest)}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {researchResults.brand.targetDemographics.primaryAudience?.painPoints?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-bold text-[#6b7281] uppercase tracking-wider mb-2">נקודות כאב</p>
+                    <ul className="space-y-1">
+                      {researchResults.brand.targetDemographics.primaryAudience.painPoints.map((p: string, i: number) => (
+                        <li key={i} className="text-sm text-[#212529] flex items-start gap-2">
+                          <span className="text-red-400 mt-1">●</span>{typeof p === 'string' ? p : JSON.stringify(p)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </ResearchSection>
+            )}
+
+            {/* ── Digital Presence ── */}
+            {researchResults.brand?.socialPresence && (
+              <ResearchSection title="נוכחות דיגיטלית" icon="📱">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {Object.entries(researchResults.brand.socialPresence).map(([platform, data]) => {
+                    if (!data) return null
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const d = data as any
+                    return (
+                      <div key={platform} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                        <p className="font-bold text-sm text-[#212529] capitalize mb-2">{platform}</p>
+                        {d.handle && <p className="text-xs text-[#6b7281]">{d.handle}</p>}
+                        {d.followers && <p className="text-lg font-black text-[#212529] mt-1">{d.followers}</p>}
+                        {d.engagement && <p className="text-xs text-[#6b7281]">מעורבות: {d.engagement}</p>}
+                        {d.contentStyle && <p className="text-xs text-[#6b7281] mt-1">{d.contentStyle}</p>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </ResearchSection>
+            )}
+
+            {/* ── Influencer Strategy ── */}
+            {researchResults.influencer && (
+              <ResearchSection title="אסטרטגיית משפיענים" icon="📊" defaultOpen>
+                {researchResults.influencer.strategySummary && (
+                  <p className="text-sm text-[#212529] leading-relaxed mb-4">{researchResults.influencer.strategySummary}</p>
+                )}
+                {researchResults.influencer.tiers?.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-bold text-[#6b7281] uppercase tracking-wider mb-2">שכבות משפיענים</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {researchResults.influencer.tiers.map((tier: { name: string; description?: string; recommendedCount?: number; budgetAllocation?: string; purpose?: string }, i: number) => (
+                        <div key={i} className="bg-purple-50 rounded-xl p-4 border border-purple-100">
+                          <p className="font-bold text-sm text-purple-900">{tier.name}</p>
+                          {tier.recommendedCount && <p className="text-2xl font-black text-purple-700 mt-1">{tier.recommendedCount}</p>}
+                          {tier.budgetAllocation && <p className="text-xs text-purple-600 mt-1">תקציב: {tier.budgetAllocation}</p>}
+                          {tier.purpose && <p className="text-xs text-[#6b7281] mt-1">{tier.purpose}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {researchResults.influencer.expectedKPIs?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-[#6b7281] uppercase tracking-wider mb-2">יעדים צפויים</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {researchResults.influencer.expectedKPIs.map((kpi: { metric: string; target: string; rationale?: string }, i: number) => (
+                        <div key={i} className="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+                          <p className="text-xs text-[#6b7281]">{kpi.metric}</p>
+                          <p className="text-xl font-black text-[#212529] mt-1">{kpi.target}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </ResearchSection>
+            )}
+
+            {/* ── Influencer Recommendations ── */}
+            {researchResults.influencer?.recommendations?.length > 0 && (
+              <ResearchSection title="משפיענים מומלצים" icon="⭐" defaultOpen>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {researchResults.influencer.recommendations.map((rec: { name?: string; handle?: string; category?: string; followers?: string; engagement?: string; whyRelevant?: string; platform?: string; estimatedCost?: string; profilePicUrl?: string }, i: number) => (
+                    <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center gap-3 mb-3">
+                        {rec.profilePicUrl ? (
+                          <Image src={rec.profilePicUrl} alt={rec.name || ''} width={48} height={48} className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-lg">
+                            {(rec.name || '?').charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-bold text-sm text-[#212529]">{rec.name}</p>
+                          {rec.handle && <p className="text-xs text-[#6b7281]">{rec.handle}</p>}
+                        </div>
+                      </div>
+                      <div className="flex gap-3 mb-3">
+                        {rec.followers && (
+                          <div className="bg-gray-50 rounded-lg px-3 py-1.5">
+                            <p className="text-[10px] text-[#6b7281] uppercase">עוקבים</p>
+                            <p className="font-bold text-sm text-[#212529]">{rec.followers}</p>
+                          </div>
+                        )}
+                        {rec.engagement && (
+                          <div className="bg-gray-50 rounded-lg px-3 py-1.5">
+                            <p className="text-[10px] text-[#6b7281] uppercase">מעורבות</p>
+                            <p className="font-bold text-sm text-[#212529]">{rec.engagement}</p>
+                          </div>
+                        )}
+                        {rec.estimatedCost && (
+                          <div className="bg-gray-50 rounded-lg px-3 py-1.5">
+                            <p className="text-[10px] text-[#6b7281] uppercase">עלות</p>
+                            <p className="font-bold text-sm text-[#212529]">{rec.estimatedCost}</p>
+                          </div>
+                        )}
+                      </div>
+                      {rec.category && (
+                        <span className="inline-block bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full text-xs font-semibold mb-2">{rec.category}</span>
+                      )}
+                      {rec.whyRelevant && (
+                        <p className="text-xs text-[#6b7281] leading-relaxed">{rec.whyRelevant}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </ResearchSection>
+            )}
+
+            {/* ── Sources ── */}
+            {researchResults.brand?.sources?.length > 0 && (
+              <ResearchSection title="מקורות" icon="📚">
+                <div className="space-y-2">
+                  {researchResults.brand.sources.map((src: { title: string; url?: string }, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-sm">
+                      <span className="text-[#6b7281]">•</span>
+                      {src.url ? (
+                        <a href={src.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{src.title}</a>
+                      ) : (
+                        <span className="text-[#212529]">{src.title}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </ResearchSection>
+            )}
+
+            {/* Bottom action bar */}
+            <div className="flex items-center justify-center gap-4 pt-4 pb-8">
+              <button
+                onClick={downloadResearch}
+                className="flex items-center gap-2 bg-white border border-[#dfdfdf] text-[#6b7281] rounded-full px-6 py-3 text-sm font-medium hover:bg-gray-50 hover:text-[#212529] hover:shadow-sm transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                הורד מחקר (JSON)
+              </button>
+              <button
+                onClick={() => router.push(`/wizard/${documentId}`)}
+                className="flex items-center gap-2 bg-[#f2cc0d] text-[#0f172a] rounded-full px-8 py-3 text-sm font-bold hover:scale-105 transition-transform shadow-lg"
+              >
+                המשך לעריכת ההצעה
+                <svg className="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  )
+}
+
+// ═══ Helper Components ═══
+
+function ResearchSection({ title, icon, defaultOpen = false, children }: {
+  title: string; icon: string; defaultOpen?: boolean; children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">{icon}</span>
+          <h3 className="font-bold text-[#212529] text-base">{title}</h3>
+        </div>
+        <svg className={`w-5 h-5 text-[#6b7281] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-6 pb-5 animate-in fade-in slide-in-from-top-2 duration-300">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+      <p className="text-xs font-bold text-[#6b7281] uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-sm font-semibold text-[#212529]">{value}</p>
     </div>
   )
 }
