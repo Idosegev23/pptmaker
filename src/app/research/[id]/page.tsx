@@ -65,6 +65,7 @@ export default function ResearchPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [researchResults, setResearchResults] = useState<{ brand: any; influencer: any; colors: any } | null>(null)
   const [showResults, setShowResults] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   const startedRef = useRef(false)
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -203,10 +204,18 @@ export default function ResearchPage() {
         throw new Error('שני המחקרים נכשלו. נסה שוב.')
       }
 
-      // Stage 4: Enrich step data
+      // Stage 4: Enrich step data (research OVERRIDES basic proposal-agent data)
       setStage('enriching')
       const existingStepData = data._stepData || {}
       const enriched = enrichStepData(existingStepData, brandResearch, influencerStrategy)
+
+      // Ensure research data is stored in _stepData.research for wizardDataToProposalData
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(enriched as any).research = {
+        brandResearch: brandResearch || null,
+        influencerStrategy: influencerStrategy || null,
+        brandColors: colors || null,
+      }
 
       // Save everything to document
       const patchPayload: Record<string, unknown> = {
@@ -257,23 +266,40 @@ export default function ResearchPage() {
     return 'pending'
   }, [stage])
 
-  // Download research as JSON file
-  const downloadResearch = useCallback(() => {
+  // Download research as styled PDF
+  const downloadResearch = useCallback(async () => {
     if (!researchResults) return
-    const content = {
-      brandName,
-      researchDate: new Date().toLocaleDateString('he-IL'),
-      brandResearch: researchResults.brand,
-      influencerStrategy: researchResults.influencer,
-      brandColors: researchResults.colors,
+    setDownloadingPdf(true)
+    try {
+      const res = await fetch('/api/research-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName,
+          brandResearch: researchResults.brand,
+          influencerStrategy: researchResults.influencer,
+          brandColors: researchResults.colors,
+          skipDriveUpload: true,
+        }),
+      })
+      const result = await res.json()
+      if (result.supabaseUrl) {
+        const pdfRes = await fetch(result.supabaseUrl)
+        const blob = await pdfRes.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `research-${brandName || 'report'}-${new Date().toISOString().slice(0, 10)}.pdf`
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        console.error('[Research] PDF generation failed:', result.error)
+      }
+    } catch (err) {
+      console.error('[Research] PDF download failed:', err)
+    } finally {
+      setDownloadingPdf(false)
     }
-    const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `research-${brandName || 'report'}-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
   }, [researchResults, brandName])
 
   const activeTips = useMemo(() => GENERIC_TIPS, [])
@@ -559,12 +585,17 @@ export default function ResearchPage() {
               <div className="flex gap-3">
                 <button
                   onClick={downloadResearch}
-                  className="flex items-center gap-2 bg-white border border-[#dfdfdf] text-[#6b7281] rounded-full px-5 py-2.5 text-sm font-medium hover:bg-gray-50 hover:text-[#212529] hover:shadow-sm transition-all"
+                  disabled={downloadingPdf}
+                  className="flex items-center gap-2 bg-white border border-[#dfdfdf] text-[#6b7281] rounded-full px-5 py-2.5 text-sm font-medium hover:bg-gray-50 hover:text-[#212529] hover:shadow-sm transition-all disabled:opacity-50"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  הורד מחקר
+                  {downloadingPdf ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  )}
+                  {downloadingPdf ? 'מייצר PDF...' : 'הורד מחקר (PDF)'}
                 </button>
                 <button
                   onClick={() => router.push(`/wizard/${documentId}`)}
@@ -813,12 +844,17 @@ export default function ResearchPage() {
             <div className="flex items-center justify-center gap-4 pt-4 pb-8">
               <button
                 onClick={downloadResearch}
-                className="flex items-center gap-2 bg-white border border-[#dfdfdf] text-[#6b7281] rounded-full px-6 py-3 text-sm font-medium hover:bg-gray-50 hover:text-[#212529] hover:shadow-sm transition-all"
+                disabled={downloadingPdf}
+                className="flex items-center gap-2 bg-white border border-[#dfdfdf] text-[#6b7281] rounded-full px-6 py-3 text-sm font-medium hover:bg-gray-50 hover:text-[#212529] hover:shadow-sm transition-all disabled:opacity-50"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                הורד מחקר (JSON)
+                {downloadingPdf ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                )}
+                {downloadingPdf ? 'מייצר PDF...' : 'הורד מחקר (PDF)'}
               </button>
               <button
                 onClick={() => router.push(`/wizard/${documentId}`)}
