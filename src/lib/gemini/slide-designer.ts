@@ -779,28 +779,34 @@ ${leadersLogoUrl ? `- לוגו Leaders: ${leadersLogoUrl}` : ''}
 ## שקפים ליצירה:
 ${slidesDescription}
 
-## פילוסופיית עיצוב:
+## פילוסופיית עיצוב וארט דיירקשן אקסטרים (Awwwards Winning Level):
 
-אתה לא יוצר "מצגת רגילה עם רקע ושורות טקסט". אתה יוצר חוויה ויזואלית.
+אתה ארט-דיירקטור גאון ופרובוקטיבי בסוכנות עיצוב עלית. המטרה שלך היא אחת: שמיטת לסתות (WOW Effect). אתה לא בונה מצגות, אתה יוצר יצירות אמנות אבסטרקטיות, אולטרה-מודרניות, שמעבירות מסר עסקי חותך.
 
-### עקרונות עיצוב מרכזיים:
-- **דרמטיות ויזואלית**: כל שקף צריך אלמנט "WOW" - gradient overlay דרמטי, shape חותך עם clip-path, טיפוגרפיה ענקית
-- **שכבות עומק (Layering)**: minimum 2-3 shapes דקורטיביים בכל שקף. shapes חופפים, שקיפויות, אלמנטים שחותכים אחד לשני
-- **קונטרסט טיפוגרפי**: הבדלים דרמטיים בגודל - כותרת 64-96px לצד body 20-24px. אף פעם לא הכל באותו גודל
-- **צבע אסטרטגי**: 80% מהשקף בטון ניטרלי (רקע כהה/בהיר), 20% בצבע accent פוצץ. הצבע מדגיש רק את מה שחשוב
-- **מרחב לבן (Breathing Room)**: אל תדחוס הכל. תשאיר ריקים מכוונים. שקף עם מעט תוכן מעוצב היטב > שקף עם הרבה תוכן דחוס
-- **אסימטריה מחושבת**: layouts לא סימטריים נראים מודרניים יותר. חלוקות 70/30, 60/40, אלמנטים ב-offset
+### ארבעת חוקי הברזל של ה"וואו":
+1. **Z-Axis Overlap (חפיפת אקסטרים):** אלמנטים לעולם לא יושבים "לבד" בקופסה שלהם. תמונה חייבת לחתוך צורה גיאומטרית, וטקסט ענק חייב לעלות גם על התמונה וגם על הרקע בו זמנית. שחק באגרסיביות עם ה-zIndex (טקסט מעל תמונה מעל צורה מעל רקע).
+2. **Mesh / Aurora Gradients (זוהר צפוני):** אל תשתמש ברקעים חלקים או בגרדיאנט רגיל. צור אפקט "Aurora" מטורף על ידי שימוש ב-shape שתופס את כל המסך עם הפורמט הבא:
+   \`radial-gradient(circle at 20% 30%, \${colors.primary}60 0%, transparent 50%), radial-gradient(circle at 80% 80%, \${colors.accent}60 0%, transparent 50%), radial-gradient(circle at 50% 50%, \${colors.secondary}80 0%, transparent 50%)\`
+3. **טקסט קו-מתאר (Hollow/Stroke Typography):** לשקפי שער וסטטיסטיקות ענק, השתמש בטקסט שקוף עם קו מתאר. העבר ל-CSS של הטקסט: \`color: transparent; -webkit-text-stroke: 2px \${colors.accent};\`. השתמש בזה למספרים ענקיים (300px+) ברקע.
+4. **קווים אדריכליים (Architectural Grid):** הוסף shapes שהם בעצם קווים דקים (גובה או רוחב של 1px) שחוצים את כל המסך (width: 1920 או height: 1080) מחוץ ל-Safe zone, כדי לייצר תחושה של שרטוט אדריכלי וגריד חשוף.
 
-### טכניקות CSS חובה לשימוש:
-- **clip-path**: לחיתוך shapes דקורטיביים: polygon(), circle(), ellipse(). דוגמאות:
-  - "polygon(0 0, 100% 0, 100% 85%, 0 100%)" - שקף חתוך באלכסון
-  - "polygon(0 15%, 100% 0, 100% 100%, 0 100%)" - shape עליון אלכסוני
-  - "circle(40% at 70% 50%)" - עיגול דקורטיבי
-  - "ellipse(60% 80% at 75% 50%)" - אליפסה
-- **gradients מורכבים**: לא רק 2 צבעים! 3-4 color stops, angles מעניינים (135deg, 220deg), radial-gradient לאפקטי זוהר
-  - "linear-gradient(135deg, ${colors.background} 0%, ${colors.secondary} 50%, ${colors.primary}20 100%)"
-  - "radial-gradient(ellipse at 80% 20%, ${colors.primary}40 0%, transparent 60%)" - זוהר צבעוני
-- **opacity שכבות**: shapes עם opacity 0.1-0.3 יוצרים עומק ללא הסתרת תוכן
+### מאסטרים של Layout (בחר אחד לכל שקף כדי לשבור שגרה):
+
+1. **The Bento Box (טרנד ה-Tech העולמי):**
+   - שימוש: שקפי Goals, Metrics, Deliverables.
+   - חזות: חלוקת המסך ל-4-5 מלבנים/ריבועים צפופים (gap של 20px ביניהם), כל אחד עם רקע חצי-שקוף (\`\${colors.cardBg}\` עם opacity 0.8), גבול דק ופינות מעוגלות מאוד (borderRadius: 32). זה יוצר מראה של UI הייטקי יוקרתי.
+
+2. **The Editorial Bleed (מגזין אופנה):**
+   - שימוש: שקפי Brief, Audience, Big Idea.
+   - חזות: תמונה ענקית שתופסת 60% מהמסך (חותכת את הקצוות), אבל עם clip-path דרמטי (למשל צורת קפסולה ענקית \`borderRadius: 500px\`). טקסט דחוס ומינימליסטי בצד, ומספר ענק (01, 02) ב-Hollow Typography שחופף על התמונה.
+
+3. **The Typographic Brutalism (ברוטליזם עיצובי):**
+   - שימוש: Cover, Insight, Closing.
+   - חזות: בלי תמונות בכלל. רק טייפוגרפיה פסיכית. מילה אחת ענקית (fontSize: 250-400px) שחותכת את גבולות המסך ב-45 מעלות (\`transform: rotate(-15deg)\`), בצבע חלש מאוד ברקע. מעליה ב-contrast אגרסיבי, המשפט המרכזי בגודל 96px.
+
+4. **The Split Screen Asymmetry (חצוי ואגרסיבי):**
+   - שימוש: Strategy, Approach.
+   - חזות: המסך חתוך בצורה חדה. צד ימין (width: 700) רקע כהה עם טקסט בהיר. צד שמאל (width: 1220) מכיל תמונה או גרדיאנט דרמטי עליו יושבים כרטיסים צפים (floating cards) שחותכים את קו התפר בין שני החצאים.
 
 ## הוראות טכניות:
 
@@ -814,31 +820,16 @@ ${slidesDescription}
 8. גוף: fontSize 20-28, fontWeight 400-500.
 9. מספרים/מדדים: fontSize 56-96, fontWeight 800-900, color accent.
 10. תמונות: objectFit "cover", borderRadius 16-32.
-11. **חובה minimum 2 shapes דקורטיביים בכל שקף** - gradient overlays, geometric forms, accent lines.
+11. **חובה minimum 3 shapes דקורטיביים בכל שקף** - Aurora gradients, architectural lines, fake-3D shadows, geometric forms.
 
-## כללי Layout לפי סוג שקף:
-
-- **cover**: רקע gradient דרמטי עם minimum 3 shapes חופפים (base gradient + radial glow + diagonal cut). שם מותג בטייפ ענק (96-120px) ממורכז. פס accent בצד. לוגואים בפינות. כותרת משנית קטנה מתחת (24px).
-- **brief**: חלוקה אסימטרית 65/35. צד ימין: כותרת ענקית + טקסט עם מרווח נדיב. צד שמאל: shape דקורטיבי עם clip-path אלכסוני או תמונה עם overlay. פס accent אנכי מפריד.
-- **goals**: כרטיסים ב-grid (2x2 או 1x3-4). כל כרטיס: shape רקע עם borderRadius 24 + gradient עדין + כותרת bold + תיאור. מספר/אייקון בפינה עליונה. קו accent מתחת לכותרת.
-- **audience**: פרסונה card גדול במרכז (800px רוחב) עם background shape. נתונים בצד. accent circle דקורטיבי מאחורי ה-card. מידע מאורגן ב-grid קטן.
-- **insight**: תובנה כציטוט ענק (fontSize 48-56) ממורכז עם guillemets או מירכאות גדולות כ-shape. רקע gradient דרמטי. מקור + נתון תומך למטה בגודל קטן.
-- **strategy**: 3 עמודים עם shapes רקע נפרדים. כל pillar: מספר גדול (01, 02, 03) בצבע accent כ-watermark, כותרת bold, תיאור. קו אופקי מחבר.
-- **bigIdea**: כותרת ענקית (80-96px) ממורכזת. תיאור מתחת (24px). תמונה גדולה בצד עם clip-path עגול/אלכסוני. רקע דו-טוני (חצי כהה חצי בהיר) או diagonal split.
-- **approach**: שלבים (3-4) מחוברים עם קו gradient אופקי. כל שלב: עיגול accent עם מספר + כותרת + תיאור. step connector line כ-shape.
-- **deliverables**: רשימת תוצרים ב-cards (2-3 שורות). כל פריט: סוג + כמות (גדול, accent) + תיאור. icon/number בכל card. רקע alternating.
-- **metrics**: 3-4 metric boxes גדולים. ערכים ענקיים (72-96px) בצבע accent. label קטן מתחת. shape רקע עגול/מלבני מאחורי כל מספר. הסבר כללי למטה.
-- **influencerStrategy**: כותרת גדולה + קריטריונים כ-tags/badges עם shapes רקע. accent lines. guidelines כנקודות עם bullet circles.
-- **influencers**: grid של כרטיסי משפיענים (2x3 או 3x2). כל כרטיס: shape רקע עגול לתמונה + שם bold + @handle קטן + followers + engagement. למשפיענים ללא תמונה: circle עם אות ראשונה.
-- **closing**: רקע gradient דרמטי כמו cover. כותרת ממורכזת ענקית (80px). tagline מתחת. לוגואים בפוטר. minimum 2 shapes דקורטיביים.
-
-## Anti-patterns (אסור בשום מצב):
-- טקסט קטן מ-18px
+## חוקי CSS למניעת קריסות הדפסה ב-PDF:
+- אסור בהחלט: box-shadow, filter: drop-shadow, backdrop-filter: blur.
+- החלופה (Fake 3D & Depth): צור עומק על ידי ציור shape שחור (opacity: 0.2) שממוקם ב- x: +15, y: +15 מתחת לכרטיס (z-index אחד פחות) כדי לדמות צל נקי. השתמש במסגרות (borders) בצבעי פסטל זוהרים.
+- טקסט קטן מ-18px אסור
 - שקף בלי שום shape דקורטיבי - אסור שקף "שטוח"
 - layout זהה בין שני שקפים - כל שקף חייב layout שונה
 - zIndex בלי הגיון (רקע=0-5, תוכן=10-50, overlay=60+)
 - shapes שחוסמים טקסט חשוב (shapes דקורטיביים חייבים להיות מתחת לתוכן ב-zIndex)
-- gradient בודד בלי שכבות נוספות - תמיד תוסיף לפחות shape אחד נוסף
 
 ## מבנה JSON לכל שקף:
 {
