@@ -397,42 +397,72 @@ ${slide.imageUrl ? `תמונה: ${slide.imageUrl}` : 'ללא תמונה — הש
 תוכן: ${contentJson}`
   }).join('\n\n')
 
-  const prompt = `אתה מעצב מצגות פרימיום ברמת Pentagram/Apple. עצב ${slides.length} שקפים למותג "${brandName}".
+  // Build slide-type specific hints
+  const slideTypeHints: Record<string, string> = {
+    cover: `שקף שער — HERO דרמטי! כותרת ענקית (100-140px) עם letter-spacing צפוף. תמונה full-bleed אם יש, עם gradient overlay כהה. לוגו קטן בפינה. שם המותג באותיות ענק.`,
+    brief: `בריף — split-screen: תמונה מותג בצד אחד (50%), טקסט בצד שני. כותרת "למה התכנסנו?" בולטת. pain points בנקודות עם אייקונים או מספור גדול.`,
+    goals: `מטרות — Bento Box / כרטיסים: כל מטרה בכרטיס נפרד עם מספר ענק צבעוני (accent). גריד 2x2 או 3 כרטיסים אופקיים. כל כרטיס עם cardBg וborder עדין.`,
+    audience: `קהל יעד — Magazine spread: תמונה גדולה (60% מהשקף) עם clip-path מעניין. demographics בצד בטיפוגרפיה נקייה. מספרים (גיל, מגדר) בפונט ענק.`,
+    insight: `תובנה — IMPACT slide! רקע כהה, טקסט התובנה ענק (80-100px) במרכז עם accent color. מינימום אלמנטים — הנקודה צריכה לבלוט. גרשיים ענקיים דקורטיביים.`,
+    strategy: `אסטרטגיה — Swiss Grid מסודר: כותרת headline בולטת, pillars ב-3 עמודות עם קו מפריד ביניהם. כל pillar עם כותרת משנה ותיאור קצר.`,
+    bigIdea: `רעיון מרכזי — HERO שני! כותרת הרעיון ענקית עם accent. תמונה אם יש. אלמנט דקורטיבי שובר גבולות (shape שיוצא מהמסגרת). הכי דרמטי אחרי השער.`,
+    approach: `גישה — Steps/Process: שלבים ממוספרים (01, 02, 03) עם מספרים ב-accent ענקיים. קו מחבר ביניהם. כל שלב עם כותרת ותיאור.`,
+    deliverables: `תוצרים — Data visualization: כל תוצר בכרטיס/שורה עם כמות בפונט ענק. אייקונים דקורטיביים (shapes עגולות/ריבועיות). טבלת pricing אלגנטית.`,
+    metrics: `מטריקות — Data Art! מספרים ענקיים (80-120px) בצבע accent. קווים דקורטיביים מחברים. "500K" ו-"2.3%" צריכים להיות הדבר הראשון שרואים. ויזואליזציה לא סתם טקסט.`,
+    influencerStrategy: `אסטרטגיית משפיענים — Editorial: כותרת ענקה, קריטריונים ב-bullet points מעוצבים עם accent dots. קווים מפרידים אלגנטיים.`,
+    influencers: `משפיענים — Card Grid: כל משפיען בכרטיס עם profilePicUrl (image element עגול!), שם, followers ענק, engagement rate. מקסימום 6 כרטיסים בגריד 3x2 או 2x3.`,
+    closing: `סיום — Cinematic: רקע gradient דרמטי. "LET'S CREATE TOGETHER" ענק. לוגואים (לקוח + סוכנות) מסודרים. מינימום אלמנטים, מקסימום impact.`,
+  }
 
-## עיצוב
-Canvas: 1920x1080px | כיוון: RTL (עברית)
-צבעים: ראשי ${colors.primary} | משני ${colors.secondary} | הדגשה ${colors.accent} | רקע ${colors.background} | טקסט ${colors.text} | כרטיסים ${colors.cardBg}
-פונט כותרות: ${typo.headingSize}px weight ${typo.weightPairs[0]?.[0] || 800} | גוף: ${typo.bodySize}px weight ${typo.weightPairs[0]?.[1] || 400}
-כותרות משנה: ${typo.subheadingSize}px | קפשן: ${typo.captionSize}px
-Radius: ${effects.borderRadiusValue}px | סגנון דקורטיבי: ${effects.decorativeStyle}
+  const typeHintsForBatch = slides.map(s => {
+    const hint = slideTypeHints[s.slideType]
+    return hint ? `**${s.slideType}**: ${hint}` : ''
+  }).filter(Boolean).join('\n')
 
-## 5 עקרונות חובה
-1. **היררכיה טיפוגרפית חזקה** — כותרות ענקיות (64-120px), טקסט גוף בגודל קריא (20-28px). יחס גדלים של לפחות 4:1 בין כותרת לגוף.
-2. **צבעי המותג בכל מקום** — primary לכותרות/הדגשות, accent למיקוד, רקע כהה/בהיר לפי הסגנון. כל שקף חייב לנשום את המותג.
-3. **מרווח נשימה** — לפחות 30% מהשקף פנוי. כותרות עם מרחק 60px+ מאלמנטים אחרים. לא לדחוס!
-4. **מגוון לייאאוטים** — כל שקף שונה: split-screen, כרטיסים, full-bleed, טיפוגרפיה בלבד, asymmetric. אף שקף לא נראה כמו PowerPoint.
-5. **תמונות בולטות** — אם יש URL תמונה, הצג אותה בגודל משמעותי (לפחות 40% מהשקף). עם clip-path או borderRadius ליוקרה.
+  const prompt = `אתה Art Director שמעצב מצגות ברמת מגזין / Apple Keynote. עצב ${slides.length} שקפים למותג "${brandName}".
+כל שקף חייב להרגיש כמו עמוד במגזין יוקרה — לא כמו PowerPoint!
+
+## נתוני עיצוב
+Canvas: 1920x1080px | RTL (עברית) | פונט: Heebo
+צבעים: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent} | bg ${colors.background} | text ${colors.text} | cards ${colors.cardBg}
+טיפוגרפיה: כותרות ${typo.headingSize}px/${typo.weightPairs[0]?.[0] || 800} | גוף ${typo.bodySize}px/${typo.weightPairs[0]?.[1] || 400} | display ${typo.displaySize}px | caption ${typo.captionSize}px
+אפקטים: radius ${effects.borderRadiusValue}px | style ${effects.decorativeStyle} | gradients ${colors.gradientStart}→${colors.gradientEnd}
+
+## הנחיות לכל סוג שקף
+${typeHintsForBatch}
+
+## דוגמה — שקף "insight" ברמת WOW (לחקות את הרמה הזו!):
+\`\`\`json
+{
+  "id": "slide-5", "slideType": "insight", "label": "התובנה",
+  "background": { "type": "gradient", "value": "linear-gradient(135deg, ${colors.background} 0%, ${colors.secondary}dd 100%)" },
+  "elements": [
+    { "id": "s-1", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 80% 30%, ${colors.accent}15 0%, transparent 60%)", "opacity": 1 },
+    { "id": "s-2", "type": "shape", "x": 1400, "y": -200, "width": 800, "height": 800, "zIndex": 1, "shapeType": "decorative", "fill": "${colors.primary}", "opacity": 0.06, "borderRadius": 999, "rotation": 0 },
+    { "id": "s-3", "type": "shape", "x": 100, "y": 180, "width": 6, "height": 200, "zIndex": 3, "shapeType": "decorative", "fill": "${colors.accent}", "opacity": 0.9 },
+    { "id": "t-1", "type": "text", "x": 140, "y": 120, "width": 300, "height": 40, "zIndex": 8, "content": "THE INSIGHT", "fontSize": 16, "fontWeight": 400, "color": "${colors.accent}", "textAlign": "right", "role": "label", "letterSpacing": 8 },
+    { "id": "t-2", "type": "text", "x": 140, "y": 200, "width": 1200, "height": 300, "zIndex": 10, "content": "הצרכן הישראלי מחפש חוויה אמיתית — לא עוד פרסומת", "fontSize": 72, "fontWeight": 800, "color": "${colors.text}", "textAlign": "right", "role": "title", "lineHeight": 1.05, "letterSpacing": -3 },
+    { "id": "t-3", "type": "text", "x": 140, "y": 530, "width": 700, "height": 100, "zIndex": 7, "content": "מקור: מחקר שוק 2024 | n=2,400", "fontSize": 18, "fontWeight": 400, "color": "${colors.muted}", "textAlign": "right", "role": "caption", "lineHeight": 1.5 },
+    { "id": "s-4", "type": "shape", "x": 140, "y": 660, "width": 200, "height": 2, "zIndex": 3, "shapeType": "divider", "fill": "${colors.accent}", "opacity": 0.4 }
+  ]
+}
+\`\`\`
+שים לב: גרשיים/ציטוט ענק כ-watermark, shape דקורטיבי גדול ב-opacity נמוכה, קו accent לצד הכותרת, label קטן עם letter-spacing רחב, כותרת ענקית עם letter-spacing שלילי. **זו הרמה!**
 
 ## כללים טכניים
-- textAlign: "right" תמיד (RTL)
-- כל הטקסט בעברית (חוץ ממספרים ושמות מותג באנגלית)
-- zIndex: 0-1 לרקע, 2-3 לדקורציה, 4-6 לתוכן, 7-10 לכותרות
-- אסור: box-shadow, blur. במקום — shapes עם opacity נמוכה
-- כל שקף צריך לפחות: shape רקע, כותרת, 2-3 אלמנטי תוכן
-- shapes דקורטיביים (עיגולים, קווים, גרדיאנטים) מוסיפים עומק ויוקרה
+- textAlign: "right" תמיד (RTL). כל הטקסט בעברית (חוץ ממספרים ושמות באנגלית)
+- zIndex: 0-1 רקע, 2-3 דקורציה, 4-6 תוכן, 7-10 כותרות
+- אסור: box-shadow, blur
+- חובה בכל שקף: לפחות 1 shape דקורטיבי (עיגול/קו/gradient ב-opacity נמוכה) + כותרת + תוכן
+- תמונות: אם יש imageUrl, חובה image element בגודל ≥40% מהשקף! עם clip-path או borderRadius
+- **מגוון**: אסור ששני שקפים עוקבים ייראו אותו דבר. שנה layout, חלוקה, כיוון
 
-${batchContext.previousSlidesVisualSummary ? `## שקפים קודמים (לגיוון):\n${batchContext.previousSlidesVisualSummary}\nוודא שהשקפים החדשים שונים בלייאאוט!` : ''}
+${batchContext.previousSlidesVisualSummary ? `## שקפים שכבר נוצרו (וודא שהחדשים שונים!):\n${batchContext.previousSlidesVisualSummary}` : ''}
 
 ## שקפים ליצירה
 ${simpleSlideDescs}
 
-## אלמנטים אפשריים
-Shape: { "id": "s-N", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "decorative"|"card"|"divider"|"background", "fill": "#hex or linear-gradient(...)", "opacity": 1, "borderRadius": 0, "clipPath": "optional", "rotation": 0 }
-Text: { "id": "t-N", "type": "text", "x": 100, "y": 100, "width": 800, "height": 80, "zIndex": 10, "content": "טקסט בעברית", "fontSize": 64, "fontWeight": 800, "color": "#fff", "textAlign": "right", "role": "title"|"subtitle"|"body"|"caption"|"stat"|"label", "lineHeight": 1.1, "letterSpacing": -2 }
-Image: { "id": "i-N", "type": "image", "x": 960, "y": 0, "width": 960, "height": 1080, "zIndex": 5, "src": "IMAGE_URL", "objectFit": "cover", "borderRadius": 0, "clipPath": "optional" }
-
-החזר JSON בלבד:
-{ "slides": [{ "id": "slide-N", "slideType": "TYPE", "label": "שם בעברית", "background": { "type": "solid"|"gradient", "value": "#hex or linear-gradient(...)" }, "elements": [...] }] }`
+החזר JSON: { "slides": [{ "id": "slide-N", "slideType": "TYPE", "label": "שם", "background": { "type": "solid"|"gradient", "value": "..." }, "elements": [...] }] }`
 
   try {
     const response = await ai.models.generateContent({
