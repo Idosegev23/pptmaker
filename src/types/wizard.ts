@@ -2,6 +2,7 @@
 
 export type WizardStepId =
   | 'brief'
+  | 'research'
   | 'goals'
   | 'target_audience'
   | 'key_insight'
@@ -132,9 +133,53 @@ export interface InfluencersStepData {
   influencerNote?: string
 }
 
+export interface ResearchStepData {
+  researchEnabled: boolean
+  researchPhase: 'idle' | 'running' | 'complete' | 'error'
+
+  brandResearch: {
+    companyDescription: string
+    industry: string
+    competitors: { name: string; description: string; differentiator: string }[]
+    mainProducts: { name: string; description: string }[]
+    targetDemographics: {
+      primaryAudience: {
+        gender: string; ageRange: string; lifestyle: string
+        interests: string[]; painPoints: string[]
+      }
+    }
+    socialPresence: Record<string, { handle?: string; followers?: string; engagement?: string }>
+    brandPersonality: string[]
+    brandValues: string[]
+    suggestedApproach: string
+    industryTrends: string[]
+    sources: { title: string; url: string }[]
+  } | null
+
+  influencerStrategy: {
+    strategyTitle: string
+    strategySummary: string
+    tiers: { name: string; description: string; recommendedCount: number; budgetAllocation: string }[]
+    recommendations: {
+      name: string; handle: string; category: string; followers: string
+      engagement: string; whyRelevant: string; contentStyle: string
+    }[]
+    contentThemes: { theme: string; description: string }[]
+    expectedKPIs: { metric: string; target: string; rationale: string }[]
+  } | null
+
+  brandColors: {
+    primary: string; secondary: string; accent: string
+    background: string; text: string; palette: string[]
+  } | null
+
+  errorMessage?: string
+}
+
 // Map step IDs to their data types
 export interface WizardStepDataMap {
   brief: BriefStepData
+  research: ResearchStepData
   goals: GoalsStepData
   target_audience: TargetAudienceStepData
   key_insight: KeyInsightStepData

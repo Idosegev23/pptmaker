@@ -253,6 +253,7 @@ export default function CreateProposalPage() {
               currentStep: 'brief',
               stepStatuses: {
                 brief: 'pending',
+                research: 'pending',
                 goals: 'pending',
                 target_audience: 'pending',
                 key_insight: 'pending',

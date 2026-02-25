@@ -207,6 +207,17 @@ export function wizardDataToProposalData(
     data.influencerNote = stepData.influencers.influencerNote
   }
 
+  // Research
+  if (stepData.research?.brandResearch) {
+    data._brandResearch = stepData.research.brandResearch
+  }
+  if (stepData.research?.influencerStrategy) {
+    data._influencerStrategy = stepData.research.influencerStrategy
+  }
+  if (stepData.research?.brandColors) {
+    data._brandColors = stepData.research.brandColors
+  }
+
   return data
 }
 
@@ -374,7 +385,8 @@ export function validateStep(
       // Influencers can be empty at this stage
       break
     case 'creative':
-      // Creative is optional - always valid
+    case 'research':
+      // Optional steps - always valid
       return null
   }
 

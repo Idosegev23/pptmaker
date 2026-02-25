@@ -10,12 +10,20 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     order: 1,
   },
   {
+    id: 'research',
+    label: 'מחקר מותג',
+    labelShort: 'מחקר',
+    description: 'מחקר מעמיק על המותג, שוק ומשפיענים',
+    required: false,
+    order: 2,
+  },
+  {
     id: 'goals',
     label: 'מטרות',
     labelShort: 'מטרות',
     description: 'מטרות הקמפיין',
     required: true,
-    order: 2,
+    order: 3,
   },
   {
     id: 'target_audience',
@@ -23,7 +31,7 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     labelShort: 'קהל',
     description: 'קהלי היעד של הקמפיין',
     required: true,
-    order: 3,
+    order: 4,
   },
   {
     id: 'key_insight',
@@ -31,7 +39,7 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     labelShort: 'תובנה',
     description: 'תובנה מרכזית מבוססת מחקר',
     required: true,
-    order: 4,
+    order: 5,
   },
   {
     id: 'strategy',
@@ -39,7 +47,7 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     labelShort: 'אסטרטגיה',
     description: 'הגישה האסטרטגית והפעולות',
     required: true,
-    order: 5,
+    order: 6,
   },
   {
     id: 'creative',
@@ -47,7 +55,7 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     labelShort: 'קריאייטיב',
     description: 'כיוון קריאייטיבי ורפרנסים',
     required: false,
-    order: 6,
+    order: 7,
   },
   {
     id: 'deliverables',
@@ -55,7 +63,7 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     labelShort: 'תוצרים',
     description: 'מסגרת התוצרים והתכנים',
     required: true,
-    order: 7,
+    order: 8,
   },
   {
     id: 'quantities',
@@ -63,7 +71,7 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     labelShort: 'כמויות',
     description: 'סיכום כמויות תוצרים ומשפיענים',
     required: true,
-    order: 8,
+    order: 9,
   },
   {
     id: 'media_targets',
@@ -71,7 +79,7 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     labelShort: 'יעדים',
     description: 'תקציב, צפיות, מעורבות ו-CPE',
     required: true,
-    order: 9,
+    order: 10,
   },
   {
     id: 'influencers',
@@ -79,7 +87,7 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     labelShort: 'משפיענים',
     description: 'פרופילי משפיענים מומלצים',
     required: true,
-    order: 10,
+    order: 11,
   },
 ]
 
