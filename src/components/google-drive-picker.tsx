@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
-
-const GOOGLE_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || ''
+import { useGooglePicker } from '@/hooks/use-google-picker'
+import type { GooglePickerCallbackData } from '@/hooks/use-google-picker'
 
 // Supported MIME types for the picker
 const PICKER_MIME_TYPES = [
@@ -22,97 +21,9 @@ interface GoogleDrivePickerProps {
   label?: string
 }
 
-declare global {
-  interface Window {
-    google?: {
-      picker?: {
-        PickerBuilder: new () => GooglePickerBuilder
-        ViewId: { DOCS: string }
-        Action: { PICKED: string; CANCEL: string }
-        DocsView: new (viewId: string) => { setMimeTypes: (types: string) => unknown; setIncludeFolders: (v: boolean) => unknown; setEnableDrives: (v: boolean) => unknown }
-      }
-    }
-    gapi?: {
-      load: (api: string, callback: () => void) => void
-    }
-  }
-}
-
-interface GooglePickerBuilder {
-  addView: (view: unknown) => GooglePickerBuilder
-  enableFeature: (feature: unknown) => GooglePickerBuilder
-  setOAuthToken: (token: string) => GooglePickerBuilder
-  setDeveloperKey: (key: string) => GooglePickerBuilder
-  setCallback: (callback: (data: GooglePickerCallbackData) => void) => GooglePickerBuilder
-  setTitle: (title: string) => GooglePickerBuilder
-  setLocale: (locale: string) => GooglePickerBuilder
-  build: () => { setVisible: (visible: boolean) => void }
-}
-
-interface GooglePickerCallbackData {
-  action: string
-  docs?: Array<{
-    id: string
-    name: string
-    mimeType: string
-    url: string
-  }>
-}
-
-function loadScript(src: string, id: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.getElementById(id)) {
-      resolve()
-      return
-    }
-    const script = document.createElement('script')
-    script.id = id
-    script.src = src
-    script.onload = () => resolve()
-    script.onerror = reject
-    document.body.appendChild(script)
-  })
-}
-
-// Shared state across all picker instances
-let pickerReady = false
-const pickerReadyCallbacks: (() => void)[] = []
-
-function ensurePickerLoaded(callback: () => void) {
-  if (pickerReady) {
-    callback()
-    return
-  }
-  pickerReadyCallbacks.push(callback)
-  // Only load once
-  if (pickerReadyCallbacks.length === 1) {
-    loadScript('https://apis.google.com/js/api.js', 'google-api')
-      .then(() => {
-        if (window.gapi) {
-          window.gapi.load('picker', () => {
-            pickerReady = true
-            pickerReadyCallbacks.forEach(cb => cb())
-            pickerReadyCallbacks.length = 0
-          })
-        }
-      })
-      .catch((err) => {
-        console.error('[Google Drive Picker] Failed to load scripts:', err)
-      })
-  }
-}
-
 export default function GoogleDrivePicker({ onFilePicked, disabled, label }: GoogleDrivePickerProps) {
   const [loading, setLoading] = useState(false)
-  const [scriptsLoaded, setScriptsLoaded] = useState(pickerReady)
-
-  // Check if picker is configured
-  const isConfigured = Boolean(GOOGLE_API_KEY)
-
-  useEffect(() => {
-    if (!isConfigured) return
-    ensurePickerLoaded(() => setScriptsLoaded(true))
-  }, [isConfigured])
+  const { isConfigured, scriptsLoaded, apiKey, getAccessToken } = useGooglePicker()
 
   const openPicker = useCallback(async () => {
     if (!window.google?.picker) {
@@ -123,10 +34,7 @@ export default function GoogleDrivePicker({ onFilePicked, disabled, label }: Goo
     setLoading(true)
 
     try {
-      // Get the Google access token from Supabase session
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      const accessToken = session?.provider_token
+      const accessToken = await getAccessToken()
 
       if (!accessToken) {
         console.error('[Google Drive Picker] No provider token - user needs to re-login')
@@ -135,27 +43,39 @@ export default function GoogleDrivePicker({ onFilePicked, disabled, label }: Goo
         return
       }
 
-      // Build and show the picker
-      const google = window.google!
+      const picker = window.google.picker!
 
-      // My Drive view
-      const myDriveView = new google.picker!.DocsView(google.picker!.ViewId.DOCS)
+      // 1. My Drive
+      const myDriveView = new picker.DocsView(picker.ViewId.DOCS)
       myDriveView.setMimeTypes(PICKER_MIME_TYPES)
       myDriveView.setIncludeFolders(true)
 
-      // Shared Drives view
-      const sharedDriveView = new google.picker!.DocsView(google.picker!.ViewId.DOCS)
+      // 2. Shared with me
+      const sharedWithMeView = new picker.DocsView(picker.ViewId.DOCS)
+      sharedWithMeView.setMimeTypes(PICKER_MIME_TYPES)
+      sharedWithMeView.setIncludeFolders(true)
+      sharedWithMeView.setOwnedByMe(false)
+
+      // 3. Shared Drives
+      const sharedDriveView = new picker.DocsView(picker.ViewId.DOCS)
       sharedDriveView.setMimeTypes(PICKER_MIME_TYPES)
       sharedDriveView.setEnableDrives(true)
       sharedDriveView.setIncludeFolders(true)
 
-      const picker = new google.picker!.PickerBuilder()
+      // 4. Recent
+      const recentView = new picker.DocsView(picker.ViewId.RECENTLY_PICKED)
+      recentView.setMimeTypes(PICKER_MIME_TYPES)
+
+      const pickerInstance = new picker.PickerBuilder()
         .addView(myDriveView)
+        .addView(sharedWithMeView)
         .addView(sharedDriveView)
+        .addView(recentView)
+        .enableFeature(picker.Feature.SUPPORT_DRIVES)
         .setOAuthToken(accessToken)
-        .setDeveloperKey(GOOGLE_API_KEY)
+        .setDeveloperKey(apiKey)
         .setCallback(async (data: GooglePickerCallbackData) => {
-          if (data.action === google.picker!.Action.PICKED && data.docs?.[0]) {
+          if (data.action === picker.Action.PICKED && data.docs?.[0]) {
             const doc = data.docs[0]
             console.log(`[Google Drive Picker] Selected: ${doc.name} (${doc.mimeType})`)
 
@@ -172,12 +92,12 @@ export default function GoogleDrivePicker({ onFilePicked, disabled, label }: Goo
         .setLocale('he')
         .build()
 
-      picker.setVisible(true)
+      pickerInstance.setVisible(true)
     } catch (err) {
       console.error('[Google Drive Picker] Error:', err)
       setLoading(false)
     }
-  }, [onFilePicked])
+  }, [onFilePicked, getAccessToken, apiKey])
 
   if (!isConfigured) return null
 

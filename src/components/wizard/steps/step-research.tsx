@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import type { ResearchStepData } from '@/types/wizard'
+import GoogleDriveSaveButton from '@/components/google-drive-save-button'
 
 interface StepResearchProps {
   data: Partial<ResearchStepData>
@@ -66,8 +67,7 @@ export default function StepResearch({
     sources: false,
   })
 
-  // Drive download state
-  const [isDownloading, setIsDownloading] = useState(false)
+  // Drive save state
   const [driveUrl, setDriveUrl] = useState<string | null>(null)
 
   const toggleSection = useCallback((key: string) => {
@@ -173,27 +173,28 @@ export default function StepResearch({
     onChange({ ...data, researchPhase: 'idle', researchEnabled: false })
   }, [data, onChange])
 
-  // ─── Download to Drive ────────────────────────────────
-  const downloadToDrive = useCallback(async () => {
-    setIsDownloading(true)
-    try {
-      const res = await fetch('/api/research-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brandName,
-          brandResearch: data.brandResearch,
-          influencerStrategy: data.influencerStrategy,
-          brandColors: data.brandColors,
-        }),
-      })
-      if (!res.ok) throw new Error('PDF generation failed')
-      const result = await res.json()
-      setDriveUrl(result.viewUrl)
-    } catch {
-      alert('שגיאה בהורדה ל-Drive')
-    } finally {
-      setIsDownloading(false)
+  // ─── Get research PDF for Drive save ─────────────────
+  const getResearchPdf = useCallback(async () => {
+    const res = await fetch('/api/research-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brandName,
+        brandResearch: data.brandResearch,
+        influencerStrategy: data.influencerStrategy,
+        brandColors: data.brandColors,
+        skipDriveUpload: true,
+      }),
+    })
+    if (!res.ok) throw new Error('PDF generation failed')
+    const result = await res.json()
+    const pdfUrl = result.supabaseUrl || result.viewUrl
+    const pdfRes = await fetch(pdfUrl)
+    const blob = await pdfRes.blob()
+    return {
+      blob,
+      fileName: `מחקר_${brandName}_${new Date().toISOString().split('T')[0]}.pdf`,
+      mimeType: 'application/pdf',
     }
   }, [brandName, data])
 
@@ -391,14 +392,13 @@ export default function StepResearch({
               פתח ב-Drive
             </a>
           ) : (
-            <Button
-              onClick={downloadToDrive}
-              disabled={isDownloading}
-              variant="outline"
+            <GoogleDriveSaveButton
+              getFileData={getResearchPdf}
+              onSaved={(result) => setDriveUrl(result.webViewLink)}
+              onError={() => alert('שגיאה בשמירה ל-Drive')}
+              label="שמור מחקר ב-Drive"
               className="text-xs h-8 border-green-300 text-green-700 hover:bg-green-100"
-            >
-              {isDownloading ? 'מוריד...' : 'הורד מחקר ל-Drive'}
-            </Button>
+            />
           )}
           <button
             onClick={runResearch}

@@ -31,7 +31,7 @@ function LoginContent() {
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/api/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
-          scopes: 'openid email profile https://www.googleapis.com/auth/drive.readonly',
+          scopes: 'openid email profile https://www.googleapis.com/auth/drive',
           queryParams: {
             access_type: 'offline',
             prompt: 'select_account consent',

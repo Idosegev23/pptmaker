@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { brandName, brandResearch, influencerStrategy, brandColors } = body
+    const { brandName, brandResearch, influencerStrategy, brandColors, skipDriveUpload } = body
 
     if (!brandName) {
       return NextResponse.json({ error: 'brandName is required' }, { status: 400 })
@@ -56,7 +56,17 @@ export async function POST(request: NextRequest) {
       console.log(`[${requestId}] Uploaded to Supabase Storage: ${storageFileName}`)
     }
 
-    // 4. Try Google Drive (optional)
+    // 4. If skipDriveUpload, return Supabase URL only (client handles Drive upload via Picker)
+    if (skipDriveUpload) {
+      return NextResponse.json({
+        success: true,
+        supabaseUrl,
+        viewUrl: supabaseUrl,
+        downloadUrl: supabaseUrl,
+      })
+    }
+
+    // 5. Try Google Drive (optional, legacy flow)
     try {
       const fileName = `מחקר_${brandName}_${new Date().toISOString().split('T')[0]}.pdf`
       const driveResult = await uploadToGoogleDrive({

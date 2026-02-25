@@ -10,6 +10,7 @@ import SlideEditor from '@/components/presentation/SlideEditor'
 import SlideViewer from '@/components/presentation/SlideViewer'
 import PropertiesPanel from '@/components/presentation/PropertiesPanel'
 import ImageSourceModal from '@/components/presentation/ImageSourceModal'
+import GoogleDriveSaveButton from '@/components/google-drive-save-button'
 
 // ─── Empty presentation (placeholder while loading) ────────
 const EMPTY_PRESENTATION: Presentation = {
@@ -190,6 +191,23 @@ export default function PresentationEditorPage() {
       alert('שגיאה ביצירת ה-PDF')
     } finally {
       setIsGeneratingPdf(false)
+    }
+  }, [documentId, brandName, editor])
+
+  // ─── Get PDF blob for Drive save ────────────────────
+  const getProposalPdf = useCallback(async () => {
+    await editor.saveNow(documentId)
+    const response = await fetch('/api/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ documentId, action: 'download' }),
+    })
+    if (!response.ok) throw new Error('PDF generation failed')
+    const blob = await response.blob()
+    return {
+      blob,
+      fileName: `${brandName || 'proposal'}.pdf`,
+      mimeType: 'application/pdf',
     }
   }, [documentId, brandName, editor])
 
@@ -421,6 +439,15 @@ export default function PresentationEditorPage() {
               >
                 {isGeneratingPdf ? 'מייצר...' : 'הורד PDF'}
               </button>
+
+              {/* Save to Drive */}
+              <GoogleDriveSaveButton
+                getFileData={getProposalPdf}
+                onSaved={(result) => window.open(result.webViewLink, '_blank')}
+                onError={() => alert('שגיאה בשמירה ל-Drive')}
+                label="שמור ב-Drive"
+                className="px-4 py-1.5 text-xs font-medium rounded-lg"
+              />
             </div>
           </div>
         </div>
