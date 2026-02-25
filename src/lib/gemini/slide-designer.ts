@@ -19,6 +19,7 @@ import type {
   DesignSystem,
   SlideType,
   FontWeight,
+  ImageElement,
 } from '@/types/presentation'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
@@ -1127,7 +1128,8 @@ export async function generateAIPresentation(
   }
 
   const avgScore = Math.round(totalScore / allSlides.length)
-  const finalSlides = checkVisualConsistency(validatedSlides, designSystem)
+  const consistentSlides = checkVisualConsistency(validatedSlides, designSystem)
+  const finalSlides = injectLeadersLogo(consistentSlides)
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1)
   console.log(`\n${'═'.repeat(50)}`)
@@ -1257,6 +1259,66 @@ export async function pipelineBatch(
   }
 }
 
+// ─── Leaders Logo Injection ────────────────────────────
+
+function getAppBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return 'http://localhost:3000'
+}
+
+function hexToLuminance(hex: string): number {
+  let clean = hex.replace('#', '')
+  if (clean.length === 3) clean = clean.split('').map(c => c + c).join('')
+  if (clean.length !== 6) return 0.2 // fallback — assume dark
+  const r = parseInt(clean.slice(0, 2), 16) / 255
+  const g = parseInt(clean.slice(2, 4), 16) / 255
+  const b = parseInt(clean.slice(4, 6), 16) / 255
+  const adj = (c: number) => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  return 0.2126 * adj(r) + 0.7152 * adj(g) + 0.0722 * adj(b)
+}
+
+function extractDominantColor(bg: Slide['background']): string {
+  if (bg.type === 'solid') return bg.value
+  if (bg.type === 'gradient') {
+    const match = bg.value.match(/#[0-9a-fA-F]{3,8}/)
+    return match ? match[0] : '#1a1a2e'
+  }
+  return '#1a1a2e' // image backgrounds assumed dark
+}
+
+function injectLeadersLogo(slides: Slide[]): Slide[] {
+  const baseUrl = getAppBaseUrl()
+  const whiteLogoUrl = `${baseUrl}/logo.png`
+  const blackLogoUrl = `${baseUrl}/logoblack.png`
+
+  return slides.map(slide => {
+    const bgColor = extractDominantColor(slide.background)
+    const luminance = hexToLuminance(bgColor)
+    const isDark = luminance < 0.45
+    const logoUrl = isDark ? whiteLogoUrl : blackLogoUrl
+
+    const logoElement: ImageElement = {
+      id: `leaders-logo-${slide.id}`,
+      type: 'image',
+      src: logoUrl,
+      alt: 'Leaders',
+      x: 40,
+      y: 1000,
+      width: 140,
+      height: 50,
+      zIndex: 99,
+      objectFit: 'contain',
+      opacity: 0.7,
+    }
+
+    return {
+      ...slide,
+      elements: [...slide.elements, logoElement],
+    }
+  })
+}
+
 /**
  * Stage 3: Validate, auto-fix, consistency check, assemble final Presentation.
  */
@@ -1284,7 +1346,8 @@ export function pipelineFinalize(
   }
 
   const avgScore = Math.round(totalScore / allSlides.length)
-  const finalSlides = checkVisualConsistency(validatedSlides, foundation.designSystem)
+  const consistentSlides = checkVisualConsistency(validatedSlides, foundation.designSystem)
+  const finalSlides = injectLeadersLogo(consistentSlides)
 
   console.log(`[SlideDesigner][${requestId}] Finalized: ${finalSlides.length} slides, quality: ${avgScore}/100`)
 
