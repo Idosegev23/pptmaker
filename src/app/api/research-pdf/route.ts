@@ -42,7 +42,21 @@ export async function POST(request: NextRequest) {
     const pdfBuffer = await generatePdf(html, { format: 'A4' })
     console.log(`[${requestId}] PDF generated: ${pdfBuffer.length} bytes`)
 
-    // 3. Try to upload to Google Drive
+    // 3. Upload to Supabase Storage (always works) + try Google Drive
+    const storageFileName = `research_${brandName.replace(/[^a-zA-Z0-9א-ת]/g, '_')}_${Date.now()}.pdf`
+    const { data: uploadData } = await supabase.storage
+      .from('documents')
+      .upload(storageFileName, pdfBuffer, { contentType: 'application/pdf', upsert: true })
+
+    const supabaseUrl = uploadData
+      ? supabase.storage.from('documents').getPublicUrl(storageFileName).data.publicUrl
+      : null
+
+    if (supabaseUrl) {
+      console.log(`[${requestId}] Uploaded to Supabase Storage: ${storageFileName}`)
+    }
+
+    // 4. Try Google Drive (optional)
     try {
       const fileName = `מחקר_${brandName}_${new Date().toISOString().split('T')[0]}.pdf`
       const driveResult = await uploadToGoogleDrive({
@@ -58,11 +72,21 @@ export async function POST(request: NextRequest) {
         viewUrl: driveResult.webViewLink,
         downloadUrl: driveResult.webContentLink,
         fileId: driveResult.fileId,
+        supabaseUrl,
       })
     } catch (driveError) {
-      console.error(`[${requestId}] Drive upload failed, returning PDF as download:`, driveError)
+      console.error(`[${requestId}] Drive upload failed, using Supabase fallback:`, driveError)
 
-      // Fallback: return PDF as direct download
+      // Fallback: return Supabase URL or direct download
+      if (supabaseUrl) {
+        return NextResponse.json({
+          success: true,
+          viewUrl: supabaseUrl,
+          downloadUrl: supabaseUrl,
+          supabaseUrl,
+        })
+      }
+
       return new NextResponse(new Uint8Array(pdfBuffer), {
         headers: {
           'Content-Type': 'application/pdf',

@@ -281,58 +281,76 @@ export async function extractColorsByBrandName(brandName: string): Promise<Brand
 - אל תחזיר צבעים כלליים אם אתה מכיר את המותג
 `
 
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-      }
-    })
+  const MAX_RETRIES = 3
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL,
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+        }
+      })
 
-    const text = response.text || ''
-    console.log('[Gemini Colors] Brand analysis received')
+      const text = response.text || ''
+      console.log('[Gemini Colors] Brand analysis received')
 
-    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[1])
-      const result: BrandColors & { logoUrl?: string } = {
-        primary: parsed.primary || '#111111',
-        secondary: parsed.secondary || '#666666',
-        accent: parsed.accent || parsed.primary || '#E94560',
-        background: parsed.background || '#FFFFFF',
-        text: parsed.text || '#111111',
-        palette: parsed.palette || [parsed.primary, parsed.secondary, parsed.accent].filter(Boolean),
-        style: parsed.style || 'corporate',
-        mood: parsed.mood || 'מקצועי',
-        logoUrl: parsed.logoUrl || undefined,
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[1])
+        const result: BrandColors & { logoUrl?: string } = {
+          primary: parsed.primary || '#111111',
+          secondary: parsed.secondary || '#666666',
+          accent: parsed.accent || parsed.primary || '#E94560',
+          background: parsed.background || '#FFFFFF',
+          text: parsed.text || '#111111',
+          palette: parsed.palette || [parsed.primary, parsed.secondary, parsed.accent].filter(Boolean),
+          style: parsed.style || 'corporate',
+          mood: parsed.mood || 'מקצועי',
+          logoUrl: parsed.logoUrl || undefined,
+        }
+        console.log(`[Gemini Colors] Brand "${brandName}" → primary=${result.primary}, accent=${result.accent}, confidence=${parsed.confidence || 'unknown'}`)
+        return result
       }
-      console.log(`[Gemini Colors] Brand "${brandName}" → primary=${result.primary}, accent=${result.accent}, confidence=${parsed.confidence || 'unknown'}`)
-      return result
+
+      // Try without code blocks
+      const jsonStart = text.indexOf('{')
+      const jsonEnd = text.lastIndexOf('}')
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
+        const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
+        return {
+          primary: parsed.primary || '#111111',
+          secondary: parsed.secondary || '#666666',
+          accent: parsed.accent || parsed.primary || '#E94560',
+          background: parsed.background || '#FFFFFF',
+          text: parsed.text || '#111111',
+          palette: parsed.palette || [],
+          style: parsed.style || 'corporate',
+          mood: parsed.mood || 'מקצועי',
+        }
+      }
+
+      throw new Error('No JSON in response')
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      const is503 = errorMsg.includes('503') || errorMsg.includes('overloaded') || errorMsg.includes('UNAVAILABLE')
+      console.error(`[Gemini Colors] Attempt ${attempt}/${MAX_RETRIES} failed:`, errorMsg)
+
+      if (is503 && attempt < MAX_RETRIES) {
+        const delay = 2000 * attempt
+        console.log(`[Gemini Colors] 503 error, retrying in ${delay}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        continue
+      }
+
+      if (attempt === MAX_RETRIES) {
+        console.error('[Gemini Colors] All retries exhausted, returning defaults')
+        return getDefaultColors()
+      }
     }
-
-    // Try without code blocks
-    const jsonStart = text.indexOf('{')
-    const jsonEnd = text.lastIndexOf('}')
-    if (jsonStart !== -1 && jsonEnd > jsonStart) {
-      const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
-      return {
-        primary: parsed.primary || '#111111',
-        secondary: parsed.secondary || '#666666',
-        accent: parsed.accent || parsed.primary || '#E94560',
-        background: parsed.background || '#FFFFFF',
-        text: parsed.text || '#111111',
-        palette: parsed.palette || [],
-        style: parsed.style || 'corporate',
-        mood: parsed.mood || 'מקצועי',
-      }
-    }
-
-    throw new Error('No JSON in response')
-  } catch (error) {
-    console.error('[Gemini Colors] Brand name analysis error:', error)
-    return getDefaultColors()
   }
+
+  return getDefaultColors()
 }
 
 /**

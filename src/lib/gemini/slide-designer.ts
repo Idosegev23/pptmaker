@@ -746,11 +746,30 @@ async function generateSlidesBatchAST(
   const requestId = `sb-ast-${batchIndex}-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Generating AST batch ${batchIndex + 1}: ${slides.map(s => s.slideType).join(', ')}`)
 
+  // Assign layout style to each slide type
+  const layoutMap: Record<string, string> = {
+    cover: 'Typographic Brutalism — מילה ענקית 300px+ עם textStroke ברקע, סיבוב -12°, Aurora BG, בלי תמונה',
+    brief: 'Editorial Bleed — תמונה ענקית 60% מסך עם borderRadius: 500, טקסט מינימליסטי בצד, מספר 01 hollow',
+    goals: 'Bento Box — 3-4 קוביות מעוגלות (borderRadius: 32) עם fake-shadow, מספרים hollow בכל קוביה',
+    audience: 'Editorial Bleed — תמונה/shape ענקי בצורת קפסולה, נתוני פרסונה בצד בטקסט מינימליסטי',
+    insight: 'Typographic Brutalism — הציטוט עצמו ב-48px ממורכז, מילה מפתח ענקית 250px+ hollow ברקע',
+    strategy: 'Split Screen Asymmetry — צד ימין (700px) כהה עם כותרת, צד שמאל כרטיסים צפים חוצים את הקו',
+    bigIdea: 'Typographic Brutalism — שם הרעיון ב-80px, מילה ענקית 300px+ hollow ברקע בסיבוב',
+    approach: 'Split Screen Asymmetry — שלבים כ-floating cards שחוצים את קו ההפרדה',
+    deliverables: 'Bento Box — כל תוצר בקוביה נפרדת, מספרים גדולים hollow, גבולות זוהרים',
+    metrics: 'Bento Box — כל מדד בקוביה עם מספר ענק 72-96px בצבע accent, fake-shadow מתחת',
+    influencerStrategy: 'Split Screen Asymmetry — קריטריונים כ-tags בצד ימין, אסטרטגיה בצד שמאל',
+    influencers: 'Bento Box — כרטיסי משפיענים בגריד צפוף עם מעגלי תמונה ופינות מעוגלות',
+    closing: 'Typographic Brutalism — BRAND ענק 350px+ hollow, כותרת סיום ממורכזת 80px, Aurora BG',
+  }
+
   const slidesDescription = slides.map((slide, i) => {
     const contentJson = JSON.stringify(slide.content, null, 2)
+    const assignedLayout = layoutMap[slide.slideType] || 'Bento Box'
     return `
 ### שקף ${i + 1}: ${slide.title} (סוג: ${slide.slideType})
-${slide.imageUrl ? `תמונה זמינה: ${slide.imageUrl}` : 'אין תמונה'}
+**סגנון חובה: ${assignedLayout}**
+${slide.imageUrl ? `תמונה זמינה: ${slide.imageUrl}` : 'אין תמונה — השתמש ב-shapes וטיפוגרפיה בלבד'}
 תוכן:
 \`\`\`json
 ${contentJson}
