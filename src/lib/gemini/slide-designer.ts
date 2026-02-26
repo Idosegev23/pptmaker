@@ -426,8 +426,9 @@ async function generateDesignSystem(
 
 פונט: Heebo. החזר JSON בלבד עם שני חלקים: creativeDirection (object) + כל שאר שדות ה-Design System.`
 
-  // Flash first (fast + cheap), Pro fallback
-  const models = [FLASH_MODEL, PRO_MODEL]
+  // Pro first for design system (one-time critical call that defines the entire presentation)
+  // Flash fallback if Pro is overloaded
+  const models = [PRO_MODEL, FLASH_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -435,7 +436,11 @@ async function generateDesignSystem(
       const response = await ai.models.generateContent({
         model,
         contents: prompt,
-        config: { responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH } },
+        config: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          maxOutputTokens: 16000,
+        },
       })
 
       const parsed = parseGeminiJson<PremiumDesignSystem>(response.text || '')
@@ -447,7 +452,7 @@ async function generateDesignSystem(
         if (attempt > 0) console.log(`[SlideDesigner][${requestId}] ✅ Design system succeeded with fallback (${model})`)
         return parsed
       }
-      throw new Error('Invalid design system response')
+      throw new Error(`Invalid design system response — parsed colors missing`)
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       console.error(`[SlideDesigner][${requestId}] Design system attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
