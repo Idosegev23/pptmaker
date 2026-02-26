@@ -7,7 +7,10 @@ import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { BrandResearch } from './brand-research'
 import { parseGeminiJson } from '../utils/json-cleanup'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
+})
 
 // Use Gemini 3.1 Pro for high-reasoning influencer research and market analysis
 const MODEL = 'gemini-3.1-pro-preview'
@@ -186,26 +189,39 @@ export async function researchInfluencers(
 **חובה להחזיר JSON בלבד! וודא שמות משפיענים אמיתיים מהשוק הישראלי.**
 `
 
-  try {
+  const callGemini = async () => {
     const response = await ai.models.generateContent({
       model: MODEL,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }], // Added only strictly supported Google tools
+        tools: [{ googleSearch: {} }],
         thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        maxOutputTokens: 6000,
       }
     })
-
-    const text = response.text || ''
-    console.log('[Influencer Research] Response received, parsing JSON...')
-    
-    const strategy = parseGeminiJson<InfluencerStrategy>(text)
-    console.log(`[Influencer Research] Complete. Found ${strategy.recommendations?.length || 0} real recommendations.`)
-    return strategy
-  } catch (error) {
-    console.error('[Influencer Research] Error during strategy generation:', error)
-    return getDefaultStrategy(brandResearch, budget, goals)
+    return response.text || ''
   }
+
+  // Retry once on transient failures (fetch timeout / 499)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const text = await callGemini()
+      console.log('[Influencer Research] Response received, parsing JSON...')
+      const strategy = parseGeminiJson<InfluencerStrategy>(text)
+      console.log(`[Influencer Research] Complete. Found ${strategy.recommendations?.length || 0} real recommendations.`)
+      return strategy
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[Influencer Research] Attempt ${attempt}/2 failed: ${msg}`)
+      if (attempt < 2) {
+        console.log('[Influencer Research] Retrying in 3s...')
+        await new Promise(r => setTimeout(r, 3000))
+      }
+    }
+  }
+
+  console.error('[Influencer Research] All attempts failed, using fallback')
+  return getDefaultStrategy(brandResearch, budget, goals)
 }
 
 /**

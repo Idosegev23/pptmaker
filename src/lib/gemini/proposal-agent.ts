@@ -220,17 +220,47 @@ function buildProposalPrompt(
   brandResearch?: Record<string, unknown>,
   influencerStrategy?: Record<string, unknown>
 ): string {
+  // Build a rich research context from ALL available data
+  const r = brandResearch || {}
   const researchSection = brandResearch ? `
-## מחקר אסטרטגי שנאסף על המותג (השתמש בו כדי לכתוב תוכן חכם וספציפי!):
-- מיקום בשוק: ${(brandResearch.marketPosition as string) || 'לא ידוע'}
-- מתחרים עיקריים: ${JSON.stringify((brandResearch.competitors as unknown[])?.slice(0, 3) || [])}
-- יתרונות תחרותיים: ${JSON.stringify((brandResearch.competitiveAdvantages as unknown[]) || [])}
-- טרנדים בתעשייה: ${JSON.stringify((brandResearch.industryTrends as unknown[]) || [])}
-- קמפיינים תחרותיים: ${JSON.stringify((brandResearch.competitorCampaigns as unknown[])?.slice(0, 2) || [])}
-- פער תחרותי: ${(brandResearch.competitiveGap as string) || ''}
-- whyNow: ${(brandResearch.whyNowTrigger as string) || ''}
-- קהל יעד מהמחקר: ${JSON.stringify((brandResearch.targetDemographics as unknown) || {})}
-${influencerStrategy ? `- אסטרטגיית משפיענים: ${JSON.stringify(influencerStrategy).slice(0, 500)}` : ''}
+## מחקר אסטרטגי מעמיק שנאסף על המותג:
+**חובה להשתמש בנתונים האלה כדי לכתוב תוכן ספציפי ומבוסס — לא גנרי!**
+
+### מיקום בשוק ותחרות:
+- מיקום: ${(r.marketPosition as string) || ''}
+- מתחרים: ${JSON.stringify((r.competitors as unknown[])?.slice(0, 4) || [])}
+- יתרונות תחרותיים: ${JSON.stringify((r.competitiveAdvantages as unknown[]) || [])}
+- יתרונות ייחודיים (USP): ${JSON.stringify((r.uniqueSellingPoints as unknown[]) || [])}
+- פער תחרותי (הזדמנות!): ${(r.competitiveGap as string) || ''}
+
+### טרנדים, הקשר וטריגר:
+- טרנדים בתעשייה: ${JSON.stringify((r.industryTrends as unknown[]) || [])}
+- למה עכשיו (whyNow): ${(r.whyNowTrigger as string) || ''}
+- הקשר ישראלי: ${(r.israeliMarketContext as string) || ''}
+- פלטפורמה דומיננטית בישראל: ${(r.dominantPlatformInIsrael as string) || ''}
+- עונתיות: ${(r.seasonality as string) || ''}
+
+### זהות המותג (השתמש לטון הכתיבה!):
+- אישיות המותג: ${JSON.stringify((r.brandPersonality as unknown[]) || [])}
+- ערכי מותג: ${JSON.stringify((r.brandValues as unknown[]) || [])}
+- הבטחת מותג: ${(r.brandPromise as string) || ''}
+- טון דיבור: ${(r.toneOfVoice as string) || ''}
+
+### קהל יעד מהמחקר:
+${JSON.stringify((r.targetDemographics as unknown) || {}, null, 1)}
+
+### קמפיינים קודמים ותחרותיים:
+- קמפיינים קודמים של המותג: ${JSON.stringify((r.previousCampaigns as unknown[])?.slice(0, 3) || [])}
+- קמפיינים של מתחרים: ${JSON.stringify((r.competitorCampaigns as unknown[])?.slice(0, 3) || [])}
+
+### נוכחות דיגיטלית:
+- רשתות חברתיות: ${JSON.stringify((r.socialPresence as unknown) || {})}
+- נושאי תוכן מומלצים: ${JSON.stringify((r.contentThemes as unknown[]) || [])}
+- גישה מומלצת מהמחקר: ${(r.suggestedApproach as string) || ''}
+- סוגי משפיענים מומלצים: ${JSON.stringify((r.influencerTypes as unknown[]) || [])}
+${influencerStrategy ? `
+### אסטרטגיית משפיענים (מחקר שוק אמיתי):
+${JSON.stringify(influencerStrategy, null, 1).slice(0, 1500)}` : ''}
 ` : ''
 
   return `אתה מנהל קריאייטיב ואסטרטג ראשי בסוכנות פרימיום לשיווק משפיענים.

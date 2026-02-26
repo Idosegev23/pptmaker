@@ -6,7 +6,10 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '../utils/json-cleanup'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
+})
 
 // Only gemini-3.1-pro-preview — never use other model families
 const AGENT_MODEL = 'gemini-3.1-pro-preview'
@@ -210,21 +213,35 @@ ${angleDescription}
 5. אם לא מצאת מידע כלל על נושא מסוים, ציין במפורש "לא מצאתי מידע על כך ברשת".
   `
 
-  // No internal timeout — each agent runs in its own Lambda with maxDuration=600
-  try {
+  const callAgent = async () => {
     const response = await ai.models.generateContent({
       model: AGENT_MODEL,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
         thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        maxOutputTokens: 4000,
       },
     })
-    return { angle: angleName, data: response.text || `לא נאסף מידע עבור: ${angleName}` }
-  } catch (error) {
-    console.error(`[Research Agent Error] Failed to gather data for angle: ${angleName}`, error)
-    return { angle: angleName, data: `שגיאה באיסוף מידע.` }
+    return response.text || `לא נאסף מידע עבור: ${angleName}`
   }
+
+  // Retry once on transient failures (fetch timeout / 499)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const data = await callAgent()
+      return { angle: angleName, data }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[Research Agent] Attempt ${attempt}/2 failed for ${angleName}: ${msg}`)
+      if (attempt < 2) {
+        console.log(`[Research Agent] Retrying ${angleName} in 3s...`)
+        await new Promise(r => setTimeout(r, 3000))
+      }
+    }
+  }
+
+  return { angle: angleName, data: `שגיאה באיסוף מידע לאחר 2 ניסיונות.` }
 }
 
 /**
