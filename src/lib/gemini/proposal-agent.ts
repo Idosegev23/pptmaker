@@ -78,7 +78,7 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
     const response = await ai.models.generateContent({
       model: PRO_MODEL,
       contents: prompt,
-      config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 2000 },
+      config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 4000 },
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const extracted = parseGeminiJson<any>(response.text || '{}')

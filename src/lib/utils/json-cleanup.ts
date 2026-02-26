@@ -315,8 +315,11 @@ function aggressiveRepair(json: string): string {
 function fixTruncatedJson(json: string): string {
   let fixed = json.trim()
 
-  // Remove trailing incomplete key-value pairs (e.g., "key":)
-  fixed = fixed.replace(/,\s*"[^"]*"\s*:\s*$/, '')
+  // Remove trailing incomplete key (quote opened but never closed, e.g., , "tagline)
+  fixed = fixed.replace(/,\s*"[^"]*$/, '')
+
+  // Remove trailing key with no value (e.g., , "key": or , "key")
+  fixed = fixed.replace(/,\s*"[^"]*"\s*:?\s*$/, '')
 
   // Remove trailing incomplete string values
   fixed = fixed.replace(/:\s*"[^"]*$/, ': ""')
