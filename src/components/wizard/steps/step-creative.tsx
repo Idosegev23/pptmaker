@@ -120,7 +120,7 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {suggestedReferences.map((ref, i) => (
-              <div key={i} className="rounded-2xl border border-accent/20 bg-brand-gold-light/30 p-4">
+              <div key={i} className="rounded-2xl border border-wizard-border bg-brand-pearl/50 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="rounded-md bg-accent/10 px-2 py-0.5 text-[10px] font-rubik font-medium text-accent">
                     {ref.type}

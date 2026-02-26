@@ -86,18 +86,18 @@ export default function StepKeyInsight({
     <div dir="rtl" className="space-y-6">
       {/* Extracted insight banner */}
       {hasExtractedInsight && (
-        <Card className="border-amber-300 bg-amber-50">
+        <Card className="border-wizard-border bg-brand-pearl/50">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base text-amber-800">
+            <CardTitle className="text-base text-wizard-text-primary">
               תובנה שחולצה מהבריף:
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-sm text-amber-700 leading-relaxed">
+            <p className="text-sm text-wizard-text-secondary leading-relaxed">
               {extractedData.keyInsight}
             </p>
             {extractedData.insightSource && (
-              <p className="text-xs text-amber-600">
+              <p className="text-xs text-wizard-text-tertiary">
                 <span className="font-semibold">מקור:</span> {extractedData.insightSource}
               </p>
             )}
@@ -105,7 +105,7 @@ export default function StepKeyInsight({
               variant="outline"
               size="sm"
               onClick={applyExtracted}
-              className="mt-2 border-amber-400 text-amber-800 hover:bg-amber-100"
+              className="mt-2 border-accent/30 text-accent hover:bg-accent/5"
             >
               החל תובנה מחולצת
             </Button>
@@ -114,19 +114,17 @@ export default function StepKeyInsight({
       )}
 
       {/* Creative connection hint */}
-      <Card className="border-purple-200 bg-purple-50">
-        <CardContent className="py-3 px-4">
-          <p className="text-sm text-purple-700">
-            <span className="font-semibold">טיפ:</span> התובנה צריכה להסביר <strong>למה</strong> הגישה הקריאייטיבית שנציע היא הנכונה. חשבו על זה כגשר לוגי בין הכאב של הקהל לפתרון שנציע.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl border border-wizard-border bg-brand-pearl/50 px-4 py-3">
+        <p className="text-[13px] text-wizard-text-secondary leading-relaxed">
+          <span className="font-heebo font-semibold">טיפ:</span> התובנה צריכה להסביר <strong>למה</strong> הגישה הקריאייטיבית שנציע היא הנכונה. חשבו על זה כגשר לוגי בין הכאב של הקהל לפתרון שנציע.
+        </p>
+      </div>
 
       {/* Key Insight */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <label className="block text-sm font-medium text-foreground">התובנה המרכזית</label>
+            <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">התובנה המרכזית</label>
             {aiVersionHistory?.['key_insight.insight'] && onNavigateVersion && (
               <AiVersionNavigator
                 versions={aiVersionHistory['key_insight.insight'].versions}
@@ -140,11 +138,11 @@ export default function StepKeyInsight({
             size="sm"
             onClick={handleRefineWithAI}
             disabled={isRefining}
-            className="text-primary border-primary/30 hover:bg-primary/5"
+            className="gap-1.5 border-accent/30 text-accent hover:bg-accent/5"
           >
             {isRefining ? (
               <>
-                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin ml-1.5" />
+                <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                 מחדד עם AI...
               </>
             ) : (
@@ -159,7 +157,7 @@ export default function StepKeyInsight({
           error={errors?.keyInsight}
           className="min-h-[160px] text-base"
         />
-        <p className="text-xs text-muted-foreground leading-relaxed">
+        <p className="text-xs text-wizard-text-tertiary leading-relaxed">
           למה נכון למותג לעשות את מה שאנחנו הולכים להציע? לאן אנחנו רוצים להביא את הקהל?
         </p>
       </div>

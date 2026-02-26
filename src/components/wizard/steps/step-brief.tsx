@@ -87,8 +87,8 @@ export default function StepBrief({ data, extractedData, onChange, errors }: Ste
     <div dir="rtl" className="space-y-10">
       {/* Extracted data banner */}
       {hasExtractedDiff && (
-        <div className="relative rounded-2xl border border-accent/20 bg-brand-gold-light/40 p-5 overflow-hidden">
-          <div className="absolute top-0 right-0 bottom-0 w-1 bg-gradient-to-b from-accent to-brand-gold" />
+        <div className="relative rounded-2xl border border-wizard-border bg-brand-pearl/50 p-5 overflow-hidden">
+          <div className="absolute top-0 right-0 bottom-0 w-1 bg-gradient-to-b from-accent to-brand-primary" />
           <h3 className="text-sm font-heebo font-bold text-wizard-text-primary mb-3">
             המערכת חילצה את המידע הבא מהבריף
           </h3>

@@ -4,7 +4,7 @@ import React, { useCallback, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { InfluencersStepData, InfluencerProfile } from '@/types/wizard'
 
@@ -150,15 +150,16 @@ export default function StepInfluencers({
   )
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir="rtl" className="space-y-10">
       {/* Influencer Cards */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
             משפיענים ({influencers.length})
           </label>
-          <Button variant="ghost" size="sm" onClick={addInfluencer}>
-            + הוסף משפיען
+          <Button variant="ghost" size="sm" onClick={addInfluencer} className="gap-1.5">
+            <span className="text-base leading-none">+</span>
+            <span>הוסף משפיען</span>
           </Button>
         </div>
 
@@ -167,8 +168,8 @@ export default function StepInfluencers({
         )}
 
         {influencers.length === 0 && (
-          <div className="rounded-lg border-2 border-dashed border-input p-6 text-center">
-            <p className="text-sm text-muted-foreground mb-3">
+          <div className="rounded-2xl border-2 border-dashed border-wizard-border p-8 text-center">
+            <p className="text-sm text-wizard-text-tertiary mb-3">
               לא נוספו משפיענים עדיין
             </p>
             <Button variant="secondary" size="sm" onClick={addInfluencer}>
@@ -186,10 +187,10 @@ export default function StepInfluencers({
               <button
                 type="button"
                 onClick={() => setExpandedIndex(isExpanded ? null : index)}
-                className="w-full flex items-center gap-3 p-4 text-right hover:bg-muted/30 transition-colors"
+                className="w-full flex items-center gap-3 p-4 text-right hover:bg-brand-pearl transition-colors"
               >
                 {/* Profile pic */}
-                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-brand-mist flex items-center justify-center shrink-0 overflow-hidden">
                   {inf.profilePicUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -208,7 +209,7 @@ export default function StepInfluencers({
                       strokeWidth="1.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="text-muted-foreground"
+                      className="text-wizard-text-tertiary"
                     >
                       <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
                       <circle cx="12" cy="7" r="4" />
@@ -217,10 +218,10 @@ export default function StepInfluencers({
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">
+                  <p className="font-heebo font-bold text-sm text-wizard-text-primary truncate">
                     {inf.name || 'משפיען ללא שם'}
                   </p>
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="text-xs text-wizard-text-tertiary truncate">
                     {inf.username ? `@${inf.username}` : 'ללא שם משתמש'}
                     {inf.followers > 0 && ` | ${inf.followers.toLocaleString('he-IL')} עוקבים`}
                   </p>
@@ -238,7 +239,7 @@ export default function StepInfluencers({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   className={cn(
-                    'shrink-0 text-muted-foreground transition-transform duration-200',
+                    'shrink-0 text-wizard-text-tertiary transition-transform duration-200',
                     isExpanded && 'rotate-180'
                   )}
                 >
@@ -248,7 +249,7 @@ export default function StepInfluencers({
 
               {/* Expanded form */}
               {isExpanded && (
-                <CardContent className="border-t pt-4 space-y-4">
+                <CardContent className="border-t border-wizard-border pt-4 space-y-4">
                   {/* Basic info */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Input
@@ -282,18 +283,18 @@ export default function StepInfluencers({
 
                   {/* Categories */}
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-foreground">קטגוריות</label>
+                    <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">קטגוריות</label>
                     <div className="flex flex-wrap gap-2">
                       {inf.categories.map((cat, catIndex) => (
                         <span
                           key={catIndex}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-muted text-sm"
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-accent/10 text-sm text-accent"
                         >
                           {cat}
                           <button
                             type="button"
                             onClick={() => removeCategory(index, catIndex)}
-                            className="text-muted-foreground hover:text-destructive"
+                            className="text-accent/60 hover:text-destructive"
                           >
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
@@ -384,7 +385,7 @@ export default function StepInfluencers({
 
                     {/* Gender Split */}
                     <div className="space-y-2">
-                      <label className="block text-sm font-medium text-foreground">
+                      <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
                         פילוח מגדרי (%)
                       </label>
                       <div className="grid grid-cols-2 gap-2">
@@ -425,11 +426,12 @@ export default function StepInfluencers({
                   {/* Age Split */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="block text-sm font-medium text-foreground">
+                      <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
                         פילוח גילאים
                       </label>
-                      <Button variant="ghost" size="sm" onClick={() => addAgeSplit(index)}>
-                        + הוסף טווח
+                      <Button variant="ghost" size="sm" onClick={() => addAgeSplit(index)} className="gap-1.5">
+                        <span className="text-base leading-none">+</span>
+                        <span>הוסף טווח</span>
                       </Button>
                     </div>
                     {(inf.ageSplit || []).map((split, splitIndex) => (
@@ -461,7 +463,7 @@ export default function StepInfluencers({
                           variant="ghost"
                           size="icon"
                           onClick={() => removeAgeSplit(index, splitIndex)}
-                          className="shrink-0 text-destructive hover:bg-destructive/10"
+                          className="shrink-0 text-wizard-text-tertiary hover:text-destructive hover:bg-destructive/10"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -497,17 +499,18 @@ export default function StepInfluencers({
                       type="checkbox"
                       checked={inf.isVerified ?? false}
                       onChange={(e) => updateInfluencer(index, { isVerified: e.target.checked })}
-                      className="h-4 w-4 rounded border-input accent-primary"
+                      className="h-4 w-4 rounded border-wizard-border accent-accent"
                     />
-                    <span className="text-sm text-foreground">חשבון מאומת</span>
+                    <span className="text-sm text-wizard-text-primary">חשבון מאומת</span>
                   </label>
 
                   {/* Remove button */}
-                  <div className="border-t pt-3">
+                  <div className="border-t border-wizard-border pt-3">
                     <Button
-                      variant="destructive"
+                      variant="outline"
                       size="sm"
                       onClick={() => removeInfluencer(index)}
+                      className="text-destructive border-destructive/30 hover:bg-destructive/5"
                     >
                       הסר משפיען
                     </Button>
@@ -532,16 +535,17 @@ export default function StepInfluencers({
       {/* Criteria */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
             קריטריונים לבחירה
           </label>
-          <Button variant="ghost" size="sm" onClick={addCriterion}>
-            + הוסף קריטריון
+          <Button variant="ghost" size="sm" onClick={addCriterion} className="gap-1.5">
+            <span className="text-base leading-none">+</span>
+            <span>הוסף קריטריון</span>
           </Button>
         </div>
 
         {influencerCriteria.length === 0 && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-wizard-text-tertiary">
             הוסיפו קריטריונים לבחירת משפיענים (אחוז מעורבות מינימלי, התאמה לקהל יעד וכו&apos;)
           </p>
         )}
@@ -557,7 +561,7 @@ export default function StepInfluencers({
               variant="ghost"
               size="icon"
               onClick={() => removeCriterion(index)}
-              className="shrink-0 text-destructive hover:bg-destructive/10"
+              className="shrink-0 text-wizard-text-tertiary hover:text-destructive hover:bg-destructive/10"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

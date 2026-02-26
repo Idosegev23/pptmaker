@@ -10,6 +10,8 @@
 
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '../utils/json-cleanup'
+import { getConfig } from '@/lib/config/admin-config'
+import { MODEL_DEFAULTS } from '@/lib/config/defaults'
 import type { ExtractedBriefData } from '@/types/brief'
 import type { WizardStepDataMap } from '@/types/wizard'
 
@@ -17,8 +19,13 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 },
 })
-const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast, cheap, ThinkingLevel handles complexity
-const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
+const PRO_MODEL = 'gemini-3.1-pro-preview'     // Used for extraction (fast, single model)
+
+async function getProposalModels() {
+  const primary = await getConfig('ai_models', 'proposal_agent.primary_model', MODEL_DEFAULTS['proposal_agent.primary_model'].value as string)
+  const fallback = await getConfig('ai_models', 'proposal_agent.fallback_model', MODEL_DEFAULTS['proposal_agent.fallback_model'].value as string)
+  return [primary, fallback]
+}
 
 export interface ProposalOutput {
   extracted: ExtractedBriefData
@@ -69,13 +76,13 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
 
   try {
     const response = await ai.models.generateContent({
-      model: FLASH_MODEL,
+      model: PRO_MODEL,
       contents: prompt,
       config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 2000 },
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const extracted = parseGeminiJson<any>(response.text || '{}')
-    console.log(`[${agentId}] ✅ Extraction done (Flash). Brand: ${extracted?.brand?.name || 'N/A'}`)
+    console.log(`[${agentId}] ✅ Extraction done (Pro). Brand: ${extracted?.brand?.name || 'N/A'}`)
     return extracted
   } catch (err) {
     console.error(`[${agentId}] ❌ Extraction failed:`, err)
@@ -106,11 +113,11 @@ export async function generateProposal(
     throw new Error('טקסט הבריף קצר מדי לניתוח. ודא שהמסמך נקרא בהצלחה.')
   }
 
-  const prompt = buildProposalPrompt(clientBriefText, kickoffText, brandResearch, influencerStrategy)
+  const prompt = await buildProposalPrompt(clientBriefText, kickoffText, brandResearch, influencerStrategy)
   console.log(`[${agentId}] 📝 Prompt length: ${prompt.length} chars, hasResearch=${!!brandResearch}`)
 
-  // Flash first (fast + cheap), Pro fallback
-  const models = [FLASH_MODEL, PRO_MODEL]
+  // Primary model first, fallback second (configurable via admin)
+  const models = await getProposalModels()
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -201,12 +208,12 @@ interface RawProposalResponse {
 // Prompt builder - HEAVILY OPTIMIZED FOR "WOW" PDF OUTPUT
 // ============================================================
 
-function buildProposalPrompt(
+async function buildProposalPrompt(
   clientBriefText: string,
   kickoffText?: string,
   brandResearch?: Record<string, unknown>,
   influencerStrategy?: Record<string, unknown>
-): string {
+): Promise<string> {
   // Build a rich research context from ALL available data
   const r = brandResearch || {}
   const researchSection = brandResearch ? `
@@ -250,8 +257,19 @@ ${influencerStrategy ? `
 ${JSON.stringify(influencerStrategy, null, 1).slice(0, 1500)}` : ''}
 ` : ''
 
-  return `אתה מנהל קריאייטיב ואסטרטג ראשי בסוכנות פרימיום לשיווק משפיענים.
-המטרה שלך היא לבנות הצעת מחיר שתגרום ללקוח להגיד "וואו!". התוצר שלך ייוצא בסופו של דבר לעיצוב PDF יוקרתי.
+  // Admin-configurable system prompt and writing rules
+  const systemPrompt = await getConfig('ai_prompts', 'proposal_agent.system_prompt', `אתה מנהל קריאייטיב ואסטרטג ראשי בסוכנות פרימיום לשיווק משפיענים.
+המטרה שלך היא לבנות הצעת מחיר שתגרום ללקוח להגיד "וואו!". התוצר שלך ייוצא בסופו של דבר לעיצוב PDF יוקרתי.`)
+
+  const writingRules = await getConfig('ai_prompts', 'proposal_agent.writing_rules', `## חוקי כתיבה קריטיים לעיצוב ה-PDF (חובה!):
+1. **קופי של סוכנות בוטיק:** השתמש בשפה סוחפת, פאנצ'ית ויוקרתית. אל תכתוב כמו רובוט.
+2. **Scannability (קריאות מרחבית):** הימנע מגושי טקסט ענקיים. השתמש במשפטים קצרים וממוקדים כדי שהעיצוב ב-PDF ינשום וייראה מודרני.
+3. **יציאה מהקופסא בקריאייטיב:** אל תציע "משפיענים יצטלמו עם המוצר". תציע מהלכים משבשי שגרה, תרחישים מעניינים, קונספטים עם פוטנציאל ויראלי ואסתטיקה ויזואלית חזקה.
+4. **תובנה קטלנית:** ה-Key Insight חייב להיות 'אסימון שנופל' ללקוח. מתח בין התנהגות קהל היעד לבין מה שהמותג מציע.
+5. **סתירות:** מסמך ההתנעה תמיד גובר על הבריף.
+6. **ללא נקודתיים בכותרות:** אסור להשתמש בתו ':' בכותרות, שמות מטרות, שמות עמודי תווך, או כל שדה כותרת. במקום "מודעות: הגברת נוכחות" כתוב "מודעות — הגברת נוכחות" או "מודעות והגברת נוכחות".`)
+
+  return `${systemPrompt}
 
 ## מסמך 1: בריף לקוח (Client Brief)
 ${clientBriefText}
@@ -260,13 +278,7 @@ ${kickoffText ? `## מסמך 2: מסמך התנעה פנימי (Kickoff Notes)
 ${kickoffText}` : '(לא סופק מסמך התנעה)'}
 ${researchSection}
 
-## חוקי כתיבה קריטיים לעיצוב ה-PDF (חובה!):
-1. **קופי של סוכנות בוטיק:** השתמש בשפה סוחפת, פאנצ'ית ויוקרתית. אל תכתוב כמו רובוט.
-2. **Scannability (קריאות מרחבית):** הימנע מגושי טקסט ענקיים. השתמש במשפטים קצרים וממוקדים כדי שהעיצוב ב-PDF ינשום וייראה מודרני.
-3. **יציאה מהקופסא בקריאייטיב:** אל תציע "משפיענים יצטלמו עם המוצר". תציע מהלכים משבשי שגרה, תרחישים מעניינים, קונספטים עם פוטנציאל ויראלי ואסתטיקה ויזואלית חזקה.
-4. **תובנה קטלנית:** ה-Key Insight חייב להיות 'אסימון שנופל' ללקוח. מתח בין התנהגות קהל היעד לבין מה שהמותג מציע.
-5. **סתירות:** מסמך ההתנעה תמיד גובר על הבריף.
-6. **ללא נקודתיים בכותרות:** אסור להשתמש בתו ':' בכותרות, שמות מטרות, שמות עמודי תווך, או כל שדה כותרת. במקום "מודעות: הגברת נוכחות" כתוב "מודעות — הגברת נוכחות" או "מודעות והגברת נוכחות".
+${writingRules}
 
 ## פורמט הפלט (JSON):
 {

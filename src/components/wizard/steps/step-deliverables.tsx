@@ -26,13 +26,13 @@ const DELIVERABLE_TYPE_OPTIONS = [
 ]
 
 const DELIVERABLE_META: Record<string, { icon: string; color: string }> = {
-  'פעימת סטוריז': { icon: '📱', color: 'border-l-violet-400' },
-  'רילז': { icon: '🎬', color: 'border-l-rose-400' },
-  'טיקטוק': { icon: '🎵', color: 'border-l-cyan-400' },
-  'פוסט פיד': { icon: '📷', color: 'border-l-blue-400' },
-  'שיתוף פעולה': { icon: '🤝', color: 'border-l-amber-400' },
-  'לייב': { icon: '🔴', color: 'border-l-red-400' },
-  'אחר': { icon: '📦', color: 'border-l-gray-400' },
+  'פעימת סטוריז': { icon: '📱', color: 'border-l-accent' },
+  'רילז': { icon: '🎬', color: 'border-l-accent/70' },
+  'טיקטוק': { icon: '🎵', color: 'border-l-brand-primary' },
+  'פוסט פיד': { icon: '📷', color: 'border-l-brand-primary/70' },
+  'שיתוף פעולה': { icon: '🤝', color: 'border-l-brand-gold' },
+  'לייב': { icon: '🔴', color: 'border-l-accent' },
+  'אחר': { icon: '📦', color: 'border-l-brand-mist' },
 }
 
 function getDeliverableMeta(type: string) {

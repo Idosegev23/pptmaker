@@ -11,8 +11,8 @@ const ai = new GoogleGenAI({
   httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
 })
 
-const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast + cheap for research
-const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
+const PRO_MODEL = 'gemini-3.1-pro-preview'     // Primary — best reasoning quality
+const FLASH_MODEL = 'gemini-3-flash-preview'   // Fallback when Pro fails/overloaded
 
 export interface BrandResearch {
   // Basic Info
@@ -255,7 +255,7 @@ ${angleDescription}
   }
 
   // Flash first (fast + cheap), Pro fallback if Flash fails
-  const models = [FLASH_MODEL, PRO_MODEL]
+  const models = [PRO_MODEL, FLASH_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -394,7 +394,7 @@ ${websiteContext}
 `
 
   // Try Pro first, fallback to Flash if overloaded
-  const synthModels = [FLASH_MODEL, PRO_MODEL]
+  const synthModels = [PRO_MODEL, FLASH_MODEL]
   for (let attempt = 0; attempt < synthModels.length; attempt++) {
     const model = synthModels[attempt]
     try {
@@ -550,7 +550,7 @@ export async function quickBrandSummary(brandName: string): Promise<{
 
   try {
     const response = await ai.models.generateContent({
-      model: FLASH_MODEL,
+      model: PRO_MODEL,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],

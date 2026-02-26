@@ -14,8 +14,8 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 },
 })
-const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast + cheap
-const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
+const PRO_MODEL = 'gemini-3.1-pro-preview'     // Primary — best reasoning quality
+const FLASH_MODEL = 'gemini-3-flash-preview'   // Fallback when Pro fails/overloaded
 
 export interface SmartImagePrompt {
   imageId: string
@@ -115,7 +115,7 @@ ${imagePlans}
 `
 
   // Flash first (fast + cheap), Pro fallback
-  const models = [FLASH_MODEL, PRO_MODEL]
+  const models = [PRO_MODEL, FLASH_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {

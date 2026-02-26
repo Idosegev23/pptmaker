@@ -225,7 +225,7 @@ export default function StepQuantities({
 
       {/* Grand total */}
       {contentTypes.length > 0 && (
-        <Card className="border-accent/20 bg-brand-gold-light/30">
+        <Card className="border-wizard-border bg-brand-pearl/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-heebo">סיכום כמויות</CardTitle>
           </CardHeader>
@@ -237,7 +237,7 @@ export default function StepQuantities({
               </div>
             )}
 
-            <div className="flex items-center justify-between border-t border-accent/15 pt-3">
+            <div className="flex items-center justify-between border-t border-accent/10 pt-3">
               <span className="font-heebo font-bold text-wizard-text-primary">סה&quot;כ תוצרים:</span>
               <span className="text-2xl font-heebo font-extrabold text-accent">
                 {calculatedTotal}

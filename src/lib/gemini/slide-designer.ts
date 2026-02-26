@@ -30,17 +30,23 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 },
 })
-const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast, cheap, ThinkingLevel.HIGH handles complexity
-const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
+const PRO_MODEL = 'gemini-3.1-pro-preview'     // Primary — best reasoning quality
+const FLASH_MODEL = 'gemini-3-flash-preview'   // Fallback when Pro fails/overloaded
 
 // ─── System Instruction (shared persona) ─────────────────
 
-const SYSTEM_INSTRUCTION = `אתה Creative Director + Art Director ב-Sagmeister & Walsh / Pentagram.
+import { getConfig } from '@/lib/config/admin-config'
+
+const SYSTEM_INSTRUCTION_DEFAULT = `אתה Creative Director + Art Director ב-Sagmeister & Walsh / Pentagram.
 המומחיות שלך: עיצוב מצגות editorial ברמת Awwwards.
 כל מצגת חייבת להרגיש כמו מגזין אופנה פרימיום — לא כמו PowerPoint.
 אתה עובד בעברית (RTL). פונט: Heebo. קנבס: 1920x1080.
 אתה מעולם לא חוזר על אותו layout — כל שקף שונה מקודמו.
 אתה משתמש ב-JSON AST בלבד — ללא HTML, ללא CSS.`
+
+async function getSystemInstruction(): Promise<string> {
+  return getConfig('ai_prompts', 'slide_designer.system_instruction', SYSTEM_INSTRUCTION_DEFAULT)
+}
 
 // ─── Layout Archetypes (anti-generic design) ──────────────
 
@@ -558,7 +564,8 @@ async function generateDesignSystem(
 פונט: Heebo.`
 
   // Flash first (fast + no 503), Pro fallback with exponential backoff
-  const models = [FLASH_MODEL, PRO_MODEL]
+  const sysInstruction = await getSystemInstruction()
+  const models = [PRO_MODEL, FLASH_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -567,7 +574,7 @@ async function generateDesignSystem(
         model,
         contents: prompt,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: sysInstruction,
           responseMimeType: 'application/json',
           responseSchema: DESIGN_SYSTEM_SCHEMA,
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
@@ -849,7 +856,8 @@ ${slidesDescription}
 - ✅ Fake 3D: shape ב-x+12,y+12 fill:#000 opacity:0.12-0.18`
 
   // Flash first (fast + cheap), Pro fallback with exponential backoff
-  const batchModels = [FLASH_MODEL, PRO_MODEL]
+  const batchSysInstruction = await getSystemInstruction()
+  const batchModels = [PRO_MODEL, FLASH_MODEL]
   for (let attempt = 0; attempt < batchModels.length; attempt++) {
     const model = batchModels[attempt]
     try {
@@ -858,7 +866,7 @@ ${slidesDescription}
         model,
         contents: prompt,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: batchSysInstruction,
           responseMimeType: 'application/json',
           responseSchema: SLIDE_BATCH_SCHEMA,
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },

@@ -500,7 +500,7 @@ export default function ProposalWizard({
               {currentStepMeta.description}
             </p>
             {currentStepMeta.helpText && (
-              <div className="mt-4 rounded-xl border border-accent/15 bg-brand-gold-light/40 px-4 py-3">
+              <div className="mt-4 rounded-xl border border-wizard-border bg-brand-pearl/50 px-4 py-3">
                 <p className="text-[13px] text-wizard-text-secondary leading-relaxed">
                   {currentStepMeta.helpText}
                 </p>

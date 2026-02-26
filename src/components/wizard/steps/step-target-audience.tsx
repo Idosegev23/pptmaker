@@ -139,10 +139,10 @@ export default function StepTargetAudience({
   )
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir="rtl" className="space-y-10">
       {/* Primary audience */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-foreground">קהל יעד ראשי</h3>
+        <h3 className="text-lg font-heebo font-bold text-wizard-text-primary">קהל יעד ראשי</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select
@@ -183,7 +183,7 @@ export default function StepTargetAudience({
         {/* Insights */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <label className="block text-sm font-medium text-foreground">
+            <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
               תובנות על קהל היעד
             </label>
             <div className="flex gap-2">
@@ -192,11 +192,11 @@ export default function StepTargetAudience({
                 size="sm"
                 onClick={handleGenerateInsights}
                 disabled={isGeneratingInsights || (!targetGender && !targetAgeRange)}
-                className="text-primary border-primary/30 hover:bg-primary/5"
+                className="gap-1.5 border-accent/30 text-accent hover:bg-accent/5"
               >
                 {isGeneratingInsights ? (
                   <>
-                    <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin ml-1.5" />
+                    <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                     מחפש תובנות...
                   </>
                 ) : (
@@ -214,7 +214,7 @@ export default function StepTargetAudience({
           )}
 
           {targetInsights.length === 0 && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-wizard-text-tertiary">
               לא נוספו תובנות. לחצו על &quot;הוסף תובנה&quot; להתחיל.
             </p>
           )}
@@ -228,14 +228,14 @@ export default function StepTargetAudience({
 
             if (parsed?.source) {
               return (
-                <div key={index} className="rounded-lg border border-input bg-muted/20 p-3 space-y-1.5 relative group">
-                  <p className="text-sm font-medium text-foreground pr-6">{parsed.text}</p>
+                <div key={index} className="rounded-2xl border border-wizard-border bg-white shadow-wizard-sm p-3 space-y-1.5 relative group">
+                  <p className="text-sm font-medium text-wizard-text-primary pr-6">{parsed.text}</p>
                   {parsed.dataPoint && (
-                    <p className="text-xs text-primary font-semibold">{parsed.dataPoint}</p>
+                    <p className="text-xs text-accent font-semibold">{parsed.dataPoint}</p>
                   )}
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-wizard-text-tertiary">
                     {parsed.sourceUrl ? (
-                      <a href={parsed.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                      <a href={parsed.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-wizard-text-primary">
                         {parsed.source}
                       </a>
                     ) : parsed.source}
@@ -265,7 +265,7 @@ export default function StepTargetAudience({
                   variant="ghost"
                   size="icon"
                   onClick={() => removeInsight(index)}
-                  className="shrink-0 text-destructive hover:bg-destructive/10"
+                  className="shrink-0 text-wizard-text-tertiary hover:text-destructive hover:bg-destructive/10"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
@@ -278,11 +278,11 @@ export default function StepTargetAudience({
       </div>
 
       {/* Secondary audience */}
-      <div className="border-t pt-4">
+      <div className="border-t border-wizard-border pt-4">
         <button
           type="button"
           onClick={toggleSecondary}
-          className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+          className="flex items-center gap-2 text-sm font-heebo font-semibold text-wizard-text-primary hover:text-accent transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -302,7 +302,7 @@ export default function StepTargetAudience({
         </button>
 
         {showSecondary && (
-          <div className="mt-4 space-y-4 rounded-lg border border-input bg-muted/20 p-4">
+          <div className="mt-4 space-y-4 rounded-2xl border border-wizard-border bg-brand-pearl/40 p-5">
             <Select
               label="מגדר"
               options={GENDER_OPTIONS}

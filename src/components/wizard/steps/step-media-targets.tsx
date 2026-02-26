@@ -61,14 +61,14 @@ export default function StepMediaTargets({
     <div dir="rtl" className="space-y-10">
       {/* Success metrics from brief */}
       {successMetrics && successMetrics.length > 0 && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
-          <h3 className="text-[13px] font-heebo font-bold text-emerald-700 mb-2">
+        <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/5 p-4">
+          <h3 className="text-[13px] font-heebo font-bold text-wizard-text-primary mb-2">
             מדדי הצלחה מהבריף
           </h3>
           <ul className="space-y-1">
             {successMetrics.map((metric, i) => (
-              <li key={i} className="text-[13px] text-emerald-600 flex items-start gap-2">
-                <span className="mt-0.5">✓</span>
+              <li key={i} className="text-[13px] text-wizard-text-secondary flex items-start gap-2">
+                <span className="text-brand-primary mt-0.5">✓</span>
                 <span>{metric}</span>
               </li>
             ))}
@@ -130,7 +130,7 @@ export default function StepMediaTargets({
       </div>
 
       {/* CPE */}
-      <Card className="border-accent/20 bg-brand-gold-light/30">
+      <Card className="border-wizard-border bg-brand-pearl/50">
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-heebo">CPE — עלות למעורבות</CardTitle>
         </CardHeader>
