@@ -19,12 +19,18 @@ export interface InfluencerRecommendation {
   category: string
   followers: string
   engagement: string
-  avgStoryViews?: string // Average story views
+  avgStoryViews?: string
   whyRelevant: string
   contentStyle: string
   estimatedCost: string
   profileUrl: string
   profilePicUrl?: string // Added after scraping
+  // New quality & safety fields
+  israeliAudienceEstimate?: string  // % קהל ישראלי משוער (e.g. "85%+")
+  bestContentFormat?: string        // Reels / Stories / TikTok / Posts
+  competitorBrandWork?: string      // האם עבד עם מתחרים (+ שמות)
+  audienceQualitySignal?: 'high' | 'mixed' | 'low' // אותנטיות הקהל
+  previousBrandCollabs?: string[]   // שמות מותגים שעבד איתם
 }
 
 export interface InfluencerStrategy {
@@ -92,14 +98,18 @@ export async function researchInfluencers(
 - תחומי עניין: ${brandResearch.targetDemographics?.primaryAudience?.interests?.join(', ') || 'רלוונטי לתעשייה'}
 - ערכי המותג: ${brandResearch.brandValues?.join(', ') || 'איכות, מקצוענות'}
 - מתחרים: ${brandResearch.competitors?.map(c => typeof c === 'string' ? c : c.name).join(', ') || 'לא ידוע'}
+- פלטפורמה דומיננטית בישראל לקהל זה: ${(brandResearch as any).dominantPlatformInIsrael || 'אינסטגרם'}
+- הקשר שוק ישראלי: ${(brandResearch as any).israeliMarketContext || ''}
 - תקציב פנוי: ${budget.toLocaleString()} ש"ח
 - מטרות הקמפיין: ${goals.join(', ')}
 
 ## הנחיות קריטיות למחקר:
-1. **השתמש בחיפוש גוגל כדי לאמת משפיענים ישראלים אמיתיים** בתחום הרלוונטי. בשום פנים ואופן אל תמציא שמות או Handles (@).
-2. הצע שכבות פעולה (Tiers) **שמותאמות ריאלית לתקציב** (למשל, אל תציע משפיעני מאקרו אם התקציב הוא רק 5,000 ש"ח).
-3. הערך עלויות ריאליסטיות בשוק הישראלי לפוסט/סטורי בהתאם לכמות העוקבים.
-4. הגדר KPIs שגוזרים משמעות כמותית מהתקציב.
+1. **השתמש בחיפוש גוגל כדי לאמת משפיענים ישראלים אמיתיים** — עם קהל ישראלי ממשי (לפחות 70%+ עוקבים ישראלים). בשום פנים ואופן אל תמציא שמות או Handles (@).
+2. הצע שכבות פעולה (Tiers) **שמותאמות ריאלית לתקציב**.
+3. הערך עלויות ריאליסטיות בשוק הישראלי.
+4. **בדוק** (דרך חיפוש) האם המשפיעני פרסמו תכנים ממומנים עבור מתחרי המותג. סמן כ-⚠️ אם כן.
+5. הגדר KPIs שגוזרים משמעות כמותית מהתקציב.
+6. לכל המלצת משפיען — ציין באיזה פורמט הוא הכי חזק (Reels/Stories/TikTok/Posts).
 
 ## פורמט תגובה:
 החזר **אך ורק** אובייקט JSON חוקי לפי המבנה הבא (ללא טקסט מקדים או סיומת):
@@ -108,7 +118,7 @@ export async function researchInfluencers(
 {
   "strategyTitle": "כותרת קצרה וקולעת לאסטרטגיה",
   "strategySummary": "סיכום האסטרטגיה ב-3-4 משפטים המותאמים לתקציב ולמטרות.",
-  
+
   "tiers": [
     {
       "name": "שם השכבה (למשל: Micro / Macro)",
@@ -118,7 +128,7 @@ export async function researchInfluencers(
       "purpose": "מטרת השכבה בקמפיין"
     }
   ],
-  
+
   "recommendations": [
     {
       "name": "שם מלא ואמיתי של המשפיען",
@@ -131,7 +141,12 @@ export async function researchInfluencers(
       "whyRelevant": "למה הוא מתאים בול למותג הזה",
       "contentStyle": "סגנון התוכן",
       "estimatedCost": "הערכת מחיר בשקלים",
-      "profileUrl": "https://instagram.com/username_real"
+      "profileUrl": "https://instagram.com/username_real",
+      "israeliAudienceEstimate": "85%+ קהל ישראלי",
+      "bestContentFormat": "Reels",
+      "competitorBrandWork": "לא עבד עם מתחרים ידועים / עבד עם [שם מתחרה] — ⚠️ לשקול",
+      "audienceQualitySignal": "high",
+      "previousBrandCollabs": ["מותג 1", "מותג 2"]
     }
   ],
   

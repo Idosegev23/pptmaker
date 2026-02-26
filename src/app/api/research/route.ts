@@ -1,24 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { researchBrand } from '@/lib/gemini/brand-research'
+import { extractColorsFromLogo, analyzeColorPalette, extractColorsByBrandName } from '@/lib/gemini/color-extractor'
 
 export const maxDuration = 600
-import { extractColorsFromLogo, analyzeColorPalette } from '@/lib/gemini/color-extractor'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { brandName, websiteData } = body
-    
+
     if (!brandName) {
-      return NextResponse.json(
-        { error: 'Brand name is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Brand name is required' }, { status: 400 })
     }
-    
+
     console.log(`[API Research] Starting deep research for: ${brandName}`)
-    
-    // Convert enhanced websiteData to research format
+
+    // Convert websiteData to research format if provided
     const researchWebsiteData = websiteData ? {
       url: websiteData.url,
       title: websiteData.title,
@@ -30,34 +27,53 @@ export async function POST(request: NextRequest) {
       paragraphs: websiteData.paragraphs || [],
       socialLinks: Object.values(websiteData.socialLinks || {}).filter(Boolean) as string[],
     } : undefined
-    
-    // Research brand using Gemini with Google Search grounding
-    const research = await researchBrand(brandName, researchWebsiteData)
+
+    // Run brand research + visual research in parallel
+    const [research, brandColorData] = await Promise.all([
+      researchBrand(brandName, researchWebsiteData),
+      extractColorsByBrandName(brandName),   // ← NEW: always runs, uses Google Search
+    ])
+
     console.log(`[API Research] Research complete, confidence: ${research.confidence}`)
-    
-    // Extract colors - try multiple sources
+    console.log(`[API Research] Brand colors from name: primary=${brandColorData.primary}, logoUrl=${brandColorData.logoUrl || 'none'}`)
+
+    // Extract colors — priority chain
     let colors = null
-    
-    // Try primary logo first
-    const logoUrl = websiteData?.logos?.primary || websiteData?.logoUrl
-    if (logoUrl) {
-      console.log('[API Research] Extracting colors from logo:', logoUrl)
+
+    // 1. If we got a logoUrl from extractColorsByBrandName, use it for precise extraction
+    const discoveredLogoUrl = brandColorData.logoUrl
+    if (discoveredLogoUrl && !discoveredLogoUrl.endsWith('.svg')) {
+      console.log('[API Research] Extracting colors from discovered logo:', discoveredLogoUrl)
       try {
-        colors = await extractColorsFromLogo(logoUrl)
-        console.log('[API Research] Logo colors extracted successfully')
-      } catch (error) {
-        console.error('[API Research] Logo color extraction failed:', error)
+        colors = await extractColorsFromLogo(discoveredLogoUrl)
+        console.log('[API Research] Discovered logo colors extracted')
+      } catch {
+        console.warn('[API Research] Discovered logo extraction failed, falling back')
       }
     }
-    
-    // Fallback to dominant CSS colors
+
+    // 2. Try logo from websiteData (if provided)
+    if (!colors) {
+      const websiteLogoUrl = websiteData?.logos?.primary || websiteData?.logoUrl
+      if (websiteLogoUrl && !websiteLogoUrl.endsWith('.svg')) {
+        try {
+          colors = await extractColorsFromLogo(websiteLogoUrl)
+        } catch { /* continue */ }
+      }
+    }
+
+    // 3. Use extractColorsByBrandName result (already have it)
+    if (!colors) {
+      colors = brandColorData
+    }
+
+    // 4. Try CSS colors from websiteData
     const cssColors = websiteData?.dominantColors || websiteData?.cssColors
     if (!colors && cssColors?.length > 0) {
-      console.log('[API Research] Analyzing CSS colors...')
       colors = await analyzeColorPalette(cssColors)
     }
-    
-    // Use research visual identity if available
+
+    // 5. Use research visualIdentity colors
     if (!colors && research.visualIdentity?.primaryColors?.length > 0) {
       colors = {
         primary: research.visualIdentity.primaryColors[0],
@@ -70,8 +86,8 @@ export async function POST(request: NextRequest) {
         mood: research.visualIdentity.style || 'מקצועי',
       }
     }
-    
-    // Default colors
+
+    // 6. Absolute fallback
     if (!colors) {
       colors = {
         primary: '#111111',
@@ -81,16 +97,17 @@ export async function POST(request: NextRequest) {
         text: '#111111',
         palette: ['#111111', '#666666', '#E94560'],
         style: 'minimal' as const,
-        mood: 'מקצועי ומודרני'
+        mood: 'מקצועי ומודרני',
       }
     }
-    
+
     console.log(`[API Research] Final colors: primary=${colors.primary}, accent=${colors.accent}`)
-    
+
     return NextResponse.json({
       success: true,
       research,
       colors,
+      logoUrl: discoveredLogoUrl || websiteData?.logos?.primary || null,
       logos: websiteData?.logos || null,
     })
   } catch (error) {

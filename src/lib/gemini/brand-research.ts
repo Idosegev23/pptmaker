@@ -104,10 +104,26 @@ export interface BrandResearch {
   industryTrends: string[]
   seasonality?: string
   keyDates?: string[]
-  
+
+  // Competitive Campaign Intelligence (new)
+  competitorCampaigns: {
+    competitorName: string
+    campaignDescription: string
+    influencersUsed?: string[]
+    whatWorked?: string
+    opportunityForBrand?: string
+  }[]
+  competitiveGap?: string  // מה המותג "פספס" לעומת מתחריו
+
+  // Brand Safety & Israeli Market (new)
+  brandSafetyFlags: string[]       // הגבלות רגולטוריות (אם יש)
+  dominantPlatformInIsrael?: string // אינסטגרם/טיקטוק/פייסבוק לקהל הספציפי
+  whyNowTrigger?: string           // הרגע העסקי שמניע את הקמפיין
+  israeliMarketContext?: string    // הקשר שוק ישראלי ספציפי
+
   // Sources
   sources: { title: string; url: string }[]
-  
+
   // Confidence
   confidence: 'high' | 'medium' | 'low'
   researchNotes?: string
@@ -185,6 +201,14 @@ export async function researchBrand(
     {
       name: "Industry Trends",
       description: "מגמות וטרנדים בתעשייה שבה המותג פועל, עונתיות ותאריכי מפתח שיווקיים רלוונטיים."
+    },
+    {
+      name: "Competitive Campaign Intelligence",
+      description: `מה מתחרי המותג "${brandName}" עשו בקמפיינים שיווקיים ובמיוחד קמפיינים עם משפיענים ב-6-12 חודשים האחרונים? עם אילו משפיענים עבדו? אילו מסרים הובילו? מה נראה שעבד ומה לא? מה הרגעים השיווקיים שהמותג "פספס" לעומת מתחריו? זה המחקר התחרותי האסטרטגי שיאפשר לסוכנות להציע גישה שמנצחת את השוק.`
+    },
+    {
+      name: "Brand Safety and Israeli Market Fit",
+      description: `האם המותג "${brandName}" פועל בתחום מוסדר בישראל? (פארמה, אלכוהול, מוצרי ילדים, פיננסים, מזון עם טענות בריאות — כפוף לחוק הגנת הצרכן ומועצת הפרסום). מהן ההגבלות הספציפיות על פרסום מותג זה בישראל? בנוסף: באיזו פלטפורמה הקהל הספציפי הזה בישראל הכי פעיל — אינסטגרם, טיקטוק או פייסבוק? האם יש "רגע" עסקי מיוחד עכשיו (השקת מוצר, כניסה לשוק חדש, לחץ תחרותי) שמסביר מדוע המותג צריך קמפיין משפיענים עכשיו?`
     }
   ];
 
@@ -306,10 +330,26 @@ ${websiteContext}
   "seasonality": "תיאור עונתיות",
   "keyDates": ["תאריך 1"],
   
+  "competitorCampaigns": [
+    {
+      "competitorName": "שם מתחרה",
+      "campaignDescription": "תיאור הקמפיין שעשו",
+      "influencersUsed": ["@handle1", "@handle2"],
+      "whatWorked": "מה עבד להם",
+      "opportunityForBrand": "איך המותג שלנו יכול לנצח אותם בדיוק בנקודה הזו"
+    }
+  ],
+  "competitiveGap": "פסקה: מה המותג מפסיד לעומת מתחריו בזירת הדיגיטל/משפיענים — ומה ההזדמנות",
+
+  "brandSafetyFlags": ["הגבלה 1 אם קיימת (למשל: חייב גילוי נאות, אסור לטרגט קטינים)"],
+  "dominantPlatformInIsrael": "אינסטגרם / טיקטוק / פייסבוק — עם הסבר קצר",
+  "whyNowTrigger": "מה הרגע העסקי שמניע את הצורך בקמפיין עכשיו",
+  "israeliMarketContext": "הקשר ייחודי של השוק הישראלי לתחום המותג",
+
   "sources": [
     { "title": "תיאור המקור", "url": "URL" }
   ],
-  
+
   "confidence": "high/medium/low",
   "researchNotes": "הערות על איכות המידע שנאסף, מקורות חסרים או דברים שדורשים אימות אנושי"
 }
@@ -397,7 +437,10 @@ function getMinimalResearch(brandName: string, websiteData?: ScrapedWebsite): Br
     potentialChallenges: [],
     
     industryTrends: [],
-    
+
+    competitorCampaigns: [],
+    brandSafetyFlags: [],
+
     sources: [],
     confidence: 'low',
     researchNotes: 'המחקר האוטומטי לא הצליח לאסוף מידע מספק. מומלץ לבצע מחקר ידני נוסף.',

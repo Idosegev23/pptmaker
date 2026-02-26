@@ -6,13 +6,20 @@ import Image from 'next/image'
 import { enrichStepData } from '@/components/wizard/wizard-utils'
 import FlowStepper from '@/components/flow-stepper'
 
-type ResearchStage = 'loading' | 'brand_research' | 'influencer_research' | 'enriching' | 'done' | 'error'
+type ResearchStage =
+  | 'loading'
+  | 'brand_research'
+  | 'influencer_research'
+  | 'reviewing'   // מחקר הסתיים — משתמש מעיין ומחליט
+  | 'building'    // משתמש אישר — בונה תוכן wizard
+  | 'done'        // הכל הסתיים
+  | 'error'
 
 const RESEARCH_STEPS = [
   { key: 'loading', label: 'טוען נתונים' },
   { key: 'brand_research', label: 'מחקר מותג' },
   { key: 'influencer_research', label: 'מחקר משפיענים' },
-  { key: 'enriching', label: 'העשרת הצעה' },
+  { key: 'reviewing', label: 'סקירה ואישור' },
 ]
 
 const BRAND_STAGES = [
@@ -66,6 +73,21 @@ export default function ResearchPage() {
   const [researchResults, setResearchResults] = useState<{ brand: any; influencer: any; colors: any } | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [building, setBuilding] = useState(false)
+
+  // Research status per section — for transparency + retry
+  const [brandStatus, setBrandStatus] = useState<'success' | 'failed' | null>(null)
+  const [influencerStatus, setInfluencerStatus] = useState<'success' | 'failed' | null>(null)
+  const [retryingBrand, setRetryingBrand] = useState(false)
+  const [retryingInfluencer, setRetryingInfluencer] = useState(false)
+
+  // Store raw data for enrichment step (needed for buildProposal)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [existingStepDataRef, setExistingStepDataRef] = useState<Record<string, any>>({})
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [extractedRef, setExtractedRef] = useState<Record<string, any>>({})
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [pipelineStatusRef, setPipelineStatusRef] = useState<Record<string, any>>({})
 
   const startedRef = useRef(false)
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -76,7 +98,7 @@ export default function ResearchPage() {
 
   // Elapsed timer
   useEffect(() => {
-    if (stage !== 'done' && stage !== 'error' && stage !== 'loading') {
+    if (stage !== 'done' && stage !== 'error' && stage !== 'loading' && stage !== 'reviewing') {
       setElapsed(0)
       elapsedRef.current = setInterval(() => setElapsed(prev => prev + 1), 1000)
     } else if (elapsedRef.current) {
@@ -100,7 +122,7 @@ export default function ResearchPage() {
 
   // Tips rotation
   useEffect(() => {
-    if (stage === 'loading' || stage === 'error' || stage === 'done') return
+    if (stage === 'loading' || stage === 'error' || stage === 'done' || stage === 'reviewing') return
     const interval = setInterval(() => {
       setTipVisible(false)
       setTimeout(() => {
@@ -146,12 +168,17 @@ export default function ResearchPage() {
         return
       }
 
+      // Save for buildProposal later
+      const extracted = data._extractedData || {}
+      setExistingStepDataRef(data._stepData || {})
+      setExtractedRef(extracted)
+      setPipelineStatusRef(pipelineStatus)
+
       // Stage 2-3: Run research in parallel
       setStage('brand_research')
       setBrandDone(false)
       setInfluencerDone(false)
 
-      const extracted = data._extractedData || {}
       const brand = extracted.brand || {}
       const targetAudience = extracted.targetAudience || {}
 
@@ -169,7 +196,7 @@ export default function ResearchPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            mode: 'research',
+            mode: 'discover',
             brandResearch: {
               brandName: name,
               industry: brand.industry || '',
@@ -191,7 +218,7 @@ export default function ResearchPage() {
         }),
       ])
 
-      // Update visual stage as influencer finishes
+      // Update visual stage
       setStage('influencer_research')
 
       const brandResearch = brandResult.status === 'fulfilled' ? brandResult.value.research : null
@@ -204,12 +231,109 @@ export default function ResearchPage() {
         throw new Error('שני המחקרים נכשלו. נסה שוב.')
       }
 
-      // Stage 4: Enrich step data (research OVERRIDES basic proposal-agent data)
-      setStage('enriching')
-      const existingStepData = data._stepData || {}
-      const enriched = enrichStepData(existingStepData, brandResearch, influencerStrategy)
+      // Set status for each research section
+      setBrandStatus(brandResult.status === 'fulfilled' ? 'success' : 'failed')
+      setInfluencerStatus(influencerResult.status === 'fulfilled' ? 'success' : 'failed')
 
-      // Ensure research data is stored in _stepData.research for wizardDataToProposalData
+      // Save results for display — but DO NOT enrich yet (user must approve first)
+      setResearchResults({ brand: brandResearch, influencer: influencerStrategy, colors })
+      setStage('reviewing')
+      setShowResults(true)
+    } catch (err) {
+      console.error('[Research] Error:', err)
+      setStage('error')
+      setError(err instanceof Error ? err.message : 'שגיאה במחקר')
+      startedRef.current = false
+    }
+  }, [documentId, router])
+
+  // Auto-start on mount
+  useEffect(() => {
+    runResearch()
+  }, [runResearch])
+
+  // Retry brand research only
+  const retryBrandResearch = useCallback(async () => {
+    if (retryingBrand) return
+    setRetryingBrand(true)
+    try {
+      const res = await fetch('/api/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandName }),
+      })
+      if (!res.ok) throw new Error('Brand research failed')
+      const result = await res.json()
+      setBrandStatus('success')
+      setResearchResults(prev => prev
+        ? { ...prev, brand: result.research, colors: result.colors }
+        : { brand: result.research, influencer: null, colors: result.colors }
+      )
+    } catch {
+      // status remains 'failed'
+    } finally {
+      setRetryingBrand(false)
+    }
+  }, [brandName, retryingBrand])
+
+  // Retry influencer research only
+  const retryInfluencerResearch = useCallback(async () => {
+    if (retryingInfluencer) return
+    setRetryingInfluencer(true)
+    try {
+      const brand = extractedRef.brand || {}
+      const targetAudience = extractedRef.targetAudience || {}
+      const res = await fetch('/api/influencers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'discover',
+          brandResearch: {
+            brandName,
+            industry: brand.industry || '',
+            targetDemographics: {
+              primaryAudience: {
+                gender: targetAudience.primary?.gender || '',
+                ageRange: targetAudience.primary?.ageRange || '',
+                interests: targetAudience.primary?.interests || [],
+              },
+            },
+          },
+          budget: extractedRef.budget?.amount || 0,
+          goals: extractedRef.campaignGoals || [],
+        }),
+      })
+      if (!res.ok) throw new Error('Influencer research failed')
+      const result = await res.json()
+      setInfluencerStatus('success')
+      setResearchResults(prev => prev
+        ? { ...prev, influencer: result.strategy || result }
+        : { brand: null, influencer: result.strategy || result, colors: null }
+      )
+    } catch {
+      // status remains 'failed'
+    } finally {
+      setRetryingInfluencer(false)
+    }
+  }, [brandName, extractedRef, retryingInfluencer])
+
+  /**
+   * buildProposal — called only after user confirms.
+   * Runs enrichStepData + creative enhancement, saves, navigates to wizard.
+   */
+  const buildProposal = useCallback(async () => {
+    if (building || !researchResults) return
+    setBuilding(true)
+
+    try {
+      const brandResearch = researchResults.brand
+      const influencerStrategy = researchResults.influencer
+      const colors = researchResults.colors
+
+      // Enrich wizard step data with research
+      const enriched = enrichStepData(existingStepDataRef, brandResearch, influencerStrategy)
+
+      // Attach research data for wizard
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(enriched as any).research = {
         brandResearch: brandResearch || null,
@@ -217,9 +341,26 @@ export default function ResearchPage() {
         brandColors: colors || null,
       }
 
+      // Phase B: enhance creative concept with competitive intelligence
+      if (brandResearch && enriched.creative) {
+        try {
+          const enhanceRes = await fetch('/api/enhance-creative', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ creative: enriched.creative, brandResearch }),
+          })
+          if (enhanceRes.ok) {
+            const enhanced = await enhanceRes.json()
+            if (enhanced.creative) enriched.creative = enhanced.creative
+          }
+        } catch (err) {
+          console.warn('[Research] Creative enhancement failed (non-fatal):', err)
+        }
+      }
+
       // Save everything to document
       const patchPayload: Record<string, unknown> = {
-        _pipelineStatus: { ...pipelineStatus, research: 'complete' },
+        _pipelineStatus: { ...pipelineStatusRef, research: 'complete' },
         _stepData: enriched,
       }
       if (brandResearch) patchPayload._brandResearch = brandResearch
@@ -236,35 +377,13 @@ export default function ResearchPage() {
         console.error('[Research] Failed to save research data')
       }
 
-      // Done — save results for display
-      setResearchResults({ brand: brandResearch, influencer: influencerStrategy, colors })
       setStage('done')
-      setShowResults(true)
+      router.push(`/wizard/${documentId}`)
     } catch (err) {
-      console.error('[Research] Error:', err)
-      setStage('error')
-      setError(err instanceof Error ? err.message : 'שגיאה במחקר')
-      startedRef.current = false
+      console.error('[Research] buildProposal error:', err)
+      setBuilding(false)
     }
-  }, [documentId, router])
-
-  // Auto-start on mount
-  useEffect(() => {
-    runResearch()
-  }, [runResearch])
-
-  // Step status helper
-  const getStepStatus = useCallback((stepKey: string): 'pending' | 'active' | 'done' => {
-    const order = ['loading', 'brand_research', 'influencer_research', 'enriching']
-    const stepIdx = order.indexOf(stepKey)
-    const currentStage: string = stage
-    const currentIdx = order.indexOf(currentStage)
-    if (currentStage === 'done') return 'done'
-    if (currentStage === 'error') return stepIdx <= order.indexOf('loading') ? 'done' : 'pending'
-    if (currentIdx > stepIdx) return 'done'
-    if (currentIdx === stepIdx) return 'active'
-    return 'pending'
-  }, [stage])
+  }, [building, researchResults, existingStepDataRef, pipelineStatusRef, documentId, router])
 
   // Download research as styled PDF
   const downloadResearch = useCallback(async () => {
@@ -304,7 +423,21 @@ export default function ResearchPage() {
 
   const activeTips = useMemo(() => GENERIC_TIPS, [])
   const stageStr: string = stage
-  const isProcessing = stageStr !== 'error'
+  const isProcessing = stageStr !== 'error' && stageStr !== 'reviewing' && stageStr !== 'done'
+
+  // Step status helper
+  const getStepStatus = useCallback((stepKey: string): 'pending' | 'active' | 'done' => {
+    const order = ['loading', 'brand_research', 'influencer_research', 'reviewing']
+    const stepIdx = order.indexOf(stepKey)
+    const currentIdx = order.indexOf(stageStr)
+    if (stageStr === 'done' || stageStr === 'building') return 'done'
+    if (stageStr === 'error') return stepIdx <= 0 ? 'done' : 'pending'
+    if (currentIdx > stepIdx) return 'done'
+    if (currentIdx === stepIdx) return 'active'
+    return 'pending'
+  }, [stageStr])
+
+  const canBuild = !!(researchResults?.brand || researchResults?.influencer)
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#f4f5f7] font-sans selection:bg-[#f2cc0d] selection:text-[#212529]">
@@ -354,19 +487,18 @@ export default function ResearchPage() {
                     </div>
                     <div>
                       <h2 className="text-2xl font-extrabold tracking-tight">
-                        {stageStr === 'done' ? 'המחקר הושלם!' : stageStr === 'error' ? 'שגיאה במחקר' : 'חוקרים את המותג והשוק...'}
+                        {stageStr === 'error' ? 'שגיאה במחקר' : 'חוקרים את המותג והשוק...'}
                       </h2>
                       <p className="text-[#94a3b8] text-sm mt-1 font-medium">
                         {stageStr === 'loading' && 'טוען נתוני המסמך...'}
                         {stageStr === 'brand_research' && subStageMsg}
                         {stageStr === 'influencer_research' && subStageMsg}
-                        {stageStr === 'enriching' && 'משלב תוצאות מחקר עם הצעת המחיר...'}
-                        {stageStr === 'done' && 'מעביר לעורך ההצעה...'}
+                        {stageStr === 'building' && 'בונה את תוכן ההצעה...'}
                         {stageStr === 'error' && error}
                       </p>
                     </div>
                   </div>
-                  {stageStr !== 'done' && stageStr !== 'error' && (
+                  {stageStr !== 'error' && (
                     <div className="text-left shrink-0 bg-black/30 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/5">
                       <div className="text-3xl font-mono font-bold tabular-nums text-[#f2cc0d] drop-shadow-[0_0_8px_rgba(242,204,13,0.5)]">
                         {Math.floor(elapsed / 60).toString().padStart(2, '0')}:{(elapsed % 60).toString().padStart(2, '0')}
@@ -376,7 +508,7 @@ export default function ResearchPage() {
                   )}
                 </div>
 
-                {/* Progress Steps - Wizard-style pills */}
+                {/* Progress Steps */}
                 <div className="flex items-center gap-2 mb-10">
                   {RESEARCH_STEPS.map((step, i) => {
                     const status = getStepStatus(step.key)
@@ -424,9 +556,8 @@ export default function ResearchPage() {
                 </div>
 
                 {/* Brand research detail tracks */}
-                {(stageStr === 'brand_research' || stageStr === 'influencer_research' || stageStr === 'enriching') && (
+                {(stageStr === 'brand_research' || stageStr === 'influencer_research' || stageStr === 'building') && (
                   <div className="space-y-4 mb-8">
-                    {/* Brand track */}
                     <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10">
                       <div className="flex items-center gap-3 mb-3">
                         {brandDone ? (
@@ -453,7 +584,6 @@ export default function ResearchPage() {
                       </div>
                     </div>
 
-                    {/* Influencer track */}
                     <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10">
                       <div className="flex items-center gap-3 mb-3">
                         {influencerDone ? (
@@ -482,7 +612,18 @@ export default function ResearchPage() {
                   </div>
                 )}
 
-                {/* Brand Card - reveal when identified */}
+                {/* Building state — spinner */}
+                {stageStr === 'building' && (
+                  <div className="bg-[#f2cc0d]/10 border border-[#f2cc0d]/30 rounded-2xl p-6 text-center animate-in zoom-in-95 duration-500">
+                    <div className="w-16 h-16 rounded-full bg-[#f2cc0d]/20 mx-auto mb-4 flex items-center justify-center">
+                      <div className="w-8 h-8 border-3 border-[#f2cc0d] border-t-transparent rounded-full animate-spin" />
+                    </div>
+                    <h3 className="text-xl font-extrabold text-white mb-2">בונה את ההצעה...</h3>
+                    <p className="text-[#94a3b8] text-sm">משלב נתוני מחקר ובינה מלאכותית לתוכן מקצועי</p>
+                  </div>
+                )}
+
+                {/* Brand Card */}
                 {brandName && stageStr !== 'loading' && (
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 mb-6 shadow-xl animate-in slide-in-from-top-4 duration-500">
                     <div className="flex items-center gap-5">
@@ -505,19 +646,6 @@ export default function ResearchPage() {
                         </div>
                       )}
                     </div>
-                  </div>
-                )}
-
-                {/* Done state — show results */}
-                {stageStr === 'done' && !showResults && (
-                  <div className="bg-[#10b981]/10 backdrop-blur-md border border-[#10b981]/30 rounded-2xl p-6 text-center animate-in zoom-in-95 duration-500">
-                    <div className="w-16 h-16 rounded-full bg-[#10b981]/20 mx-auto mb-4 flex items-center justify-center">
-                      <svg className="w-8 h-8 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <h3 className="text-xl font-extrabold text-white mb-2">המחקר הושלם בהצלחה!</h3>
-                    <p className="text-[#94a3b8] text-sm">מעביר לעורך ההצעה עם כל הנתונים...</p>
                   </div>
                 )}
 
@@ -549,7 +677,7 @@ export default function ResearchPage() {
                 )}
 
                 {/* Tip Card */}
-                {stageStr !== 'done' && stageStr !== 'error' && (
+                {stageStr !== 'done' && stageStr !== 'error' && stageStr !== 'building' && (
                   <div className="bg-black/20 backdrop-blur-sm border border-white/5 rounded-2xl p-6 mt-6">
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner bg-white/5 text-white/50 border border-white/5">
@@ -579,6 +707,104 @@ export default function ResearchPage() {
         {/* ═══ RESEARCH RESULTS ═══ */}
         {showResults && researchResults && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* ── Research Status Panel ── */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-[#212529] text-base">סטטוס המחקר</h3>
+              </div>
+              <div className="space-y-3">
+                {/* Brand research status */}
+                <div className="flex items-center justify-between py-2.5 px-4 rounded-xl bg-gray-50 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    {brandStatus === 'success' ? (
+                      <div className="w-7 h-7 rounded-full bg-[#10b981] flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </div>
+                    )}
+                    <span className="text-sm font-semibold text-[#212529]">מחקר מותג ושוק</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      brandStatus === 'success'
+                        ? 'bg-[#10b981]/10 text-[#059669]'
+                        : 'bg-red-50 text-red-600'
+                    }`}>
+                      {brandStatus === 'success' ? 'הצליח' : 'נכשל'}
+                    </span>
+                    {brandStatus === 'failed' && (
+                      <button
+                        onClick={retryBrandResearch}
+                        disabled={retryingBrand}
+                        className="flex items-center gap-1.5 text-xs font-bold text-[#6b7281] hover:text-[#212529] bg-white border border-gray-200 rounded-full px-3 py-1.5 transition-all hover:shadow-sm disabled:opacity-50"
+                      >
+                        {retryingBrand ? (
+                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                        ) : (
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        )}
+                        {retryingBrand ? 'מנסה שוב...' : 'נסה שוב'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Influencer research status */}
+                <div className="flex items-center justify-between py-2.5 px-4 rounded-xl bg-gray-50 border border-gray-100">
+                  <div className="flex items-center gap-3">
+                    {influencerStatus === 'success' ? (
+                      <div className="w-7 h-7 rounded-full bg-[#10b981] flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </div>
+                    )}
+                    <span className="text-sm font-semibold text-[#212529]">מחקר משפיענים</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      influencerStatus === 'success'
+                        ? 'bg-[#10b981]/10 text-[#059669]'
+                        : 'bg-red-50 text-red-600'
+                    }`}>
+                      {influencerStatus === 'success' ? 'הצליח' : 'נכשל'}
+                    </span>
+                    {influencerStatus === 'failed' && (
+                      <button
+                        onClick={retryInfluencerResearch}
+                        disabled={retryingInfluencer}
+                        className="flex items-center gap-1.5 text-xs font-bold text-[#6b7281] hover:text-[#212529] bg-white border border-gray-200 rounded-full px-3 py-1.5 transition-all hover:shadow-sm disabled:opacity-50"
+                      >
+                        {retryingInfluencer ? (
+                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                        ) : (
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        )}
+                        {retryingInfluencer ? 'מנסה שוב...' : 'נסה שוב'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Action bar */}
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-extrabold text-[#212529]">תוצאות המחקר</h2>
@@ -598,13 +824,23 @@ export default function ResearchPage() {
                   {downloadingPdf ? 'מייצר PDF...' : 'הורד מחקר (PDF)'}
                 </button>
                 <button
-                  onClick={() => router.push(`/wizard/${documentId}`)}
-                  className="flex items-center gap-2 bg-[#f2cc0d] text-[#0f172a] rounded-full px-6 py-2.5 text-sm font-bold hover:scale-105 transition-transform shadow-md"
+                  onClick={buildProposal}
+                  disabled={building || !canBuild}
+                  className="flex items-center gap-2 bg-[#f2cc0d] text-[#0f172a] rounded-full px-6 py-2.5 text-sm font-bold hover:scale-105 transition-transform shadow-md disabled:opacity-60 disabled:scale-100"
                 >
-                  המשך לעריכת ההצעה
-                  <svg className="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
+                  {building ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                      בונה הצעה...
+                    </>
+                  ) : (
+                    <>
+                      אשר ובנה הצעה
+                      <svg className="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -857,13 +1093,23 @@ export default function ResearchPage() {
                 {downloadingPdf ? 'מייצר PDF...' : 'הורד מחקר (PDF)'}
               </button>
               <button
-                onClick={() => router.push(`/wizard/${documentId}`)}
-                className="flex items-center gap-2 bg-[#f2cc0d] text-[#0f172a] rounded-full px-8 py-3 text-sm font-bold hover:scale-105 transition-transform shadow-lg"
+                onClick={buildProposal}
+                disabled={building || !canBuild}
+                className="flex items-center gap-2 bg-[#f2cc0d] text-[#0f172a] rounded-full px-8 py-3 text-sm font-bold hover:scale-105 transition-transform shadow-lg disabled:opacity-60 disabled:scale-100"
               >
-                המשך לעריכת ההצעה
-                <svg className="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
+                {building ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    בונה הצעה...
+                  </>
+                ) : (
+                  <>
+                    אשר ובנה הצעה
+                    <svg className="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </>
+                )}
               </button>
             </div>
           </div>
