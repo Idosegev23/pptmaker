@@ -5,9 +5,13 @@
 
 import { GoogleGenAI } from '@google/genai'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 },
+})
 
-const MODEL = 'gemini-3.1-pro-preview'
+const MODEL = 'gemini-3-flash-preview' // Color extraction doesn't need Pro reasoning
+const FALLBACK_MODEL = 'gemini-3.1-pro-preview'
 
 export interface BrandColors {
   primary: string       // Main brand color (HEX)
@@ -282,79 +286,58 @@ export async function extractColorsByBrandName(brandName: string): Promise<Brand
 - אל תחזיר צבעים כלליים אם אתה מכיר את המותג
 `
 
-  const MAX_RETRIES = 3
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+  const parseColorResponse = (text: string): (BrandColors & { logoUrl?: string; websiteDomain?: string }) | null => {
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
+    const raw = jsonMatch ? jsonMatch[1] : (() => {
+      const s = text.indexOf('{'), e = text.lastIndexOf('}')
+      return s !== -1 && e > s ? text.slice(s, e + 1) : null
+    })()
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return {
+      primary: parsed.primary || '#111111',
+      secondary: parsed.secondary || '#666666',
+      accent: parsed.accent || parsed.primary || '#E94560',
+      background: parsed.background || '#FFFFFF',
+      text: parsed.text || '#111111',
+      palette: parsed.palette || [parsed.primary, parsed.secondary, parsed.accent].filter(Boolean),
+      style: parsed.style || 'corporate',
+      mood: parsed.mood || 'מקצועי',
+      logoUrl: parsed.logoUrl || undefined,
+      websiteDomain: parsed.websiteDomain || undefined,
+    }
+  }
+
+  // Flash first (cheap + fast), Pro fallback if Flash fails
+  const models = [MODEL, FALLBACK_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
     try {
       const response = await ai.models.generateContent({
-        model: MODEL,
+        model,
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
         }
       })
 
-      const text = response.text || ''
-      console.log('[Gemini Colors] Brand analysis received')
+      const result = parseColorResponse(response.text || '')
+      if (!result) throw new Error('No JSON in response')
 
-      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[1])
-        const result: BrandColors & { logoUrl?: string; websiteDomain?: string } = {
-          primary: parsed.primary || '#111111',
-          secondary: parsed.secondary || '#666666',
-          accent: parsed.accent || parsed.primary || '#E94560',
-          background: parsed.background || '#FFFFFF',
-          text: parsed.text || '#111111',
-          palette: parsed.palette || [parsed.primary, parsed.secondary, parsed.accent].filter(Boolean),
-          style: parsed.style || 'corporate',
-          mood: parsed.mood || 'מקצועי',
-          logoUrl: parsed.logoUrl || undefined,
-          websiteDomain: parsed.websiteDomain || undefined,
-        }
-        console.log(`[Gemini Colors] Brand "${brandName}" → primary=${result.primary}, accent=${result.accent}, confidence=${parsed.confidence || 'unknown'}`)
-        return result
-      }
-
-      // Try without code blocks
-      const jsonStart = text.indexOf('{')
-      const jsonEnd = text.lastIndexOf('}')
-      if (jsonStart !== -1 && jsonEnd > jsonStart) {
-        const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
-        const fallbackResult: BrandColors & { logoUrl?: string; websiteDomain?: string } = {
-          primary: parsed.primary || '#111111',
-          secondary: parsed.secondary || '#666666',
-          accent: parsed.accent || parsed.primary || '#E94560',
-          background: parsed.background || '#FFFFFF',
-          text: parsed.text || '#111111',
-          palette: parsed.palette || [],
-          style: parsed.style || 'corporate',
-          mood: parsed.mood || 'מקצועי',
-          logoUrl: parsed.logoUrl || undefined,
-          websiteDomain: parsed.websiteDomain || undefined,
-        }
-        return fallbackResult
-      }
-
-      throw new Error('No JSON in response')
+      console.log(`[Gemini Colors] Brand "${brandName}" → primary=${result.primary}, accent=${result.accent} (model: ${model})`)
+      if (attempt > 0) console.log(`[Gemini Colors] ✅ Succeeded with fallback model (${model})`)
+      return result
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
-      const is503 = errorMsg.includes('503') || errorMsg.includes('overloaded') || errorMsg.includes('UNAVAILABLE')
-      console.error(`[Gemini Colors] Attempt ${attempt}/${MAX_RETRIES} failed:`, errorMsg)
-
-      if (is503 && attempt < MAX_RETRIES) {
-        const delay = 2000 * attempt
-        console.log(`[Gemini Colors] 503 error, retrying in ${delay}ms...`)
-        await new Promise(resolve => setTimeout(resolve, delay))
-        continue
-      }
-
-      if (attempt === MAX_RETRIES) {
-        console.error('[Gemini Colors] All retries exhausted, returning defaults')
-        return getDefaultColors()
+      console.error(`[Gemini Colors] Attempt ${attempt + 1}/${models.length} failed (${model}): ${errorMsg}`)
+      if (attempt < models.length - 1) {
+        console.log(`[Gemini Colors] ⚡ Falling back to ${models[attempt + 1]}...`)
+        await new Promise(r => setTimeout(r, 2000))
       }
     }
   }
 
+  console.error('[Gemini Colors] All attempts failed, returning defaults')
   return getDefaultColors()
 }
 
