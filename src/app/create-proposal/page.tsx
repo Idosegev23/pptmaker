@@ -49,6 +49,8 @@ export default function CreateProposalPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [brandInfo, setBrandInfo] = useState<ExtractedBriefData | null>(null)
   const [brandFacts, setBrandFacts] = useState<string[]>([])
+  const [showResearchModal, setShowResearchModal] = useState(false)
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null)
 
   // Auto scroll logs for that "Terminal" effect
   useEffect(() => {
@@ -278,10 +280,11 @@ export default function CreateProposalPage() {
       addLog('success', `המסמך מוכן! מעביר לעורך הפרימיום (ID: ${docId?.slice(0, 8)}...)`)
 
       setStage('done')
+      setPendingDocId(docId)
 
       setTimeout(() => {
-        router.push(`/research/${docId}`)
-      }, 1500)
+        setShowResearchModal(true)
+      }, 1200)
     } catch (err) {
       console.error('[Create Proposal] Error:', err)
       setStage('error')
@@ -836,6 +839,53 @@ export default function CreateProposalPage() {
           }
         }
       `}} />
+
+      {/* Research Choice Modal */}
+      {showResearchModal && pendingDocId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+          {/* Card */}
+          <div className="relative bg-[#0f172a] border border-white/20 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
+            {/* Icon */}
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#f2cc0d]/20 to-[#f2cc0d]/5 border border-[#f2cc0d]/30 flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8 text-[#f2cc0d]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+            </div>
+
+            <h2 className="text-2xl font-extrabold text-white text-center mb-3">
+              מחקר אסטרטגי ומשפיענים?
+            </h2>
+            <p className="text-[#94a3b8] text-sm text-center leading-relaxed mb-2">
+              סוכני ה-AI שלנו יחקרו לעומק את המותג, יאתרו מתחרים, טרנדים בשוק ומשפיענים רלוונטיים — ויזינו את ההצעה בתובנות ספציפיות.
+            </p>
+            <p className="text-[#f2cc0d]/80 text-xs text-center font-semibold mb-7">
+              ⏱ המחקר לוקח כ-10 דקות
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => router.push(`/research/${pendingDocId}`)}
+                className="w-full bg-[#f2cc0d] text-[#0f172a] font-extrabold text-base py-4 rounded-2xl hover:bg-[#e0bc00] transition-all active:scale-95 shadow-[0_4px_20px_rgba(242,204,13,0.3)] flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+                כן, בצע מחקר מעמיק
+              </button>
+
+              <button
+                onClick={() => router.push(`/wizard/${pendingDocId}`)}
+                className="w-full bg-white/10 text-white font-semibold text-base py-4 rounded-2xl hover:bg-white/15 transition-all active:scale-95 border border-white/10"
+              >
+                לא תודה, עבור ישירות לעריכה
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
