@@ -8,8 +8,10 @@ import { parseGeminiJson } from '../utils/json-cleanup'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-// Use Gemini 3.1 Pro for best research quality
-const MODEL = 'gemini-3.1-pro-preview'
+// Fast Flash model for search-grounded agents (avoids 503/timeout on pro model)
+const AGENT_MODEL = 'gemini-2.0-flash'
+// Pro model for final synthesis only
+const SYNTHESIS_MODEL = 'gemini-3.1-pro-preview'
 
 export interface BrandResearch {
   // Basic Info
@@ -156,15 +158,19 @@ ${angleDescription}
 5. אם לא מצאת מידע כלל על נושא מסוים, ציין במפורש "לא מצאתי מידע על כך ברשת".
   `;
 
+  const TIMEOUT_MS = 75_000
+  const searchPromise = ai.models.generateContent({
+    model: AGENT_MODEL,
+    contents: prompt,
+    config: { tools: [{ googleSearch: {} }] },
+  }).then(r => ({ angle: angleName, data: r.text || `לא נאסף מידע עבור: ${angleName}` }))
+
+  const timeoutPromise = new Promise<{ angle: string; data: string }>((_, reject) =>
+    setTimeout(() => reject(new Error('Agent timeout')), TIMEOUT_MS)
+  )
+
   try {
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-      }
-    })
-    return { angle: angleName, data: response.text || `לא נאסף מידע עבור: ${angleName}` }
+    return await Promise.race([searchPromise, timeoutPromise])
   } catch (error) {
     console.error(`[Research Agent Error] Failed to gather data for angle: ${angleName}`, error)
     return { angle: angleName, data: `שגיאה באיסוף מידע.` }
@@ -222,9 +228,10 @@ export async function researchBrand(
   console.log(`\n========== RAW RESEARCH LOGS FOR: ${brandName} ==========`);
   let rawLogsContent = '';
   gatheredData.forEach(result => {
-    const section = `\n--- ANGLE: ${result.angle} ---\n${result.data}\n`;
-    rawLogsContent += section;
-    console.log(section);
+    console.log(`\n--- ANGLE: ${result.angle} ---\n${result.data}\n`) // log full data
+    // Truncate each agent's data in synthesis prompt to prevent prompt bloat → slow synthesis
+    const truncated = result.data.length > 2500 ? result.data.slice(0, 2500) + '...[קוצר]' : result.data
+    rawLogsContent += `\n--- ANGLE: ${result.angle} ---\n${truncated}\n`
   });
   console.log(`=========================================================\n`);
 
@@ -358,10 +365,11 @@ ${websiteContext}
 
   try {
     const response = await ai.models.generateContent({
-      model: MODEL,
+      model: SYNTHESIS_MODEL,
       contents: synthesisPrompt,
       config: {
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        // LOW thinking: synthesis is data-organization, not deep reasoning → 3-5x faster
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
       }
     })
 
@@ -470,7 +478,7 @@ export async function quickBrandSummary(brandName: string): Promise<{
 
   try {
     const response = await ai.models.generateContent({
-      model: MODEL,
+      model: AGENT_MODEL,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
