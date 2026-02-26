@@ -129,6 +129,12 @@ export function wizardDataToProposalData(
     data.brandBrief = stepData.brief.brandBrief
     data.brandPainPoints = stepData.brief.brandPainPoints
     data.brandObjective = stepData.brief.brandObjective
+    if (stepData.brief.successMetrics?.length) {
+      data.successMetrics = stepData.brief.successMetrics
+    }
+    if (stepData.brief.clientSpecificRequests?.length) {
+      data.clientSpecificRequests = stepData.brief.clientSpecificRequests
+    }
   }
 
   // Goals
