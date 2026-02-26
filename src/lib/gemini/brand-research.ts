@@ -240,7 +240,8 @@ export async function synthesizeResearch(
 
   let rawLogsContent = ''
   gatheredData.forEach(result => {
-    const truncated = result.data.length > 2500 ? result.data.slice(0, 2500) + '...[קוצר]' : result.data
+    // Limit each agent result to 1200 chars to keep total prompt manageable and avoid Gemini 499 cancellation
+    const truncated = result.data.length > 1200 ? result.data.slice(0, 1200) + '...[קוצר]' : result.data
     rawLogsContent += `\n--- ANGLE: ${result.angle} ---\n${truncated}\n`
   })
 
@@ -350,6 +351,7 @@ ${websiteContext}
       contents: synthesisPrompt,
       config: {
         thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        maxOutputTokens: 8000,
       }
     })
 
