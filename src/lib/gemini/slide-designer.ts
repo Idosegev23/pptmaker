@@ -438,7 +438,7 @@ async function generateDesignSystem(
         config: {
           responseMimeType: 'application/json',
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-          maxOutputTokens: 16000,
+          maxOutputTokens: 65536,
         },
       })
 
@@ -716,7 +716,7 @@ ${slidesDescription}
         config: {
           responseMimeType: 'application/json',
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-          maxOutputTokens: 32000,
+          maxOutputTokens: 65536,
         },
       })
 
