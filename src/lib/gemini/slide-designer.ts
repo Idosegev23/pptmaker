@@ -1129,7 +1129,9 @@ export async function generateAIPresentation(
 
   const avgScore = Math.round(totalScore / allSlides.length)
   const consistentSlides = checkVisualConsistency(validatedSlides, designSystem)
-  const finalSlides = injectLeadersLogo(consistentSlides)
+  const withLeadersLogo = injectLeadersLogo(consistentSlides)
+  const clientLogoUrl = config.clientLogoUrl || data._scraped?.logoUrl || config.brandLogoUrl || ''
+  const finalSlides = injectClientLogo(withLeadersLogo, clientLogoUrl)
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1)
   console.log(`\n${'═'.repeat(50)}`)
@@ -1319,6 +1321,42 @@ function injectLeadersLogo(slides: Slide[]): Slide[] {
   })
 }
 
+// ─── Client Logo Injection ────────────────────────────
+
+const CLIENT_LOGO_SLIDES: Record<string, { x: number; y: number; width: number; height: number; opacity: number }> = {
+  cover:   { x: 1620, y: 60, width: 220, height: 80, opacity: 0.95 },
+  bigIdea: { x: 1660, y: 60, width: 180, height: 65, opacity: 0.85 },
+  closing: { x: 810, y: 100, width: 300, height: 110, opacity: 1.0 },
+}
+
+function injectClientLogo(slides: Slide[], clientLogoUrl: string): Slide[] {
+  if (!clientLogoUrl) return slides
+
+  return slides.map(slide => {
+    const placement = CLIENT_LOGO_SLIDES[slide.slideType as string]
+    if (!placement) return slide
+
+    const logoElement: ImageElement = {
+      id: `client-logo-${slide.id}`,
+      type: 'image',
+      src: clientLogoUrl,
+      alt: 'Client Brand',
+      x: placement.x,
+      y: placement.y,
+      width: placement.width,
+      height: placement.height,
+      zIndex: 95,
+      objectFit: 'contain',
+      opacity: placement.opacity,
+    }
+
+    return {
+      ...slide,
+      elements: [...slide.elements, logoElement],
+    }
+  })
+}
+
 /**
  * Stage 3: Validate, auto-fix, consistency check, assemble final Presentation.
  */
@@ -1347,7 +1385,8 @@ export function pipelineFinalize(
 
   const avgScore = Math.round(totalScore / allSlides.length)
   const consistentSlides = checkVisualConsistency(validatedSlides, foundation.designSystem)
-  const finalSlides = injectLeadersLogo(consistentSlides)
+  const withLeadersLogo = injectLeadersLogo(consistentSlides)
+  const finalSlides = injectClientLogo(withLeadersLogo, foundation.clientLogo)
 
   console.log(`[SlideDesigner][${requestId}] Finalized: ${finalSlides.length} slides, quality: ${avgScore}/100`)
 

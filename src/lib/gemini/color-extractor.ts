@@ -248,7 +248,7 @@ async function fetchImageAsBase64(url: string): Promise<string> {
  * Extract brand colors by brand name using Gemini's knowledge
  * Fallback when website scraping fails to extract colors
  */
-export async function extractColorsByBrandName(brandName: string): Promise<BrandColors> {
+export async function extractColorsByBrandName(brandName: string): Promise<BrandColors & { logoUrl?: string; websiteDomain?: string }> {
   console.log(`[Gemini Colors] Analyzing brand by name: ${brandName}`)
 
   const prompt = `
@@ -271,7 +271,8 @@ export async function extractColorsByBrandName(brandName: string): Promise<Brand
   "style": "minimal/bold/elegant/playful/corporate",
   "mood": "תיאור קצר של האווירה",
   "confidence": "high/medium/low",
-  "logoUrl": "URL של הלוגו הרשמי של המותג אם ידוע לך (או null)"
+  "logoUrl": "URL של הלוגו הרשמי של המותג אם ידוע לך (או null)",
+  "websiteDomain": "הדומיין הרשמי של המותג (למשל: nike.com, adidas.co.il) — אם ידוע לך (או null)"
 }
 \`\`\`
 
@@ -298,7 +299,7 @@ export async function extractColorsByBrandName(brandName: string): Promise<Brand
       const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1])
-        const result: BrandColors & { logoUrl?: string } = {
+        const result: BrandColors & { logoUrl?: string; websiteDomain?: string } = {
           primary: parsed.primary || '#111111',
           secondary: parsed.secondary || '#666666',
           accent: parsed.accent || parsed.primary || '#E94560',
@@ -308,6 +309,7 @@ export async function extractColorsByBrandName(brandName: string): Promise<Brand
           style: parsed.style || 'corporate',
           mood: parsed.mood || 'מקצועי',
           logoUrl: parsed.logoUrl || undefined,
+          websiteDomain: parsed.websiteDomain || undefined,
         }
         console.log(`[Gemini Colors] Brand "${brandName}" → primary=${result.primary}, accent=${result.accent}, confidence=${parsed.confidence || 'unknown'}`)
         return result
@@ -318,7 +320,7 @@ export async function extractColorsByBrandName(brandName: string): Promise<Brand
       const jsonEnd = text.lastIndexOf('}')
       if (jsonStart !== -1 && jsonEnd > jsonStart) {
         const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1))
-        return {
+        const fallbackResult: BrandColors & { logoUrl?: string; websiteDomain?: string } = {
           primary: parsed.primary || '#111111',
           secondary: parsed.secondary || '#666666',
           accent: parsed.accent || parsed.primary || '#E94560',
@@ -327,7 +329,10 @@ export async function extractColorsByBrandName(brandName: string): Promise<Brand
           palette: parsed.palette || [],
           style: parsed.style || 'corporate',
           mood: parsed.mood || 'מקצועי',
+          logoUrl: parsed.logoUrl || undefined,
+          websiteDomain: parsed.websiteDomain || undefined,
         }
+        return fallbackResult
       }
 
       throw new Error('No JSON in response')

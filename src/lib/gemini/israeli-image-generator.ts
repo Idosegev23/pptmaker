@@ -49,17 +49,36 @@ export interface ImageGenerationConfig {
  */
 async function generateWithRetry(
   prompt: string,
-  aspectRatio: string = '16:9'
+  aspectRatio: string = '16:9',
+  logoBuffer?: Buffer | null,
 ): Promise<Buffer | null> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`[Israeli Image] Attempt ${attempt}/${MAX_RETRIES} with generateContent`)
-      
-      // Use generateContent with imageConfig for Nano Banana Pro
+      console.log(`[Israeli Image] Attempt ${attempt}/${MAX_RETRIES} with generateContent${logoBuffer ? ' (with logo ref)' : ''}`)
+
+      // Build contents: text prompt + optional logo as reference image
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const contents: any[] = []
+      if (logoBuffer) {
+        // Pass logo as reference image — Gemini will integrate it naturally
+        contents.push({
+          text: `${prompt}\n\nIMPORTANT: Naturally integrate the provided brand logo into the image. Place it prominently but elegantly — on a product, sign, screen, or surface that fits the scene. The logo must be clearly visible and pixel-perfect, not distorted or cropped.`,
+        })
+        contents.push({
+          inlineData: {
+            mimeType: 'image/png',
+            data: logoBuffer.toString('base64'),
+          },
+        })
+      } else {
+        contents.push({ text: prompt })
+      }
+
       const response = await ai.models.generateContent({
         model: IMAGE_MODEL,
-        contents: prompt,
+        contents,
         config: {
+          responseModalities: ['TEXT', 'IMAGE'],
           imageConfig: {
             aspectRatio: aspectRatio as '16:9' | '1:1' | '4:5' | '9:16',
             imageSize: '2K',
@@ -78,11 +97,11 @@ async function generateWithRetry(
           }
         }
       }
-      
+
       console.log(`[Israeli Image] No image data on attempt ${attempt}`)
     } catch (error) {
       console.error(`[Israeli Image] Attempt ${attempt} failed:`, error)
-      
+
       if (attempt < MAX_RETRIES) {
         const delay = RETRY_DELAY_BASE * attempt
         console.log(`[Israeli Image] Waiting ${delay}ms before retry...`)
@@ -90,7 +109,7 @@ async function generateWithRetry(
       }
     }
   }
-  
+
   console.log(`[Israeli Image] All ${MAX_RETRIES} attempts failed`)
   return null
 }
@@ -397,12 +416,13 @@ export interface SmartImageSet {
  * Generate a single image from a smart prompt
  */
 async function generateFromSmartPrompt(
-  smartPrompt: SmartImagePrompt
+  smartPrompt: SmartImagePrompt,
+  logoBuffer?: Buffer | null,
 ): Promise<SmartGeneratedImage | null> {
   console.log(`[Smart Image] Generating: ${smartPrompt.imageId}`)
-  
+
   const textPrompt = smartPromptToText(smartPrompt)
-  const imageData = await generateWithRetry(textPrompt, smartPrompt.aspectRatio)
+  const imageData = await generateWithRetry(textPrompt, smartPrompt.aspectRatio, logoBuffer)
   
   if (imageData) {
     return {
@@ -425,31 +445,47 @@ async function generateFromSmartPrompt(
 export async function generateSmartImages(
   brandResearch: BrandResearch,
   brandColors: BrandColors,
-  proposalContent?: Partial<ProposalContent>
+  proposalContent?: Partial<ProposalContent>,
+  clientLogoUrl?: string | null,
 ): Promise<SmartImageSet> {
   console.log(`[Smart Image] Starting smart generation for ${brandResearch.brandName}`)
-  
+
+  // Fetch client logo buffer once (if available) for reference image integration
+  let logoBuffer: Buffer | null = null
+  if (clientLogoUrl) {
+    try {
+      console.log(`[Smart Image] Fetching client logo for reference: ${clientLogoUrl}`)
+      const logoRes = await fetch(clientLogoUrl, { signal: AbortSignal.timeout(8000) })
+      if (logoRes.ok) {
+        logoBuffer = Buffer.from(await logoRes.arrayBuffer())
+        console.log(`[Smart Image] Logo fetched: ${logoBuffer.length} bytes`)
+      }
+    } catch (err) {
+      console.log(`[Smart Image] Logo fetch failed, generating without logo:`, err)
+    }
+  }
+
   // Step 1: AI analyzes brand and creates strategy
   console.log('[Smart Image] Step 1: Creating image strategy...')
   const strategy = await analyzeAndPlanImages(brandResearch, brandColors, proposalContent)
   console.log(`[Smart Image] Strategy created: ${strategy.images.length} images planned`)
-  
+
   // Step 2: AI generates optimized prompts
   console.log('[Smart Image] Step 2: Generating smart prompts...')
   const promptsData = await generateSmartPrompts(strategy, brandResearch, brandColors)
   console.log(`[Smart Image] Prompts generated: ${promptsData.prompts.length}`)
-  
+
   // Step 3: Generate images in parallel (prioritize essential ones)
-  console.log('[Smart Image] Step 3: Generating images...')
-  
+  console.log(`[Smart Image] Step 3: Generating images...${logoBuffer ? ' (with logo integration)' : ''}`)
+
   // Sort by priority - essential first
   const sortedPrompts = [...promptsData.prompts].sort((a, b) => {
     const priorityOrder = { essential: 0, recommended: 1, optional: 2 }
     return priorityOrder[a.priority] - priorityOrder[b.priority]
   })
-  
-  // Generate all images in parallel
-  const imagePromises = sortedPrompts.map(prompt => generateFromSmartPrompt(prompt))
+
+  // Generate all images in parallel — pass logo buffer so Gemini integrates it naturally
+  const imagePromises = sortedPrompts.map(prompt => generateFromSmartPrompt(prompt, logoBuffer))
   const results = await Promise.all(imagePromises)
   
   // Filter out nulls

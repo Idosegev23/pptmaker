@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       // PRIMARY: Gemini brand analysis with Google Search
       (async () => {
         console.log(`[Visual Assets][${requestId}] [Gemini PRIMARY] Analyzing brand: ${brandName}`)
-        const colors = await extractColorsByBrandName(brandName) as BrandColors & { logoUrl?: string }
+        const colors = await extractColorsByBrandName(brandName)
         console.log(`[Visual Assets][${requestId}] [Gemini PRIMARY] Done: primary=${colors.primary}, accent=${colors.accent}`)
         return colors
       })(),
@@ -141,6 +141,56 @@ export async function POST(request: NextRequest) {
     if (!logoUrl && geminiLogoUrl) {
       logoUrl = geminiLogoUrl
       console.log(`[Visual Assets][${requestId}] Using Gemini logo URL: ${logoUrl}`)
+    }
+
+    // Clearbit Logo API — fast, free, reliable fallback
+    if (!logoUrl && siteUrl) {
+      try {
+        const domain = new URL(siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`).hostname
+        const clearbitUrl = `https://logo.clearbit.com/${domain}`
+        console.log(`[Visual Assets][${requestId}] [Clearbit] Trying: ${clearbitUrl}`)
+        const clearbitRes = await fetch(clearbitUrl, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
+        if (clearbitRes.ok && clearbitRes.headers.get('content-type')?.startsWith('image/')) {
+          logoUrl = clearbitUrl
+          console.log(`[Visual Assets][${requestId}] [Clearbit] Found logo via domain`)
+        }
+      } catch (clearbitErr) {
+        console.log(`[Visual Assets][${requestId}] [Clearbit] Domain attempt failed:`, clearbitErr)
+      }
+    }
+
+    // Clearbit with Gemini's websiteDomain (if Gemini returned one)
+    if (!logoUrl && geminiResult.status === 'fulfilled' && geminiResult.value) {
+      const websiteDomain = geminiResult.value.websiteDomain
+      if (websiteDomain) {
+        try {
+          const clearbitUrl = `https://logo.clearbit.com/${websiteDomain}`
+          console.log(`[Visual Assets][${requestId}] [Clearbit] Trying Gemini domain: ${clearbitUrl}`)
+          const res = await fetch(clearbitUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000) })
+          if (res.ok && res.headers.get('content-type')?.startsWith('image/')) {
+            logoUrl = clearbitUrl
+            console.log(`[Visual Assets][${requestId}] [Clearbit] Found logo via Gemini domain`)
+          }
+        } catch { /* skip */ }
+      }
+    }
+
+    // Clearbit with brand name domain guess (last resort)
+    if (!logoUrl && brandName) {
+      const cleanBrand = brandName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+      if (cleanBrand.length >= 2) {
+        for (const suffix of ['.com', '.co.il', '.co']) {
+          try {
+            const clearbitUrl = `https://logo.clearbit.com/${cleanBrand}${suffix}`
+            const res = await fetch(clearbitUrl, { method: 'HEAD', signal: AbortSignal.timeout(3000) })
+            if (res.ok && res.headers.get('content-type')?.startsWith('image/')) {
+              logoUrl = clearbitUrl
+              console.log(`[Visual Assets][${requestId}] [Clearbit] Found logo via brand guess: ${cleanBrand}${suffix}`)
+              break
+            }
+          } catch { /* try next */ }
+        }
+      }
     }
 
     // ENHANCE: If Gemini failed but we have a logo, use vision to extract colors
@@ -221,11 +271,15 @@ export async function POST(request: NextRequest) {
     } : undefined
 
     try {
+      // Pass logoUrl so Gemini integrates client logo natively into generated images
       const smartImageSet = await generateSmartImages(
         researchForImages,
         brandColors,
-        proposalContext
+        proposalContext,
+        logoUrl,
       )
+
+      const { legacyMapping, images: allSmartImages } = smartImageSet
 
       // Upload images to Supabase Storage
       const timestamp = Date.now()
@@ -233,8 +287,6 @@ export async function POST(request: NextRequest) {
       const brandPrefix = brandName
         .replace(/[^a-zA-Z0-9]/g, '')
         .slice(0, 20) || `brand_${timestamp}`
-
-      const { legacyMapping, images: allSmartImages } = smartImageSet
 
       const uploadPromises: Promise<void>[] = []
 
