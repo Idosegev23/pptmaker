@@ -8,9 +8,8 @@ import { parseGeminiJson } from '../utils/json-cleanup'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-// Fast Flash model for search-grounded agents (avoids 503/timeout on pro model)
-const AGENT_MODEL = 'gemini-2.0-flash'
-// Pro model for final synthesis only
+// Only gemini-3.1-pro-preview — never use other model families
+const AGENT_MODEL = 'gemini-3.1-pro-preview'
 const SYNTHESIS_MODEL = 'gemini-3.1-pro-preview'
 
 export interface BrandResearch {
@@ -162,7 +161,10 @@ ${angleDescription}
   const searchPromise = ai.models.generateContent({
     model: AGENT_MODEL,
     contents: prompt,
-    config: { tools: [{ googleSearch: {} }] },
+    config: {
+      tools: [{ googleSearch: {} }],
+      thinkingConfig: { thinkingBudget: 0 }, // No reasoning needed for search agents
+    },
   }).then(r => ({ angle: angleName, data: r.text || `לא נאסף מידע עבור: ${angleName}` }))
 
   const timeoutPromise = new Promise<{ angle: string; data: string }>((_, reject) =>
