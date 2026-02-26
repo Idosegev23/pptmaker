@@ -400,23 +400,6 @@ export default function ResearchPage() {
         brandColors: colors || null,
       }
 
-      // Phase B: enhance creative concept with competitive intelligence
-      if (brandResearch && enriched.creative) {
-        try {
-          const enhanceRes = await fetch('/api/enhance-creative', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ creative: enriched.creative, brandResearch }),
-          })
-          if (enhanceRes.ok) {
-            const enhanced = await enhanceRes.json()
-            if (enhanced.creative) enriched.creative = enhanced.creative
-          }
-        } catch (err) {
-          console.warn('[Research] Creative enhancement failed (non-fatal):', err)
-        }
-      }
-
       const logoUrl = researchResults.logoUrl ?? null
 
       // Save everything to document

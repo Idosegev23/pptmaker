@@ -198,25 +198,17 @@ export default function CreateProposalPage() {
       if (!processRes.ok) throw new Error(processData.error || 'שגיאה בעיבוד המסמכים')
 
       const extracted: ExtractedBriefData = processData.extracted
-      const stepData = processData.stepData
       setBrandInfo(extracted)
 
-      addLog('success', `בניית ליבת ההצעה הושלמה (${processElapsed}s) - רמת ביטחון: ${extracted._meta?.confidence?.toUpperCase() || 'N/A'}`)
+      addLog('success', `מסמכים נותחו (${processElapsed}s) — רמת ביטחון: ${extracted._meta?.confidence?.toUpperCase() || 'N/A'}`)
 
       if (extracted.brand?.name) {
-        addLog('success', `מותג אומת וזוהה: ${extracted.brand.name}${extracted.brand.industry ? ` | תעשייה: ${extracted.brand.industry}` : ''}`)
+        addLog('success', `מותג זוהה: ${extracted.brand.name}${extracted.brand.industry ? ` | ${extracted.brand.industry}` : ''}`)
       } else {
-        addLog('warning', 'שם המותג לא זוהה בוודאות - יידרש קלט ידני בהמשך')
+        addLog('warning', 'שם המותג לא זוהה בוודאות')
       }
-
       if (extracted.budget?.amount && extracted.budget.amount > 0) {
-        addLog('detail', `תקציב שאותר: ${extracted.budget.currency}${extracted.budget.amount.toLocaleString()}`)
-      }
-      if (stepData?.key_insight?.keyInsight) {
-        addLog('detail', `תובנה מרכזית פוצחה: ${stepData.key_insight.keyInsight.slice(0, 60)}...`)
-      }
-      if (stepData?.creative?.activityTitle) {
-        addLog('detail', `קונספט קריאייטיבי: "${stepData.creative.activityTitle}"`)
+        addLog('detail', `תקציב: ${extracted.budget.currency}${extracted.budget.amount.toLocaleString()}`)
       }
       if (extracted._meta?.warnings?.length) {
         extracted._meta.warnings.forEach((w: string) => addLog('warning', w))
@@ -227,9 +219,9 @@ export default function CreateProposalPage() {
         fetchBrandFacts(extracted.brand.name)
       }
 
-      // === STEP 3: Create Document ===
+      // === STEP 3: Create Document (with raw texts for build-proposal later) ===
       setStage('creating')
-      addLog('info', 'מרכיב ואורז את הצעת המחיר למסמך אינטראקטיבי...')
+      addLog('info', 'שומר מסמך ומעביר למחקר...')
 
       const docRes = await fetch('/api/documents', {
         method: 'POST',
@@ -242,11 +234,11 @@ export default function CreateProposalPage() {
           data: {
             brandName: extracted.brand?.name || '',
             _extractedData: extracted,
-            _stepData: stepData,
             _briefText: briefText,
             _kickoffText: kickoffText || null,
+            _stepData: null, // built by /api/build-proposal after research
             _pipelineStatus: {
-              textGeneration: 'complete',
+              textGeneration: 'pending',
               research: 'pending',
               visualAssets: 'pending',
               slideGeneration: 'pending',
