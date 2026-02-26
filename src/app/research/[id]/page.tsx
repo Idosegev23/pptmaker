@@ -70,7 +70,7 @@ export default function ResearchPage() {
   const [influencerDone, setInfluencerDone] = useState(false)
   const [subStageMsg, setSubStageMsg] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [researchResults, setResearchResults] = useState<{ brand: any; influencer: any; colors: any } | null>(null)
+  const [researchResults, setResearchResults] = useState<{ brand: any; influencer: any; colors: any; logoUrl?: string | null } | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [building, setBuilding] = useState(false)
@@ -223,6 +223,7 @@ export default function ResearchPage() {
 
       const brandResearch = brandResult.status === 'fulfilled' ? brandResult.value.research : null
       const colors = brandResult.status === 'fulfilled' ? brandResult.value.colors : null
+      const logoUrl = brandResult.status === 'fulfilled' ? (brandResult.value.logoUrl as string | null) : null
       const influencerStrategy = influencerResult.status === 'fulfilled'
         ? (influencerResult.value.strategy || influencerResult.value)
         : null
@@ -236,7 +237,7 @@ export default function ResearchPage() {
       setInfluencerStatus(influencerResult.status === 'fulfilled' ? 'success' : 'failed')
 
       // Save results for display — but DO NOT enrich yet (user must approve first)
-      setResearchResults({ brand: brandResearch, influencer: influencerStrategy, colors })
+      setResearchResults({ brand: brandResearch, influencer: influencerStrategy, colors, logoUrl })
       setStage('reviewing')
       setShowResults(true)
     } catch (err) {
@@ -266,8 +267,8 @@ export default function ResearchPage() {
       const result = await res.json()
       setBrandStatus('success')
       setResearchResults(prev => prev
-        ? { ...prev, brand: result.research, colors: result.colors }
-        : { brand: result.research, influencer: null, colors: result.colors }
+        ? { ...prev, brand: result.research, colors: result.colors, logoUrl: result.logoUrl ?? prev.logoUrl }
+        : { brand: result.research, influencer: null, colors: result.colors, logoUrl: result.logoUrl ?? null }
       )
     } catch {
       // status remains 'failed'
@@ -358,6 +359,8 @@ export default function ResearchPage() {
         }
       }
 
+      const logoUrl = researchResults.logoUrl ?? null
+
       // Save everything to document
       const patchPayload: Record<string, unknown> = {
         _pipelineStatus: { ...pipelineStatusRef, research: 'complete' },
@@ -366,6 +369,11 @@ export default function ResearchPage() {
       if (brandResearch) patchPayload._brandResearch = brandResearch
       if (influencerStrategy) patchPayload._influencerStrategy = influencerStrategy
       if (colors) patchPayload._brandColors = colors
+      // Save logoUrl in _scraped.logoUrl format — used by slide-designer + export routes
+      if (logoUrl) {
+        patchPayload._scraped = { logoUrl }
+        patchPayload._brandLogoUrl = logoUrl
+      }
 
       const patchRes = await fetch(`/api/documents/${documentId}`, {
         method: 'PATCH',

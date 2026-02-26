@@ -311,12 +311,20 @@ export function enrichStepData(
     // ── Key Insight: enrich insightData and insightSource from research facts ──
     if (result.key_insight) {
       const painPoints = toStringArray(brandResearch.targetDemographics?.primaryAudience?.painPoints || [])
-      // insightData = a real market fact that supports the insight
-      if (!result.key_insight.insightData && painPoints.length) {
+      // insightData = competitive gap or pain point (competitive gap is more strategic)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const competitiveGap = (brandResearch as any).competitiveGap as string | undefined
+      if (!result.key_insight.insightData && competitiveGap) {
+        result.key_insight = { ...result.key_insight, insightData: competitiveGap }
+      } else if (!result.key_insight.insightData && painPoints.length) {
         result.key_insight = { ...result.key_insight, insightData: painPoints[0] }
       }
-      // insightSource = where the insight comes from (market position / price positioning)
-      if (!result.key_insight.insightSource && brandResearch.marketPosition) {
+      // insightSource = "why now" trigger is most specific; fall back to market position
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const whyNowTrigger = (brandResearch as any).whyNowTrigger as string | undefined
+      if (!result.key_insight.insightSource && whyNowTrigger) {
+        result.key_insight = { ...result.key_insight, insightSource: whyNowTrigger }
+      } else if (!result.key_insight.insightSource && brandResearch.marketPosition) {
         result.key_insight = {
           ...result.key_insight,
           insightSource: `ניתוח עמדת שוק: ${brandResearch.marketPosition}`,
@@ -326,13 +334,28 @@ export function enrichStepData(
 
     // ── Strategy ──
     if (result.strategy) {
-      // Enrich description if empty with market context
+      // Build a rich description: israeliMarketContext + market context
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const israeliContext = (brandResearch as any).israeliMarketContext as string | undefined
       if (!result.strategy.strategyDescription) {
-        const contextParts = [brandResearch.marketPosition, brandResearch.pricePositioning].filter(Boolean)
+        const contextParts = [
+          israeliContext,
+          brandResearch.marketPosition,
+          brandResearch.pricePositioning,
+        ].filter(Boolean) as string[]
         if (contextParts.length) {
           result.strategy = { ...result.strategy, strategyDescription: contextParts.join('. ') }
         }
+      } else if (israeliContext && !result.strategy.strategyDescription.includes(israeliContext.slice(0, 20))) {
+        // Append Israeli market context if not already included and description is short
+        if (result.strategy.strategyDescription.length < 250) {
+          result.strategy = {
+            ...result.strategy,
+            strategyDescription: `${result.strategy.strategyDescription}. ${israeliContext}`,
+          }
+        }
       }
+
       // Enrich pillar DESCRIPTIONS (not titles) with content themes — preserve creative titles
       if (brandResearch.contentThemes?.length) {
         const themes = toStringArray(brandResearch.contentThemes)
@@ -353,6 +376,39 @@ export function enrichStepData(
             ...result.strategy,
             strategyPillars: themes.slice(0, 3).map(theme => ({ title: theme, description: '' })),
           }
+        }
+      }
+    }
+
+    // ── Strategy: add competitor campaign opportunities to strategyFlow (if not set) ──
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const competitorCampaigns = (brandResearch as any).competitorCampaigns as Array<{
+      competitorName?: string; opportunityForBrand?: string
+    }> | undefined
+    if (result.strategy && !result.strategy.strategyFlow && competitorCampaigns?.length) {
+      const opportunities = competitorCampaigns
+        .filter(c => c.opportunityForBrand)
+        .map(c => c.opportunityForBrand!)
+        .slice(0, 3)
+      if (opportunities.length) {
+        result.strategy = {
+          ...result.strategy,
+          strategyFlow: {
+            steps: opportunities.map(opp => ({ label: 'הזדמנות תחרותית', description: opp })),
+          },
+        }
+      }
+    }
+
+    // ── Brief: enrich with Israeli market context if brandBrief is thin ──
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const israeliContext = (brandResearch as any).israeliMarketContext as string | undefined
+    if (result.brief && israeliContext) {
+      const currentBrief = result.brief.brandBrief || ''
+      if (currentBrief.length < 300 && !currentBrief.includes(israeliContext.slice(0, 20))) {
+        result.brief = {
+          ...result.brief,
+          brandBrief: currentBrief ? `${currentBrief}\n\n${israeliContext}` : israeliContext,
         }
       }
     }
@@ -390,6 +446,20 @@ export function enrichStepData(
         result.influencers = {
           ...result.influencers,
           influencerCriteria: toStringArray(influencerStrategy.contentThemes).filter(Boolean),
+        }
+      }
+    }
+
+    // ── Influencers: add dominant platform context from brand research ──
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dominantPlatform = (brandResearch as any)?.dominantPlatformInIsrael as string | undefined
+    if (result.influencers && dominantPlatform) {
+      const note = `פלטפורמה מובילה בישראל לקהל זה: ${dominantPlatform}`
+      const existing = result.influencers.influencerNote || ''
+      if (!existing.includes(dominantPlatform)) {
+        result.influencers = {
+          ...result.influencers,
+          influencerNote: existing ? `${existing}. ${note}` : note,
         }
       }
     }
