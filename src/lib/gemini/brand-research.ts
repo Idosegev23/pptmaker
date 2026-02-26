@@ -139,12 +139,65 @@ export interface ScrapedWebsite {
   socialLinks: string[]
 }
 
+export interface ResearchAngle {
+  name: string
+  description: string
+  label: string // Hebrew label for UI
+}
+
 /**
- * סוכן מחקר: מבצע חיפוש עמוק על זווית ספציפית
+ * Research angles — exported so client can show per-angle progress labels
  */
-async function searchSpecificAngle(brandName: string, angleName: string, angleDescription: string): Promise<{angle: string, data: string}> {
+export function getResearchAngles(brandName: string): ResearchAngle[] {
+  return [
+    {
+      name: "History and Business Profile",
+      label: "היסטוריה ופרופיל עסקי",
+      description: "היסטוריה של המותג, שנת הקמה, מיקום מטה, מייסדים, חזון, מודל עסקי ומוצרים/שירותים מרכזיים."
+    },
+    {
+      name: "Market and Competitors",
+      label: "שוק ומתחרים",
+      description: "מתחרים ישירים ועקיפים, פוזיציה בשוק (האם הם פרימיום/תקציב?), יתרונות תחרותיים (USP) ונתח שוק."
+    },
+    {
+      name: "Target Audience",
+      label: "קהל יעד",
+      description: "מי קהל היעד? דמוגרפיה (גיל, מגדר), רמה סוציואקונומית, תחומי עניין, כאבים שהמותג פותר והתנהגות צרכנים."
+    },
+    {
+      name: "Digital and Marketing",
+      label: "דיגיטל ושיווק",
+      description: "נוכחות בדיגיטל וברשתות חברתיות (אינסטגרם, פייסבוק, טיקטוק - הערכת עוקבים ומעורבות), קמפיינים קודמים, שימוש במשפיענים ומוניטין ציבורי."
+    },
+    {
+      name: "Industry Trends",
+      label: "מגמות תעשייה",
+      description: "מגמות וטרנדים בתעשייה שבה המותג פועל, עונתיות ותאריכי מפתח שיווקיים רלוונטיים."
+    },
+    {
+      name: "Competitive Campaign Intelligence",
+      label: "קמפיינים תחרותיים",
+      description: `מה מתחרי המותג "${brandName}" עשו בקמפיינים שיווקיים ובמיוחד קמפיינים עם משפיענים ב-6-12 חודשים האחרונים? עם אילו משפיענים עבדו? אילו מסרים הובילו? מה נראה שעבד ומה לא? מה הרגעים השיווקיים שהמותג "פספס" לעומת מתחריו?`
+    },
+    {
+      name: "Brand Safety and Israeli Market Fit",
+      label: "בטיחות ושוק ישראלי",
+      description: `האם המותג "${brandName}" פועל בתחום מוסדר בישראל? (פארמה, אלכוהול, מוצרי ילדים, פיננסים, מזון עם טענות בריאות). מהן ההגבלות הספציפיות? באיזו פלטפורמה הקהל הספציפי בישראל הכי פעיל? האם יש "רגע" עסקי מיוחד עכשיו?`
+    }
+  ]
+}
+
+/**
+ * Run a single research agent — exported for per-angle client orchestration
+ */
+export async function runSingleAgent(
+  brandName: string,
+  angleName: string,
+  angleDescription: string
+): Promise<{ angle: string; data: string }> {
   console.log(`[Research Agent] Starting search for angle: ${angleName}`)
-  
+
   const prompt = `
 אתה חוקר מידע עסקי בכיר. בצע חיפוש עמוק ועדכני ב-Google על המותג "${brandName}", והתמקד **אך ורק** בנושא הבא:
 ${angleDescription}
@@ -155,15 +208,15 @@ ${angleDescription}
 3. כלול נתונים מספריים, שמות ספציפיים וציטוטים אם מצאת.
 4. ציין את המקורות (URLs) עליהם התבססת בסוף הסיכום.
 5. אם לא מצאת מידע כלל על נושא מסוים, ציין במפורש "לא מצאתי מידע על כך ברשת".
-  `;
+  `
 
-  const TIMEOUT_MS = 75_000
+  const TIMEOUT_MS = 90_000
   const searchPromise = ai.models.generateContent({
     model: AGENT_MODEL,
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
-      thinkingConfig: { thinkingBudget: 0 }, // No reasoning needed for search agents
+      thinkingConfig: { thinkingBudget: 0 },
     },
   }).then(r => ({ angle: angleName, data: r.text || `לא נאסף מידע עבור: ${angleName}` }))
 
@@ -180,73 +233,29 @@ ${angleDescription}
 }
 
 /**
- * Deep research a brand using multi-phase Google Search grounding
+ * Synthesize gathered agent data into a structured BrandResearch object.
+ * Exported for use in /api/research/synthesize route.
  */
-export async function researchBrand(
+export async function synthesizeResearch(
   brandName: string,
+  gatheredData: { angle: string; data: string }[],
   websiteData?: ScrapedWebsite
 ): Promise<BrandResearch> {
-  console.log(`[Gemini Deep Research] Starting comprehensive multi-phase research for: ${brandName}`)
-  
-  // שלב 1: איסוף מידע מבוזר (Map)
-  const researchAngles = [
-    {
-      name: "History and Business Profile",
-      description: "היסטוריה של המותג, שנת הקמה, מיקום מטה, מייסדים, חזון, מודל עסקי ומוצרים/שירותים מרכזיים."
-    },
-    {
-      name: "Market and Competitors",
-      description: "מתחרים ישירים ועקיפים, פוזיציה בשוק (האם הם פרימיום/תקציב?), יתרונות תחרותיים (USP) ונתח שוק."
-    },
-    {
-      name: "Target Audience",
-      description: "מי קהל היעד? דמוגרפיה (גיל, מגדר), רמה סוציואקונומית, תחומי עניין, כאבים שהמותג פותר והתנהגות צרכנים."
-    },
-    {
-      name: "Digital and Marketing",
-      description: "נוכחות בדיגיטל וברשתות חברתיות (אינסטגרם, פייסבוק, טיקטוק - הערכת עוקבים ומעורבות), קמפיינים קודמים, שימוש במשפיענים ומוניטין ציבורי."
-    },
-    {
-      name: "Industry Trends",
-      description: "מגמות וטרנדים בתעשייה שבה המותג פועל, עונתיות ותאריכי מפתח שיווקיים רלוונטיים."
-    },
-    {
-      name: "Competitive Campaign Intelligence",
-      description: `מה מתחרי המותג "${brandName}" עשו בקמפיינים שיווקיים ובמיוחד קמפיינים עם משפיענים ב-6-12 חודשים האחרונים? עם אילו משפיענים עבדו? אילו מסרים הובילו? מה נראה שעבד ומה לא? מה הרגעים השיווקיים שהמותג "פספס" לעומת מתחריו? זה המחקר התחרותי האסטרטגי שיאפשר לסוכנות להציע גישה שמנצחת את השוק.`
-    },
-    {
-      name: "Brand Safety and Israeli Market Fit",
-      description: `האם המותג "${brandName}" פועל בתחום מוסדר בישראל? (פארמה, אלכוהול, מוצרי ילדים, פיננסים, מזון עם טענות בריאות — כפוף לחוק הגנת הצרכן ומועצת הפרסום). מהן ההגבלות הספציפיות על פרסום מותג זה בישראל? בנוסף: באיזו פלטפורמה הקהל הספציפי הזה בישראל הכי פעיל — אינסטגרם, טיקטוק או פייסבוק? האם יש "רגע" עסקי מיוחד עכשיו (השקת מוצר, כניסה לשוק חדש, לחץ תחרותי) שמסביר מדוע המותג צריך קמפיין משפיענים עכשיו?`
-    }
-  ];
+  console.log(`[Gemini Deep Research] Synthesizing ${gatheredData.length} agent results for: ${brandName}`)
 
-  console.log(`[Gemini Deep Research] Executing ${researchAngles.length} targeted search agents in parallel...`);
-  
-  const gatheredData = await Promise.all(
-    researchAngles.map(angle => searchSpecificAngle(brandName, angle.name, angle.description))
-  );
-
-  // הדפסת המידע הגולמי לקונסול של Vercel לצורך בקרה ולוגים
-  console.log(`\n========== RAW RESEARCH LOGS FOR: ${brandName} ==========`);
-  let rawLogsContent = '';
+  let rawLogsContent = ''
   gatheredData.forEach(result => {
-    console.log(`\n--- ANGLE: ${result.angle} ---\n${result.data}\n`) // log full data
-    // Truncate each agent's data in synthesis prompt to prevent prompt bloat → slow synthesis
     const truncated = result.data.length > 2500 ? result.data.slice(0, 2500) + '...[קוצר]' : result.data
     rawLogsContent += `\n--- ANGLE: ${result.angle} ---\n${truncated}\n`
-  });
-  console.log(`=========================================================\n`);
+  })
 
-  console.log(`[Gemini Deep Research] Data gathering complete. Synthesizing final JSON report...`);
-
-  // שלב 2: בניית הקונטקסט המלא לסינתזה (Reduce)
   const websiteContext = websiteData ? `
 ## מידע שחולץ מהאתר הרשמי:
 - כתובת: ${websiteData.url}
 - כותרת: ${websiteData.title}
 - תיאור: ${websiteData.description}
 - רשתות חברתיות שנמצאו: ${websiteData.socialLinks.join(', ')}
-- תוכן מהאתר: 
+- תוכן מהאתר:
 ${websiteData.paragraphs.slice(0, 15).join('\n')}
 ` : ''
 
@@ -276,91 +285,66 @@ ${websiteContext}
   "founded": "שנת הקמה",
   "headquarters": "מיקום המטה",
   "website": "כתובת האתר",
-  
   "companyDescription": "תיאור מקיף של החברה ב-3-5 פסקאות...",
   "historyHighlights": ["אירוע 1", "אירוע 2"],
   "businessModel": "תיאור המודל העסקי",
-  
   "marketPosition": "פסקה מפורטת על הפוזיציה בשוק...",
   "marketShare": "נתח שוק אם ידוע",
-  "competitors": [
-    { "name": "שם מתחרה", "description": "תיאור", "differentiator": "מה מבדיל" }
-  ],
+  "competitors": [{ "name": "שם מתחרה", "description": "תיאור", "differentiator": "מה מבדיל" }],
   "uniqueSellingPoints": ["יתרון 1", "יתרון 2"],
-  "competitiveAdvantages": ["יתרון תחרותי 1", "יתרון תחרותי 2"],
-  
-  "mainProducts": [
-    { "name": "שם מוצר", "description": "תיאור", "targetMarket": "קהל יעד למוצר" }
-  ],
+  "competitiveAdvantages": ["יתרון תחרותי 1"],
+  "mainProducts": [{ "name": "שם מוצר", "description": "תיאור", "targetMarket": "קהל יעד למוצר" }],
   "pricePositioning": "budget/mid-range/premium/luxury",
-  
   "targetDemographics": {
     "primaryAudience": {
       "gender": "פירוט מגדר",
       "ageRange": "טווח גילאים",
       "socioeconomic": "רמה סוציו-אקונומית",
       "lifestyle": "תיאור אורח החיים",
-      "interests": ["עניין 1", "עניין 2"],
-      "painPoints": ["כאב 1", "כאב 2"],
+      "interests": ["עניין 1"],
+      "painPoints": ["כאב 1"],
       "aspirations": ["שאיפה 1"]
     },
     "behavior": "תיאור התנהגות צרכנים",
-    "purchaseDrivers": ["מניע 1", "מניע 2"]
+    "purchaseDrivers": ["מניע 1"]
   },
-  
-  "brandPersonality": ["תכונה 1", "תכונה 2"],
-  "brandValues": ["ערך 1", "ערך 2"],
+  "brandPersonality": ["תכונה 1"],
+  "brandValues": ["ערך 1"],
   "brandPromise": "הבטחת המותג",
   "toneOfVoice": "תיאור הטון",
-  "visualIdentity": {
-    "primaryColors": ["#XXXXXX"],
-    "style": "תיאור הסגנון",
-    "moodKeywords": ["מילה 1", "מילה 2"]
-  },
-  
+  "visualIdentity": { "primaryColors": ["#XXXXXX"], "style": "תיאור הסגנון", "moodKeywords": ["מילה 1"] },
   "socialPresence": {
     "instagram": { "handle": "", "followers": "", "engagement": "", "contentStyle": "" },
     "tiktok": { "handle": "", "followers": "", "contentStyle": "" }
   },
-  
   "websiteTraffic": "הערכה אם קיימת",
   "onlineReputation": "תיאור המוניטין",
-  
-  "previousCampaigns": [
-    { "name": "שם קמפיין", "description": "תיאור", "results": "תוצאות" }
-  ],
-  
-  "influencerTypes": ["סוג 1", "סוג 2"],
-  "contentThemes": ["נושא 1", "נושא 2"],
+  "previousCampaigns": [{ "name": "שם קמפיין", "description": "תיאור", "results": "תוצאות" }],
+  "influencerTypes": ["סוג 1"],
+  "contentThemes": ["נושא 1"],
   "suggestedApproach": "פסקה מפורטת על אסטרטגיה",
-  "recommendedGoals": ["מטרה 1", "מטרה 2"],
-  "potentialChallenges": ["אתגר 1", "אתגר 2"],
-  "industryTrends": ["טרנד 1", "טרנד 2"],
+  "recommendedGoals": ["מטרה 1"],
+  "potentialChallenges": ["אתגר 1"],
+  "industryTrends": ["טרנד 1"],
   "seasonality": "תיאור עונתיות",
   "keyDates": ["תאריך 1"],
-  
   "competitorCampaigns": [
     {
       "competitorName": "שם מתחרה",
       "campaignDescription": "תיאור הקמפיין שעשו",
-      "influencersUsed": ["@handle1", "@handle2"],
+      "influencersUsed": ["@handle1"],
       "whatWorked": "מה עבד להם",
       "opportunityForBrand": "איך המותג שלנו יכול לנצח אותם בדיוק בנקודה הזו"
     }
   ],
   "competitiveGap": "פסקה: מה המותג מפסיד לעומת מתחריו בזירת הדיגיטל/משפיענים — ומה ההזדמנות",
-
-  "brandSafetyFlags": ["הגבלה 1 אם קיימת (למשל: חייב גילוי נאות, אסור לטרגט קטינים)"],
+  "brandSafetyFlags": ["הגבלה 1 אם קיימת"],
   "dominantPlatformInIsrael": "אינסטגרם / טיקטוק / פייסבוק — עם הסבר קצר",
   "whyNowTrigger": "מה הרגע העסקי שמניע את הצורך בקמפיין עכשיו",
   "israeliMarketContext": "הקשר ייחודי של השוק הישראלי לתחום המותג",
-
-  "sources": [
-    { "title": "תיאור המקור", "url": "URL" }
-  ],
-
+  "sources": [{ "title": "תיאור המקור", "url": "URL" }],
   "confidence": "high/medium/low",
-  "researchNotes": "הערות על איכות המידע שנאסף, מקורות חסרים או דברים שדורשים אימות אנושי"
+  "researchNotes": "הערות על איכות המידע שנאסף"
 }
 \`\`\`
 `
@@ -370,23 +354,51 @@ ${websiteContext}
       model: SYNTHESIS_MODEL,
       contents: synthesisPrompt,
       config: {
-        // LOW thinking: synthesis is data-organization, not deep reasoning → 3-5x faster
         thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
       }
     })
 
     const text = response.text || ''
     console.log('[Gemini Deep Research] Parsing final generated JSON...')
-    
+
     const research = parseGeminiJson<BrandResearch>(text)
     console.log(`[Gemini Deep Research] Complete. Confidence: ${research.confidence}`)
     console.log(`[Gemini Deep Research] Found ${research.competitors?.length || 0} competitors, ${research.sources?.length || 0} sources`)
-    
+
     return research
   } catch (error) {
     console.error('[Gemini Deep Research] Error during synthesis:', error)
     return getMinimalResearch(brandName, websiteData)
   }
+}
+
+/**
+ * Deep research a brand using multi-phase Google Search grounding.
+ * Convenience wrapper that runs all agents + synthesis in one call.
+ * For Vercel-safe usage, use runSingleAgent() + synthesizeResearch() separately from the client.
+ */
+export async function researchBrand(
+  brandName: string,
+  websiteData?: ScrapedWebsite
+): Promise<BrandResearch> {
+  console.log(`[Gemini Deep Research] Starting comprehensive multi-phase research for: ${brandName}`)
+
+  const researchAngles = getResearchAngles(brandName)
+  console.log(`[Gemini Deep Research] Executing ${researchAngles.length} targeted search agents in parallel...`);
+  
+  const gatheredData = await Promise.all(
+    researchAngles.map((angle: ResearchAngle) => runSingleAgent(brandName, angle.name, angle.description))
+  )
+
+  // Log raw results
+  console.log(`\n========== RAW RESEARCH LOGS FOR: ${brandName} ==========`)
+  gatheredData.forEach((result: { angle: string; data: string }) => {
+    console.log(`\n--- ANGLE: ${result.angle} ---\n${result.data}\n`)
+  })
+  console.log(`=========================================================\n`)
+
+  console.log(`[Gemini Deep Research] Data gathering complete. Synthesizing...`)
+  return synthesizeResearch(brandName, gatheredData, websiteData)
 }
 
 /**

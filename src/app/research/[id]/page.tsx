@@ -22,14 +22,17 @@ const RESEARCH_STEPS = [
   { key: 'reviewing', label: 'סקירה ואישור' },
 ]
 
-const BRAND_STAGES = [
-  'מחפש מידע על המותג...',
-  'סורק אתרים ומקורות...',
-  'מנתח מתחרים בשוק...',
-  'בוחן קהל יעד...',
-  'מזהה נוכחות דיגיטלית...',
-  'מסכם תובנות...',
+// Labels for the 7 research agents (must match getResearchAngles() order in brand-research.ts)
+const AGENT_LABELS = [
+  'היסטוריה ופרופיל עסקי',
+  'שוק ומתחרים',
+  'קהל יעד',
+  'דיגיטל ושיווק',
+  'מגמות תעשייה',
+  'קמפיינים תחרותיים',
+  'בטיחות ושוק ישראלי',
 ]
+const AGENT_COUNT = AGENT_LABELS.length
 
 const INFLUENCER_STAGES = [
   'מנתח נישת המותג...',
@@ -69,6 +72,9 @@ export default function ResearchPage() {
   const [brandDone, setBrandDone] = useState(false)
   const [influencerDone, setInfluencerDone] = useState(false)
   const [subStageMsg, setSubStageMsg] = useState('')
+  // Per-agent progress
+  const [agentStatuses, setAgentStatuses] = useState<Array<'pending' | 'running' | 'done' | 'failed'>>([])
+  const [synthesizing, setSynthesizing] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [researchResults, setResearchResults] = useState<{ brand: any; influencer: any; colors: any; logoUrl?: string | null } | null>(null)
   const [showResults, setShowResults] = useState(false)
@@ -107,10 +113,10 @@ export default function ResearchPage() {
     return () => { if (elapsedRef.current) clearInterval(elapsedRef.current) }
   }, [stage])
 
-  // Sub-stage message rotation
+  // Sub-stage message rotation (influencer only)
   useEffect(() => {
     if (stage !== 'brand_research' && stage !== 'influencer_research') return
-    const stages = stage === 'brand_research' ? BRAND_STAGES : INFLUENCER_STAGES
+    const stages = INFLUENCER_STAGES
     let idx = 0
     setSubStageMsg(stages[0])
     const interval = setInterval(() => {
@@ -174,48 +180,80 @@ export default function ResearchPage() {
       setExtractedRef(extracted)
       setPipelineStatusRef(pipelineStatus)
 
-      // Stage 2-3: Run research in parallel
+      // Stage 2-3: Run research — client orchestrated for Vercel safety
       setStage('brand_research')
       setBrandDone(false)
       setInfluencerDone(false)
+      setSynthesizing(false)
+      setAgentStatuses(Array(AGENT_COUNT).fill('running'))
 
       const brand = extracted.brand || {}
       const targetAudience = extracted.targetAudience || {}
 
-      const [brandResult, influencerResult] = await Promise.allSettled([
-        fetch('/api/research', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ brandName: name }),
-        }).then(async res => {
-          setBrandDone(true)
-          if (!res.ok) throw new Error('Brand research failed')
-          return res.json()
-        }),
-        fetch('/api/influencers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mode: 'discover',
-            brandResearch: {
-              brandName: name,
-              industry: brand.industry || '',
-              targetDemographics: {
-                primaryAudience: {
-                  gender: targetAudience.primary?.gender || '',
-                  ageRange: targetAudience.primary?.ageRange || '',
-                  interests: targetAudience.primary?.interests || [],
-                },
+      // Fire influencer research immediately in parallel with agents
+      const influencerFetch = fetch('/api/influencers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'discover',
+          brandResearch: {
+            brandName: name,
+            industry: brand.industry || '',
+            targetDemographics: {
+              primaryAudience: {
+                gender: targetAudience.primary?.gender || '',
+                ageRange: targetAudience.primary?.ageRange || '',
+                interests: targetAudience.primary?.interests || [],
               },
             },
-            budget: extracted.budget?.amount || 0,
-            goals: extracted.campaignGoals || [],
-          }),
-        }).then(async res => {
-          setInfluencerDone(true)
-          if (!res.ok) throw new Error('Influencer research failed')
-          return res.json()
+          },
+          budget: extracted.budget?.amount || 0,
+          goals: extracted.campaignGoals || [],
         }),
+      }).then(async res => {
+        setInfluencerDone(true)
+        if (!res.ok) throw new Error('Influencer research failed')
+        return res.json()
+      })
+
+      // Fire all 7 agents in parallel — each is a separate Lambda (max 10 min each)
+      const agentPromises = Array.from({ length: AGENT_COUNT }, (_, i) =>
+        fetch('/api/research/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brandName: name, angleIndex: i }),
+        })
+          .then(async res => {
+            const data = res.ok ? await res.json() : { angle: AGENT_LABELS[i], data: 'שגיאה' }
+            setAgentStatuses(prev => { const next = [...prev]; next[i] = res.ok ? 'done' : 'failed'; return next })
+            return data
+          })
+          .catch(() => {
+            setAgentStatuses(prev => { const next = [...prev]; next[i] = 'failed'; return next })
+            return { angle: AGENT_LABELS[i], data: 'שגיאה באיסוף מידע.' }
+          })
+      )
+
+      // Wait for all 7 agents
+      const gatheredData = await Promise.all(agentPromises)
+
+      // Synthesize — separate Lambda call
+      setSynthesizing(true)
+      const synthesizePromise = fetch('/api/research/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandName: name, gatheredData }),
+      }).then(async res => {
+        setSynthesizing(false)
+        setBrandDone(true)
+        if (!res.ok) throw new Error('Synthesis failed')
+        return res.json()
+      })
+
+      // Wait for synthesis + influencer in parallel
+      const [brandResult, influencerResult] = await Promise.allSettled([
+        synthesizePromise,
+        influencerFetch,
       ])
 
       // Update visual stage
@@ -499,7 +537,7 @@ export default function ResearchPage() {
                       </h2>
                       <p className="text-[#94a3b8] text-sm mt-1 font-medium">
                         {stageStr === 'loading' && 'טוען נתוני המסמך...'}
-                        {stageStr === 'brand_research' && subStageMsg}
+                        {stageStr === 'brand_research' && (synthesizing ? 'מסנתז תוצאות...' : `${agentStatuses.filter(s => s === 'done').length}/${AGENT_COUNT} סוכני מחקר הושלמו`)}
                         {stageStr === 'influencer_research' && subStageMsg}
                         {stageStr === 'building' && 'בונה את תוכן ההצעה...'}
                         {stageStr === 'error' && error}
@@ -563,44 +601,85 @@ export default function ResearchPage() {
                   })}
                 </div>
 
-                {/* Brand research detail tracks */}
+                {/* Research progress tracks */}
                 {(stageStr === 'brand_research' || stageStr === 'influencer_research' || stageStr === 'building') && (
-                  <div className="space-y-4 mb-8">
+                  <div className="space-y-3 mb-8">
+
+                    {/* Brand agents grid */}
                     <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10">
-                      <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-2 mb-3">
                         {brandDone ? (
-                          <div className="w-8 h-8 rounded-lg bg-[#10b981] flex items-center justify-center">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          <div className="w-6 h-6 rounded-md bg-[#10b981] flex items-center justify-center shrink-0">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                           </div>
                         ) : (
-                          <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <div className="w-6 h-6 rounded-md bg-blue-500 flex items-center justify-center shrink-0">
+                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           </div>
                         )}
-                        <div>
-                          <div className="font-semibold text-sm text-white">מחקר מותג ושוק</div>
-                          <div className="text-xs text-[#94a3b8]">
-                            {brandDone ? 'הושלם!' : BRAND_STAGES[Math.floor(elapsed / 8) % BRAND_STAGES.length]}
+                        <span className="font-semibold text-sm text-white">מחקר מותג ושוק</span>
+                        {!brandDone && agentStatuses.length > 0 && (
+                          <span className="text-[#94a3b8] text-xs mr-auto">
+                            {synthesizing
+                              ? 'מסנתז תוצאות...'
+                              : `${agentStatuses.filter(s => s === 'done' || s === 'failed').length}/${AGENT_COUNT} סוכנים השלימו`
+                            }
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Per-agent rows */}
+                      {agentStatuses.length > 0 && (
+                        <div className="grid grid-cols-1 gap-1 mb-2">
+                          {AGENT_LABELS.map((label, i) => {
+                            const s = agentStatuses[i] || 'pending'
+                            return (
+                              <div key={i} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5">
+                                <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                                  s === 'done' ? 'bg-[#10b981]' :
+                                  s === 'failed' ? 'bg-red-500' :
+                                  s === 'running' ? 'bg-blue-500' : 'bg-white/10'
+                                }`}>
+                                  {s === 'done' && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                  {s === 'failed' && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
+                                  {s === 'running' && <div className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin" />}
+                                </div>
+                                <span className={`text-xs font-medium ${
+                                  s === 'done' ? 'text-[#10b981]' :
+                                  s === 'failed' ? 'text-red-400' :
+                                  s === 'running' ? 'text-white/80' : 'text-white/30'
+                                }`}>{label}</span>
+                              </div>
+                            )
+                          })}
+                          {/* Synthesis row */}
+                          <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5 mt-1 border-t border-white/5 pt-2">
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                              brandDone ? 'bg-[#10b981]' :
+                              synthesizing ? 'bg-[#f2cc0d]' : 'bg-white/10'
+                            }`}>
+                              {brandDone && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                              {synthesizing && <div className="w-2 h-2 border border-[#0f172a] border-t-transparent rounded-full animate-spin" />}
+                            </div>
+                            <span className={`text-xs font-semibold ${
+                              brandDone ? 'text-[#10b981]' :
+                              synthesizing ? 'text-[#f2cc0d]' : 'text-white/30'
+                            }`}>סינתזה ועיבוד סופי</span>
                           </div>
                         </div>
-                      </div>
-                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-l from-blue-500 to-blue-400 rounded-full transition-all duration-1000"
-                          style={{ width: brandDone ? '100%' : `${Math.min(15 + (elapsed % 60) * 1.2, 85)}%` }}
-                        />
-                      </div>
+                      )}
                     </div>
 
+                    {/* Influencer research */}
                     <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10">
                       <div className="flex items-center gap-3 mb-3">
                         {influencerDone ? (
-                          <div className="w-8 h-8 rounded-lg bg-[#10b981] flex items-center justify-center">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          <div className="w-6 h-6 rounded-md bg-[#10b981] flex items-center justify-center">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                           </div>
                         ) : (
-                          <div className="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <div className="w-6 h-6 rounded-md bg-purple-500 flex items-center justify-center">
+                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           </div>
                         )}
                         <div>
@@ -610,7 +689,7 @@ export default function ResearchPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-l from-purple-500 to-purple-400 rounded-full transition-all duration-1000"
                           style={{ width: influencerDone ? '100%' : `${Math.min(20 + (elapsed % 60) * 1.1, 85)}%` }}
