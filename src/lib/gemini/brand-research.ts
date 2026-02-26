@@ -216,7 +216,7 @@ ${angleDescription}
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
-      thinkingConfig: { thinkingBudget: 0 },
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
     },
   }).then(r => ({ angle: angleName, data: r.text || `לא נאסף מידע עבור: ${angleName}` }))
 
