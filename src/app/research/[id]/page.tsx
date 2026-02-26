@@ -22,15 +22,12 @@ const RESEARCH_STEPS = [
   { key: 'reviewing', label: 'סקירה ואישור' },
 ]
 
-// Labels for the 7 research agents (must match getResearchAngles() order in brand-research.ts)
+// Labels for the 4 consolidated research agents (must match getResearchAngles() order in brand-research.ts)
 const AGENT_LABELS = [
-  'היסטוריה ופרופיל עסקי',
-  'שוק ומתחרים',
+  'חברה ושוק',
   'קהל יעד',
-  'דיגיטל ושיווק',
-  'מגמות תעשייה',
-  'קמפיינים תחרותיים',
-  'בטיחות ושוק ישראלי',
+  'דיגיטל וקמפיינים',
+  'שוק ישראלי וזהות',
 ]
 const AGENT_COUNT = AGENT_LABELS.length
 
@@ -190,33 +187,7 @@ export default function ResearchPage() {
       const brand = extracted.brand || {}
       const targetAudience = extracted.targetAudience || {}
 
-      // Fire influencer research immediately in parallel with agents
-      const influencerFetch = fetch('/api/influencers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'discover',
-          brandResearch: {
-            brandName: name,
-            industry: brand.industry || '',
-            targetDemographics: {
-              primaryAudience: {
-                gender: targetAudience.primary?.gender || '',
-                ageRange: targetAudience.primary?.ageRange || '',
-                interests: targetAudience.primary?.interests || [],
-              },
-            },
-          },
-          budget: extracted.budget?.amount || 0,
-          goals: extracted.campaignGoals || [],
-        }),
-      }).then(async res => {
-        setInfluencerDone(true)
-        if (!res.ok) throw new Error('Influencer research failed')
-        return res.json()
-      })
-
-      // Fire all 7 agents in parallel — each is a separate Lambda (max 10 min each)
+      // Fire 4 research agents in parallel (was 7 — reduced to avoid Gemini rate limits)
       const agentPromises = Array.from({ length: AGENT_COUNT }, (_, i) =>
         fetch('/api/research/agent', {
           method: 'POST',
@@ -234,7 +205,7 @@ export default function ResearchPage() {
           })
       )
 
-      // Wait for all 7 agents
+      // Wait for all 4 agents
       const gatheredData = await Promise.all(agentPromises)
 
       // Synthesize — separate Lambda call
@@ -250,20 +221,46 @@ export default function ResearchPage() {
         return res.json()
       })
 
-      // Wait for synthesis + influencer in parallel
-      const [brandResult, influencerResult] = await Promise.allSettled([
-        synthesizePromise,
-        influencerFetch,
+      // Wait for brand synthesis to finish first
+      const brandResult = await Promise.allSettled([synthesizePromise])
+
+      // THEN run influencer research (sequential — avoids overloading Gemini API)
+      setStage('influencer_research')
+      const influencerResult = await Promise.allSettled([
+        fetch('/api/influencers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'discover',
+            brandResearch: {
+              brandName: name,
+              industry: brand.industry || '',
+              targetDemographics: {
+                primaryAudience: {
+                  gender: targetAudience.primary?.gender || '',
+                  ageRange: targetAudience.primary?.ageRange || '',
+                  interests: targetAudience.primary?.interests || [],
+                },
+              },
+            },
+            budget: extracted.budget?.amount || 0,
+            goals: extracted.campaignGoals || [],
+          }),
+        }).then(async res => {
+          setInfluencerDone(true)
+          if (!res.ok) throw new Error('Influencer research failed')
+          return res.json()
+        })
       ])
 
-      // Update visual stage
-      setStage('influencer_research')
+      const brandSettled = brandResult[0]
+      const influencerSettled = influencerResult[0]
 
-      const brandResearch = brandResult.status === 'fulfilled' ? brandResult.value.research : null
-      const colors = brandResult.status === 'fulfilled' ? brandResult.value.colors : null
-      const logoUrl = brandResult.status === 'fulfilled' ? (brandResult.value.logoUrl as string | null) : null
-      const influencerStrategy = influencerResult.status === 'fulfilled'
-        ? (influencerResult.value.strategy || influencerResult.value)
+      const brandResearch = brandSettled.status === 'fulfilled' ? brandSettled.value.research : null
+      const colors = brandSettled.status === 'fulfilled' ? brandSettled.value.colors : null
+      const logoUrl = brandSettled.status === 'fulfilled' ? (brandSettled.value.logoUrl as string | null) : null
+      const influencerStrategy = influencerSettled.status === 'fulfilled'
+        ? (influencerSettled.value.strategy || influencerSettled.value)
         : null
 
       if (!brandResearch && !influencerStrategy) {
@@ -271,8 +268,8 @@ export default function ResearchPage() {
       }
 
       // Set status for each research section
-      setBrandStatus(brandResult.status === 'fulfilled' ? 'success' : 'failed')
-      setInfluencerStatus(influencerResult.status === 'fulfilled' ? 'success' : 'failed')
+      setBrandStatus(brandSettled.status === 'fulfilled' ? 'success' : 'failed')
+      setInfluencerStatus(influencerSettled.status === 'fulfilled' ? 'success' : 'failed')
 
       // Save results for display — but DO NOT enrich yet (user must approve first)
       setResearchResults({ brand: brandResearch, influencer: influencerStrategy, colors, logoUrl })
