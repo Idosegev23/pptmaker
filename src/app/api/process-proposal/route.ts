@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractFromBrief } from '@/lib/gemini/proposal-agent'
 
-export const maxDuration = 60 // extraction only — finishes in ~15s
+export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
   const requestId = `process-${Date.now()}`
