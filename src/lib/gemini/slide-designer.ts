@@ -426,9 +426,8 @@ async function generateDesignSystem(
 
 פונט: Heebo. החזר JSON בלבד עם שני חלקים: creativeDirection (object) + כל שאר שדות ה-Design System.`
 
-  // Pro first for design system (one-time critical call that defines the entire presentation)
-  // Flash fallback if Pro is overloaded
-  const models = [PRO_MODEL, FLASH_MODEL]
+  // Flash first (fast + no 503), Pro fallback
+  const models = [FLASH_MODEL, PRO_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
