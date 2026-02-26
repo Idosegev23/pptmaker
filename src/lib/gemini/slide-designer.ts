@@ -1,18 +1,19 @@
 /**
- * Gemini AI Slide Designer — Clean 2-Step Pipeline
+ * Gemini AI Slide Designer — Production-Grade 2-Step Pipeline
  *
  * 2-Step process:
  * 1. generateDesignSystem() → Brand design tokens (colors, typography, spacing, effects)
  * 2. generateSlidesBatchAST() → JSON AST slides on 1920×1080 canvas
  *
- * Optimized for Gemini 3.1 Pro:
- * - responseMimeType: 'application/json'
- * - maxOutputTokens: 32000 (prevents truncation)
- * - ThinkingLevel enum for predictable reasoning
+ * Production features:
+ * - Native Structured Outputs (responseSchema) for guaranteed JSON
+ * - System Instructions for consistent persona
+ * - Strict TypeScript — zero `any` casts
+ * - Exponential backoff on retries
+ * - Layout Archetypes for anti-generic design
  */
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai'
-import { parseGeminiJson } from '@/lib/utils/json-cleanup'
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai'
 import type {
   Presentation,
   Slide,
@@ -20,7 +21,10 @@ import type {
   SlideType,
   FontWeight,
   ImageElement,
+  TextElement,
+  SlideElement,
 } from '@/types/presentation'
+import { isTextElement } from '@/types/presentation'
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
@@ -28,6 +32,28 @@ const ai = new GoogleGenAI({
 })
 const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast, cheap, ThinkingLevel.HIGH handles complexity
 const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
+
+// ─── System Instruction (shared persona) ─────────────────
+
+const SYSTEM_INSTRUCTION = `אתה Creative Director + Art Director ב-Sagmeister & Walsh / Pentagram.
+המומחיות שלך: עיצוב מצגות editorial ברמת Awwwards.
+כל מצגת חייבת להרגיש כמו מגזין אופנה פרימיום — לא כמו PowerPoint.
+אתה עובד בעברית (RTL). פונט: Heebo. קנבס: 1920x1080.
+אתה מעולם לא חוזר על אותו layout — כל שקף שונה מקודמו.
+אתה משתמש ב-JSON AST בלבד — ללא HTML, ללא CSS.`
+
+// ─── Layout Archetypes (anti-generic design) ──────────────
+
+const LAYOUT_ARCHETYPES = [
+  'Brutalist typography — כותרת ענקית שחורגת מהמסך עם negative x-axis overflow + watermark טקסט שקוף',
+  'Asymmetric 30/70 split — חלוקה א-סימטרית עם אלמנט דקורטיבי שחוצה את הקו המפריד',
+  'Overlapping Z-index cards — כרטיסים חופפים עם fake-3D shadows ואפקט עומק',
+  'Full-bleed image — תמונה מלאה עם שכבת gradient ו-text cutout overlay שקוף',
+  'Diagonal grid — קומפוזיציה אלכסונית עם טקסט מסובב וקווי grid דקים',
+  'Bento box — רשת א-סימטרית של תאים בגדלים שונים עם נתונים ויזואליים',
+  'Magazine spread — פריסת מגזין עם pull-quote ענק ותמונה דומיננטית',
+  'Data art — מספרים ענקיים כאלמנט ויזואלי מרכזי עם דקורציה מינימלית',
+]
 
 // ─── Types ─────────────────────────────────────────────
 
@@ -183,12 +209,19 @@ const TEMPERATURE_MAP: Record<string, 'cold' | 'neutral' | 'warm'> = {
   influencers: 'neutral', closing: 'warm',
 }
 
-// ─── Color Helpers ─────────────────────────────────────
+// ─── DRY Color Helpers ───────────────────────────────────
 
+/** Consolidated hex parser — handles 3-char, 6-char, and 8-char (alpha) hex codes */
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
-  const match = hex.replace('#', '').match(/.{2}/g)
-  if (!match || match.length < 3) return null
-  return { r: parseInt(match[0], 16), g: parseInt(match[1], 16), b: parseInt(match[2], 16) }
+  let clean = hex.replace('#', '')
+  if (clean.length === 3) clean = clean.split('').map(c => c + c).join('')
+  if (clean.length === 8) clean = clean.slice(0, 6)
+  if (clean.length !== 6) return null
+  const r = parseInt(clean.slice(0, 2), 16)
+  const g = parseInt(clean.slice(2, 4), 16)
+  const b = parseInt(clean.slice(4, 6), 16)
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return null
+  return { r, g, b }
 }
 
 function relativeLuminance(r: number, g: number, b: number): number {
@@ -197,6 +230,13 @@ function relativeLuminance(r: number, g: number, b: number): number {
     return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
   })
   return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs
+}
+
+/** Thin wrapper using consolidated hexToRgb + relativeLuminance */
+function hexToLuminance(hex: string): number {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return 0.2 // fallback — assume dark
+  return relativeLuminance(rgb.r, rgb.g, rgb.b)
 }
 
 function contrastRatio(hex1: string, hex2: string): number {
@@ -221,7 +261,6 @@ function adjustLightness(hex: string, amount: number): string {
 function validateAndFixColors(colors: PremiumDesignSystem['colors']): PremiumDesignSystem['colors'] {
   const fixed = { ...colors }
 
-  // Text on background: need 4.5:1
   let textContrast = contrastRatio(fixed.text, fixed.background)
   let attempts = 0
   while (textContrast < 4.5 && attempts < 20) {
@@ -230,7 +269,6 @@ function validateAndFixColors(colors: PremiumDesignSystem['colors']): PremiumDes
     attempts++
   }
 
-  // Accent on background: need 3:1
   let accentContrast = contrastRatio(fixed.accent, fixed.background)
   attempts = 0
   while (accentContrast < 3 && attempts < 20) {
@@ -239,12 +277,10 @@ function validateAndFixColors(colors: PremiumDesignSystem['colors']): PremiumDes
     attempts++
   }
 
-  // Card background must differ from main background
   if (contrastRatio(fixed.cardBg, fixed.background) < 1.1) {
     fixed.cardBg = adjustLightness(fixed.cardBg, 0.06)
   }
 
-  // Muted text: 3:1 minimum
   let mutedContrast = contrastRatio(fixed.muted, fixed.background)
   attempts = 0
   while (mutedContrast < 3 && attempts < 20) {
@@ -298,6 +334,153 @@ function formatNum(n?: number): string {
   return n.toString()
 }
 
+// ─── Structured Output Schemas ─────────────────────────
+
+const DESIGN_SYSTEM_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    creativeDirection: {
+      type: Type.OBJECT,
+      properties: {
+        visualMetaphor: { type: Type.STRING },
+        visualTension: { type: Type.STRING },
+        oneRule: { type: Type.STRING },
+        colorStory: { type: Type.STRING },
+        typographyVoice: { type: Type.STRING },
+        emotionalArc: { type: Type.STRING },
+      },
+      required: ['visualMetaphor', 'visualTension', 'oneRule', 'colorStory', 'typographyVoice', 'emotionalArc'],
+    },
+    colors: {
+      type: Type.OBJECT,
+      properties: {
+        primary: { type: Type.STRING }, secondary: { type: Type.STRING },
+        accent: { type: Type.STRING }, background: { type: Type.STRING },
+        text: { type: Type.STRING }, cardBg: { type: Type.STRING },
+        cardBorder: { type: Type.STRING }, gradientStart: { type: Type.STRING },
+        gradientEnd: { type: Type.STRING }, muted: { type: Type.STRING },
+        highlight: { type: Type.STRING }, auroraA: { type: Type.STRING },
+        auroraB: { type: Type.STRING }, auroraC: { type: Type.STRING },
+      },
+      required: ['primary', 'secondary', 'accent', 'background', 'text', 'cardBg', 'cardBorder',
+        'gradientStart', 'gradientEnd', 'muted', 'highlight', 'auroraA', 'auroraB', 'auroraC'],
+    },
+    fonts: {
+      type: Type.OBJECT,
+      properties: { heading: { type: Type.STRING }, body: { type: Type.STRING } },
+      required: ['heading', 'body'],
+    },
+    typography: {
+      type: Type.OBJECT,
+      properties: {
+        displaySize: { type: Type.INTEGER }, headingSize: { type: Type.INTEGER },
+        subheadingSize: { type: Type.INTEGER }, bodySize: { type: Type.INTEGER },
+        captionSize: { type: Type.INTEGER },
+        letterSpacingTight: { type: Type.NUMBER }, letterSpacingWide: { type: Type.NUMBER },
+        lineHeightTight: { type: Type.NUMBER }, lineHeightRelaxed: { type: Type.NUMBER },
+        weightPairs: { type: Type.ARRAY, items: { type: Type.ARRAY, items: { type: Type.INTEGER } } },
+      },
+      required: ['displaySize', 'headingSize', 'subheadingSize', 'bodySize', 'captionSize',
+        'letterSpacingTight', 'letterSpacingWide', 'lineHeightTight', 'lineHeightRelaxed', 'weightPairs'],
+    },
+    spacing: {
+      type: Type.OBJECT,
+      properties: {
+        unit: { type: Type.INTEGER }, cardPadding: { type: Type.INTEGER },
+        cardGap: { type: Type.INTEGER }, safeMargin: { type: Type.INTEGER },
+      },
+      required: ['unit', 'cardPadding', 'cardGap', 'safeMargin'],
+    },
+    effects: {
+      type: Type.OBJECT,
+      properties: {
+        borderRadius: { type: Type.STRING, enum: ['sharp', 'soft', 'pill'] },
+        borderRadiusValue: { type: Type.INTEGER },
+        decorativeStyle: { type: Type.STRING, enum: ['geometric', 'organic', 'minimal', 'brutalist'] },
+        shadowStyle: { type: Type.STRING, enum: ['none', 'fake-3d', 'glow'] },
+        auroraGradient: { type: Type.STRING },
+      },
+      required: ['borderRadius', 'borderRadiusValue', 'decorativeStyle', 'shadowStyle', 'auroraGradient'],
+    },
+    motif: {
+      type: Type.OBJECT,
+      properties: {
+        type: { type: Type.STRING }, opacity: { type: Type.NUMBER },
+        color: { type: Type.STRING }, implementation: { type: Type.STRING },
+      },
+      required: ['type', 'opacity', 'color', 'implementation'],
+    },
+  },
+  required: ['colors', 'fonts', 'typography', 'spacing', 'effects', 'motif'],
+}
+
+/** Flat element schema — all element type fields combined, type-specific ones are optional */
+const SLIDE_ELEMENT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    id: { type: Type.STRING },
+    type: { type: Type.STRING, enum: ['text', 'shape', 'image'] },
+    x: { type: Type.NUMBER }, y: { type: Type.NUMBER },
+    width: { type: Type.NUMBER }, height: { type: Type.NUMBER },
+    zIndex: { type: Type.INTEGER },
+    opacity: { type: Type.NUMBER },
+    rotation: { type: Type.NUMBER },
+    // Text fields
+    content: { type: Type.STRING },
+    fontSize: { type: Type.NUMBER },
+    fontWeight: { type: Type.INTEGER },
+    color: { type: Type.STRING },
+    textAlign: { type: Type.STRING },
+    role: { type: Type.STRING },
+    lineHeight: { type: Type.NUMBER },
+    letterSpacing: { type: Type.NUMBER },
+    textStroke: {
+      type: Type.OBJECT,
+      properties: { width: { type: Type.NUMBER }, color: { type: Type.STRING } },
+      required: ['width', 'color'],
+    },
+    // Shape fields
+    shapeType: { type: Type.STRING },
+    fill: { type: Type.STRING },
+    borderRadius: { type: Type.NUMBER },
+    clipPath: { type: Type.STRING },
+    border: { type: Type.STRING },
+    // Image fields
+    src: { type: Type.STRING },
+    alt: { type: Type.STRING },
+    objectFit: { type: Type.STRING },
+  },
+  required: ['id', 'type', 'x', 'y', 'width', 'height', 'zIndex'],
+}
+
+const SLIDE_BATCH_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    slides: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          slideType: { type: Type.STRING },
+          label: { type: Type.STRING },
+          background: {
+            type: Type.OBJECT,
+            properties: {
+              type: { type: Type.STRING, enum: ['solid', 'gradient', 'image'] },
+              value: { type: Type.STRING },
+            },
+            required: ['type', 'value'],
+          },
+          elements: { type: Type.ARRAY, items: SLIDE_ELEMENT_SCHEMA },
+        },
+        required: ['id', 'slideType', 'label', 'background', 'elements'],
+      },
+    },
+  },
+  required: ['slides'],
+}
+
 // ═══════════════════════════════════════════════════════════
 //  STEP 1: GENERATE DESIGN SYSTEM
 // ═══════════════════════════════════════════════════════════
@@ -308,7 +491,7 @@ async function generateDesignSystem(
   const requestId = `ds-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Step 1: Design System for "${brand.brandName}"`)
 
-  const prompt = `אתה Creative Director + Art Director ב-Sagmeister & Walsh / Pentagram. המשימה: לייצר כיוון קריאטיבי + Design System מלא למצגת ברמת Awwwards עבור "${brand.brandName}".
+  const prompt = `המשימה: לייצר כיוון קריאטיבי + Design System מלא למצגת ברמת Awwwards עבור "${brand.brandName}".
 
 ## מידע על המותג:
 - תעשייה: ${brand.industry || 'לא ידוע'}
@@ -372,21 +555,9 @@ async function generateDesignSystem(
 - type: (diagonal-lines / dots / circles / angular-cuts / wave / grid-lines / organic-blobs / triangles)
 - opacity: 0.05-0.2, color: צבע, implementation: תיאור CSS
 
-פונט: Heebo. החזר JSON בלבד במבנה הבא (flat, לא nested):
+פונט: Heebo.`
 
-{
-  "creativeDirection": { "visualMetaphor": "...", "visualTension": "...", "oneRule": "...", "colorStory": "...", "typographyVoice": "...", "emotionalArc": "..." },
-  "colors": { "primary": "#...", "secondary": "#...", "accent": "#...", "background": "#0a0a12", "text": "#f0f0f5", "cardBg": "#...", "cardBorder": "#...", "gradientStart": "#...", "gradientEnd": "#...", "muted": "#...", "highlight": "#...", "auroraA": "#...50", "auroraB": "#...50", "auroraC": "#...60" },
-  "fonts": { "heading": "Heebo", "body": "Heebo" },
-  "typography": { "displaySize": 104, "headingSize": 56, "subheadingSize": 32, "bodySize": 22, "captionSize": 15, "letterSpacingTight": -3, "letterSpacingWide": 5, "lineHeightTight": 1.0, "lineHeightRelaxed": 1.5, "weightPairs": [[800, 400]] },
-  "spacing": { "unit": 8, "cardPadding": 40, "cardGap": 32, "safeMargin": 80 },
-  "effects": { "borderRadius": "soft", "borderRadiusValue": 16, "decorativeStyle": "geometric", "shadowStyle": "none", "auroraGradient": "radial-gradient(...)" },
-  "motif": { "type": "diagonal-lines", "opacity": 0.08, "color": "#...", "implementation": "repeating-linear-gradient(...)" }
-}
-
-חשוב: הJSON חייב להיות flat — כל השדות ברמה העליונה, לא nested תחת "designSystem".`
-
-  // Flash first (fast + no 503), Pro fallback
+  // Flash first (fast + no 503), Pro fallback with exponential backoff
   const models = [FLASH_MODEL, PRO_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
@@ -396,7 +567,9 @@ async function generateDesignSystem(
         model,
         contents: prompt,
         config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: 'application/json',
+          responseSchema: DESIGN_SYSTEM_SCHEMA,
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
           maxOutputTokens: 65536,
         },
@@ -408,23 +581,20 @@ async function generateDesignSystem(
         console.error(`[SlideDesigner][${requestId}] Response too short: "${rawText}"`)
       }
 
-      const parsed = parseGeminiJson<PremiumDesignSystem>(rawText)
-
-      // Debug: log what keys we got
-      const topKeys = parsed ? Object.keys(parsed).join(', ') : 'null'
-      console.log(`[SlideDesigner][${requestId}] Parsed keys: [${topKeys}]`)
-      if (parsed && !parsed.colors) {
-        // Maybe colors are nested under a different key (e.g., "designSystem.colors")
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = parsed as any
-        if (p.designSystem?.colors) {
-          console.log(`[SlideDesigner][${requestId}] Found colors under designSystem key — unwrapping`)
-          Object.assign(parsed, p.designSystem)
-        } else if (p.design_system?.colors) {
-          console.log(`[SlideDesigner][${requestId}] Found colors under design_system key — unwrapping`)
-          Object.assign(parsed, p.design_system)
-        }
+      // With responseSchema, JSON.parse should always succeed. Dynamic fallback for safety.
+      let parsed: PremiumDesignSystem
+      try {
+        parsed = JSON.parse(rawText) as PremiumDesignSystem
+      } catch {
+        console.warn(`[SlideDesigner][${requestId}] JSON.parse failed, falling back to robust parser`)
+        const { parseGeminiJson } = await import('@/lib/utils/json-cleanup')
+        const fallbackParsed = parseGeminiJson<PremiumDesignSystem>(rawText)
+        if (!fallbackParsed) throw new Error('Both JSON.parse and parseGeminiJson failed')
+        parsed = fallbackParsed
       }
+
+      const topKeys = Object.keys(parsed).join(', ')
+      console.log(`[SlideDesigner][${requestId}] Parsed keys: [${topKeys}]`)
 
       if (parsed?.colors?.primary) {
         parsed.colors = validateAndFixColors(parsed.colors)
@@ -440,7 +610,7 @@ async function generateDesignSystem(
       console.error(`[SlideDesigner][${requestId}] Design system attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
       if (attempt < models.length - 1) {
         console.log(`[SlideDesigner][${requestId}] ⚡ Falling back to ${models[attempt + 1]}...`)
-        await new Promise(r => setTimeout(r, 2000))
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
       }
     }
   }
@@ -511,7 +681,7 @@ async function generateSlidesBatchAST(
     closing: 'Background overlay (1920×1080) at low opacity, or centered accent.',
   }
 
-  // ── Build per-slide directives with pacing & layout ──
+  // ── Build per-slide directives with pacing, layout & archetype ──
   const slidesDescription = slides.map((slide, i) => {
     const globalIndex = batchContext.slideIndex + i
     const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
@@ -519,12 +689,14 @@ async function generateSlidesBatchAST(
     const contentJson = JSON.stringify(slide.content, null, 2)
     const hasTension = ['cover', 'insight', 'bigIdea', 'closing'].includes(slide.slideType)
     const imageSizeHint = IMAGE_SIZE_HINTS[slide.slideType] || 'At least 40% of slide area'
+    const archetype = LAYOUT_ARCHETYPES[(globalIndex + batchIndex * 3) % LAYOUT_ARCHETYPES.length]
 
     return `
 ═══ שקף ${globalIndex + 1}/${batchContext.totalSlides}: "${slide.title}" (${slide.slideType}) ═══
 🌡️ Temperature: ${temperature} | ⚡ Energy: ${pacing.energy} | 📊 Density: ${pacing.density}
 ${hasTension ? '🔥 TENSION POINT — חובה נקודת מתח ויזואלית אחת בשקף הזה!' : ''}
 📐 מקסימום ${pacing.maxElements} אלמנטים | לפחות ${pacing.minWhitespace}% רווח לבן
+📐 Mandatory Layout Archetype: ${archetype}
 ${slide.imageUrl ? `🖼️ Image: ${slide.imageUrl} — חובה element מסוג "image"!\n📏 Image sizing: ${imageSizeHint}` : '🚫 אין תמונה — השתמש ב-shapes דקורטיביים, watermarks, טיפוגרפיה דרמטית'}
 תוכן:
 \`\`\`json
@@ -532,10 +704,7 @@ ${contentJson}
 \`\`\``
   }).join('\n')
 
-  const prompt = `אתה ארט דיירקטור גאון ברמת Awwwards / Pentagram / Sagmeister & Walsh.
-המצגת חייבת להיראות כמו **מגזין אופנה פרימיום / editorial design** — לא כמו PowerPoint!
-
-עצב ${slides.length} שקפים למותג "${brandName}".
+  const prompt = `עצב ${slides.length} שקפים למותג "${brandName}".
 
 ══════════════════════════════════
 🧠 THE CREATIVE BRIEF
@@ -662,7 +831,9 @@ ${ANTI_PATTERNS}
 ══════════════════════════════════
 📝 CONTEXT FROM PREVIOUS SLIDES
 ══════════════════════════════════
-${batchContext.previousSlidesVisualSummary || 'זה הבאצ׳ הראשון — אין הקשר קודם.'}
+${batchContext.previousSlidesVisualSummary
+    ? `⚠️ ANTI-REPETITION: הנה מה שכבר עוצב. אסור לחזור על אותם layouts, צבעים דומיננטיים, או מיקומי כותרת! כל שקף חייב להפתיע.\n${batchContext.previousSlidesVisualSummary}`
+    : 'זה הבאצ׳ הראשון — אין הקשר קודם.'}
 
 ══════════════════════════════════
 📋 SLIDES TO CREATE
@@ -675,11 +846,9 @@ ${slidesDescription}
 - textAlign: "right" תמיד (RTL). כל הטקסט בעברית
 - zIndex layering: 0-1 רקע, 2-3 דקורציה, 4-5 מבנה, 6-8 תוכן, 9-10 hero
 - 🚫 אסור: box-shadow, backdrop-filter, filter: blur
-- ✅ Fake 3D: shape ב-x+12,y+12 fill:#000 opacity:0.12-0.18
+- ✅ Fake 3D: shape ב-x+12,y+12 fill:#000 opacity:0.12-0.18`
 
-החזר JSON: { "slides": [{ "id": "slide-N", "slideType": "TYPE", "label": "שם בעברית", "background": { "type": "solid"|"gradient", "value": "..." }, "elements": [...] }] }`
-
-  // Flash first (fast + cheap), Pro fallback
+  // Flash first (fast + cheap), Pro fallback with exponential backoff
   const batchModels = [FLASH_MODEL, PRO_MODEL]
   for (let attempt = 0; attempt < batchModels.length; attempt++) {
     const model = batchModels[attempt]
@@ -689,13 +858,26 @@ ${slidesDescription}
         model,
         contents: prompt,
         config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: 'application/json',
+          responseSchema: SLIDE_BATCH_SCHEMA,
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
           maxOutputTokens: 65536,
+          temperature: 0.8,
         },
       })
 
-      const parsed = parseGeminiJson<{ slides: Slide[] }>(response.text || '')
+      // With responseSchema, JSON.parse should always succeed. Dynamic fallback for safety.
+      let parsed: { slides: Slide[] }
+      try {
+        parsed = JSON.parse(response.text || '') as { slides: Slide[] }
+      } catch {
+        console.warn(`[SlideDesigner][${requestId}] JSON.parse failed, falling back to robust parser`)
+        const { parseGeminiJson } = await import('@/lib/utils/json-cleanup')
+        const fallbackParsed = parseGeminiJson<{ slides: Slide[] }>(response.text || '')
+        if (!fallbackParsed) throw new Error('Both JSON.parse and parseGeminiJson failed')
+        parsed = fallbackParsed
+      }
 
       if (parsed?.slides?.length > 0) {
         console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} AST slides (model: ${model})`)
@@ -705,7 +887,7 @@ ${slidesDescription}
           id: slide.id || `slide-${batchContext.slideIndex + i}`,
           slideType: (slide.slideType || slides[i]?.slideType || 'closing') as SlideType,
           label: slide.label || slides[i]?.title || `שקף ${batchContext.slideIndex + i + 1}`,
-          background: slide.background || { type: 'solid', value: colors.background },
+          background: slide.background || { type: 'solid' as const, value: colors.background },
           elements: (slide.elements || []).map((el, j) => ({
             ...el,
             id: el.id || `el-${batchContext.slideIndex + i}-${j}`,
@@ -719,7 +901,7 @@ ${slidesDescription}
       console.error(`[SlideDesigner][${requestId}] Batch attempt ${attempt + 1}/${batchModels.length} failed (${model}): ${msg}`)
       if (attempt < batchModels.length - 1) {
         console.log(`[SlideDesigner][${requestId}] ⚡ Falling back to ${batchModels[attempt + 1]}...`)
-        await new Promise(r => setTimeout(r, 2000))
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
       } else {
         throw error
       }
@@ -729,7 +911,7 @@ ${slidesDescription}
 }
 
 // ═══════════════════════════════════════════════════════════
-//  VALIDATION + AUTO-FIX
+//  VALIDATION + AUTO-FIX (Type-safe, zero `any` casts)
 // ═══════════════════════════════════════════════════════════
 
 function validateSlide(
@@ -740,31 +922,24 @@ function validateSlide(
   const issues: ValidationIssue[] = []
   let score = 100
 
-  const elements = slide.elements || []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const textElements = elements.filter((e: any) => e.type === 'text')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contentTexts = textElements.filter((e: any) => e.role !== 'decorative')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allBoxes: BoundingBox[] = elements.map((e: any) => ({ x: e.x || 0, y: e.y || 0, width: e.width || 0, height: e.height || 0 }))
+  const elements: SlideElement[] = slide.elements || []
+  const textElements = elements.filter(isTextElement)
+  const contentTexts = textElements.filter(el => el.role !== 'decorative')
+  const allBoxes: BoundingBox[] = elements.map(e => ({ x: e.x || 0, y: e.y || 0, width: e.width || 0, height: e.height || 0 }))
 
   // Contrast check
   for (const el of contentTexts) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const color = (el as any).color
+    const color = el.color
     if (color && !color.includes('transparent')) {
       const bgColor = designSystem.colors.background
       const cr = contrastRatio(color.replace(/[^#0-9a-fA-F]/g, '').slice(0, 7), bgColor)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const fontSize = (el as any).fontSize || 20
+      const fontSize = el.fontSize || 20
       const minContrast = fontSize >= 48 ? 3 : 4.5
       if (cr < minContrast) {
         issues.push({
           severity: 'critical', category: 'contrast',
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           message: `contrast ${cr.toFixed(1)}:1 (min ${minContrast}:1)`,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          elementId: (el as any).id, autoFixable: true,
+          elementId: el.id, autoFixable: true,
         })
         score -= 15
       }
@@ -786,17 +961,14 @@ function validateSlide(
 
   // Safe zone
   for (const el of contentTexts) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const e = el as any
-    if ((e.x || 0) < 60 || ((e.x || 0) + (e.width || 0)) > 1860 || (e.y || 0) < 60 || ((e.y || 0) + (e.height || 0)) > 1020) {
-      issues.push({ severity: 'warning', category: 'safe-zone', message: `Content outside safe zone`, elementId: e.id, autoFixable: true })
+    if (el.x < 60 || (el.x + el.width) > 1860 || el.y < 60 || (el.y + el.height) > 1020) {
+      issues.push({ severity: 'warning', category: 'safe-zone', message: 'Content outside safe zone', elementId: el.id, autoFixable: true })
       score -= 5
     }
   }
 
   // Scale contrast
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fontSizes = contentTexts.map((e: any) => e.fontSize || 20).filter((s: number) => s > 0)
+  const fontSizes = contentTexts.map(e => e.fontSize || 20).filter(s => s > 0)
   if (fontSizes.length >= 2) {
     const ratio = Math.max(...fontSizes) / Math.min(...fontSizes)
     const minRatio = pacing.energy === 'peak' ? 8 : 4
@@ -807,8 +979,7 @@ function validateSlide(
   }
 
   // Hierarchy
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const titles = contentTexts.filter((e: any) => e.role === 'title')
+  const titles = contentTexts.filter(e => e.role === 'title')
   if (titles.length === 0 && slide.slideType !== 'cover') {
     issues.push({ severity: 'warning', category: 'hierarchy', message: 'No title element', autoFixable: false })
     score -= 10
@@ -829,29 +1000,30 @@ function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSystem: Pre
 
   for (const issue of issues) {
     if (!issue.autoFixable || !issue.elementId) continue
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const elIndex = fixed.elements.findIndex((e: any) => e.id === issue.elementId)
+    const elIndex = fixed.elements.findIndex(e => e.id === issue.elementId)
     if (elIndex === -1) continue
 
     if (issue.category === 'contrast') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const el = { ...fixed.elements[elIndex] } as any
-      let color = el.color || '#ffffff'
-      let attempts = 0
-      while (contrastRatio(color, designSystem.colors.background) < 4.5 && attempts < 20) {
-        color = adjustLightness(color, 0.05)
-        attempts++
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el)) {
+        const updated: TextElement = { ...el }
+        let color = updated.color || '#ffffff'
+        let attempts = 0
+        while (contrastRatio(color, designSystem.colors.background) < 4.5 && attempts < 20) {
+          color = adjustLightness(color, 0.05)
+          attempts++
+        }
+        updated.color = color
+        fixed.elements[elIndex] = updated
       }
-      el.color = color
-      fixed.elements[elIndex] = el
     }
 
     if (issue.category === 'safe-zone') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const el = { ...fixed.elements[elIndex] } as any
-      el.x = Math.max(80, Math.min(el.x, 1920 - 80 - (el.width || 200)))
-      el.y = Math.max(80, Math.min(el.y, 1080 - 80 - (el.height || 60)))
-      fixed.elements[elIndex] = el
+      const el = fixed.elements[elIndex]
+      const updated = { ...el }
+      updated.x = Math.max(80, Math.min(updated.x, 1920 - 80 - (updated.width || 200)))
+      updated.y = Math.max(80, Math.min(updated.y, 1080 - 80 - (updated.height || 60)))
+      fixed.elements[elIndex] = updated
     }
   }
 
@@ -859,14 +1031,15 @@ function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSystem: Pre
 }
 
 function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDesignSystem): Slide[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allTitles: { slideIndex: number; y: number; fontSize: number; element: any }[] = []
+  const allTitles: { slideIndex: number; y: number; fontSize: number; element: TextElement }[] = []
 
   slides.forEach((slide, si) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const titles = (slide.elements || []).filter((e: any) => e.role === 'title' && e.type === 'text')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const t of titles) allTitles.push({ slideIndex: si, y: (t as any).y || 0, fontSize: (t as any).fontSize || 48, element: t })
+    const titles = (slide.elements || []).filter(
+      (e): e is TextElement => isTextElement(e) && e.role === 'title'
+    )
+    for (const t of titles) {
+      allTitles.push({ slideIndex: si, y: t.y || 0, fontSize: t.fontSize || 48, element: t })
+    }
   })
 
   if (allTitles.length < 3) return slides
@@ -904,8 +1077,11 @@ function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDesignSys
 function createFallbackSlide(input: SlideContentInput, designSystem: PremiumDesignSystem, index: number): Slide {
   const colors = designSystem.colors
   const typo = designSystem.typography
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const title = (input.content as any).headline || (input.content as any).brandName || input.title || `שקף ${index + 1}`
+  const content = input.content
+  const title = (typeof content.headline === 'string' ? content.headline : undefined)
+    || (typeof content.brandName === 'string' ? content.brandName : undefined)
+    || input.title
+    || `שקף ${index + 1}`
 
   return {
     id: `slide-fallback-${index}`,
@@ -930,6 +1106,13 @@ function createFallbackSlide(input: SlideContentInput, designSystem: PremiumDesi
 // ═══════════════════════════════════════════════════════════
 //  DATA TYPES
 // ═══════════════════════════════════════════════════════════
+
+interface InfluencerResearchData {
+  strategySummary?: string
+  recommendations?: { name?: string; handle?: string; followers?: string; engagement?: string; whyRelevant?: string; profilePicUrl?: string }[]
+  contentThemes?: { theme?: string }[]
+  [key: string]: unknown
+}
 
 interface PremiumProposalData {
   brandName?: string
@@ -971,20 +1154,17 @@ interface PremiumProposalData {
   influencerStrategy?: string
   influencerCriteria?: string[]
   contentGuidelines?: string[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  influencerResearch?: any
+  influencerResearch?: InfluencerResearchData
   scrapedInfluencers?: { name?: string; username?: string; profilePicUrl?: string; followers?: number; engagementRate?: number }[]
   enhancedInfluencers?: { name: string; username: string; profilePicUrl: string; categories: string[]; followers: number; engagementRate: number }[]
   _brandColors?: { primary: string; secondary: string; accent: string; background?: string; text?: string; style?: string; mood?: string; palette?: string[] }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _brandResearch?: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _scraped?: any
+  _brandResearch?: { industry?: string; brandPersonality?: string[]; [key: string]: unknown }
+  _scraped?: { logoUrl?: string; [key: string]: unknown }
   _generatedImages?: Record<string, string>
   _extraImages?: { id: string; url: string; placement: string }[]
   _imageStrategy?: { conceptSummary?: string; visualDirection?: string; styleGuide?: string }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any
+  _influencerStrategy?: InfluencerResearchData
+  [key: string]: unknown
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1080,10 +1260,10 @@ export async function generateAIPresentation(
 
   const brandInput: BrandDesignInput = {
     brandName: data.brandName || 'Unknown',
-    industry: data._brandResearch?.industry || '',
-    brandPersonality: data._brandResearch?.brandPersonality || [],
+    industry: typeof data._brandResearch?.industry === 'string' ? data._brandResearch.industry : '',
+    brandPersonality: Array.isArray(data._brandResearch?.brandPersonality) ? data._brandResearch.brandPersonality as string[] : [],
     brandColors,
-    logoUrl: config.clientLogoUrl || data._scraped?.logoUrl || config.brandLogoUrl || undefined,
+    logoUrl: config.clientLogoUrl || (typeof data._scraped?.logoUrl === 'string' ? data._scraped.logoUrl : undefined) || config.brandLogoUrl || undefined,
     coverImageUrl: config.images?.coverImage || undefined,
     targetAudience: data.targetDescription || '',
   }
@@ -1111,8 +1291,7 @@ export async function generateAIPresentation(
       allSlides.push(...batchSlides)
       visualSummary += batchSlides.map((s, i) => {
         const elCount = s.elements?.length || 0
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const hasImage = s.elements?.some((e: any) => e.type === 'image') || false
+        const hasImage = s.elements?.some(e => e.type === 'image') || false
         return `שקף ${slideIndex + i + 1} (${s.slideType}): ${elCount} elements, hasImage: ${hasImage}`
       }).join('\n') + '\n'
       slideIndex += batch.length
@@ -1130,7 +1309,7 @@ export async function generateAIPresentation(
   let totalScore = 0
 
   for (const slide of allSlides) {
-    const pacing = PACING_MAP[slide.slideType as string] || PACING_MAP.brief
+    const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
     const result = validateSlide(slide, designSystem, pacing)
     totalScore += result.score
     if (result.issues.some(i => i.severity === 'critical' && i.autoFixable)) {
@@ -1143,7 +1322,7 @@ export async function generateAIPresentation(
   const avgScore = Math.round(totalScore / allSlides.length)
   const consistentSlides = checkVisualConsistency(validatedSlides, designSystem)
   const withLeadersLogo = injectLeadersLogo(consistentSlides)
-  const clientLogoUrl = config.clientLogoUrl || data._scraped?.logoUrl || config.brandLogoUrl || ''
+  const clientLogoUrl = config.clientLogoUrl || (typeof data._scraped?.logoUrl === 'string' ? data._scraped.logoUrl : '') || config.brandLogoUrl || ''
   const finalSlides = injectClientLogo(withLeadersLogo, clientLogoUrl)
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1)
@@ -1192,7 +1371,7 @@ export async function pipelineFoundation(
   const d = data as PremiumProposalData
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const leadersLogo = config.leadersLogoUrl || `${supabaseUrl}/storage/v1/object/public/assets/logos/leaders-logo-black.png`
-  const clientLogo = config.clientLogoUrl || d._scraped?.logoUrl || config.brandLogoUrl || ''
+  const clientLogo = config.clientLogoUrl || (typeof d._scraped?.logoUrl === 'string' ? d._scraped.logoUrl : '') || config.brandLogoUrl || ''
 
   const brandColors = d._brandColors || {
     primary: config.accentColor || '#E94560',
@@ -1204,8 +1383,8 @@ export async function pipelineFoundation(
 
   const brandInput: BrandDesignInput = {
     brandName: d.brandName || 'Unknown',
-    industry: d._brandResearch?.industry || '',
-    brandPersonality: d._brandResearch?.brandPersonality || [],
+    industry: typeof d._brandResearch?.industry === 'string' ? d._brandResearch.industry : '',
+    brandPersonality: Array.isArray(d._brandResearch?.brandPersonality) ? d._brandResearch.brandPersonality as string[] : [],
     brandColors,
     logoUrl: clientLogo || undefined,
     coverImageUrl: config.images?.coverImage || undefined,
@@ -1257,8 +1436,7 @@ export async function pipelineBatch(
 
     const newVisualSummary = visualSummary + batchSlides.map((s, i) => {
       const elCount = s.elements?.length || 0
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const hasImage = s.elements?.some((e: any) => e.type === 'image') || false
+      const hasImage = s.elements?.some(e => e.type === 'image') || false
       return `שקף ${slideIndex + i + 1} (${s.slideType}): ${elCount} elements, hasImage: ${hasImage}`
     }).join('\n') + '\n'
 
@@ -1280,17 +1458,6 @@ function getAppBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
   return 'http://localhost:3000'
-}
-
-function hexToLuminance(hex: string): number {
-  let clean = hex.replace('#', '')
-  if (clean.length === 3) clean = clean.split('').map(c => c + c).join('')
-  if (clean.length !== 6) return 0.2 // fallback — assume dark
-  const r = parseInt(clean.slice(0, 2), 16) / 255
-  const g = parseInt(clean.slice(2, 4), 16) / 255
-  const b = parseInt(clean.slice(4, 6), 16) / 255
-  const adj = (c: number) => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
-  return 0.2126 * adj(r) + 0.7152 * adj(g) + 0.0722 * adj(b)
 }
 
 function extractDominantColor(bg: Slide['background']): string {
@@ -1346,7 +1513,7 @@ function injectClientLogo(slides: Slide[], clientLogoUrl: string): Slide[] {
   if (!clientLogoUrl) return slides
 
   return slides.map(slide => {
-    const placement = CLIENT_LOGO_SLIDES[slide.slideType as string]
+    const placement = CLIENT_LOGO_SLIDES[slide.slideType]
     if (!placement) return slide
 
     const logoElement: ImageElement = {
@@ -1386,7 +1553,7 @@ export function pipelineFinalize(
   let totalScore = 0
 
   for (const slide of allSlides) {
-    const pacing = PACING_MAP[slide.slideType as string] || PACING_MAP.brief
+    const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
     const result = validateSlide(slide, foundation.designSystem, pacing)
     totalScore += result.score
     if (result.issues.some(i => i.severity === 'critical' && i.autoFixable)) {

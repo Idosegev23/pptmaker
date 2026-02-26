@@ -147,7 +147,7 @@ export interface ImageElement extends BaseElement {
   border?: string
 }
 
-export type ShapeType = 'rectangle' | 'circle' | 'line' | 'decorative'
+export type ShapeType = 'rectangle' | 'circle' | 'line' | 'decorative' | 'background' | 'divider'
 
 export interface ShapeElement extends BaseElement {
   type: 'shape'
