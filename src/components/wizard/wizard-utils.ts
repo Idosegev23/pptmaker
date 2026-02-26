@@ -256,19 +256,31 @@ export function enrichStepData(
     brandColors: null, // set by research page separately
   }
 
-  // Enrich with brand research (OVERRIDE when research is richer)
+  // ─────────────────────────────────────────────────────────────────────
+  // BRAND RESEARCH enrichment
+  // ─────────────────────────────────────────────────────────────────────
   if (brandResearch) {
-    // Brief: override if research description is longer/richer
+    // ── Brief ──
     if (result.brief) {
-      if (brandResearch.companyDescription && brandResearch.companyDescription.length > (result.brief.brandBrief?.length || 0)) {
+      // Override brandBrief only if research description is richer (longer)
+      if (brandResearch.companyDescription &&
+          brandResearch.companyDescription.length > (result.brief.brandBrief?.length || 0)) {
         result.brief = { ...result.brief, brandBrief: brandResearch.companyDescription }
       }
+      // Pain points: research is always more factual than proposal-agent guesses
       if (brandResearch.targetDemographics?.primaryAudience?.painPoints?.length) {
         result.brief = { ...result.brief, brandPainPoints: toStringArray(brandResearch.targetDemographics.primaryAudience.painPoints) }
       }
+      // Objective: enrich if empty with market positioning context
+      if (!result.brief.brandObjective && brandResearch.marketPosition) {
+        result.brief = {
+          ...result.brief,
+          brandObjective: `לחזק את עמדת ${result.brief.brandName || 'המותג'} כ${brandResearch.marketPosition} באמצעות קמפיין משפיענים ממוקד`,
+        }
+      }
     }
 
-    // Target audience: research is always more detailed than proposal-agent guesses
+    // ── Target Audience ──
     if (result.target_audience) {
       if (brandResearch.targetDemographics?.primaryAudience?.lifestyle) {
         result.target_audience = { ...result.target_audience, targetDescription: brandResearch.targetDemographics.primaryAudience.lifestyle }
@@ -281,26 +293,84 @@ export function enrichStepData(
       }
     }
 
-    // Strategy: override pillars with research content themes
-    if (result.strategy && brandResearch.contentThemes?.length) {
-      result.strategy = {
-        ...result.strategy,
-        strategyPillars: toStringArray(brandResearch.contentThemes).slice(0, 3).map((theme: string) => ({
-          title: theme,
-          description: '',
+    // ── Goals: enrich empty descriptions with USPs from research ──
+    if (result.goals?.goals?.length && brandResearch.uniqueSellingPoints?.length) {
+      const usps = toStringArray(brandResearch.uniqueSellingPoints)
+      result.goals = {
+        ...result.goals,
+        goals: result.goals.goals.map((goal, i) => ({
+          ...goal,
+          // Only fill if description is missing or very short (< 20 chars = placeholder)
+          description: (goal.description && goal.description.length > 20)
+            ? goal.description
+            : (usps[i % usps.length] || goal.description),
         })),
+      }
+    }
+
+    // ── Key Insight: enrich insightData and insightSource from research facts ──
+    if (result.key_insight) {
+      const painPoints = toStringArray(brandResearch.targetDemographics?.primaryAudience?.painPoints || [])
+      // insightData = a real market fact that supports the insight
+      if (!result.key_insight.insightData && painPoints.length) {
+        result.key_insight = { ...result.key_insight, insightData: painPoints[0] }
+      }
+      // insightSource = where the insight comes from (market position / price positioning)
+      if (!result.key_insight.insightSource && brandResearch.marketPosition) {
+        result.key_insight = {
+          ...result.key_insight,
+          insightSource: `ניתוח עמדת שוק: ${brandResearch.marketPosition}`,
+        }
+      }
+    }
+
+    // ── Strategy ──
+    if (result.strategy) {
+      // Enrich description if empty with market context
+      if (!result.strategy.strategyDescription) {
+        const contextParts = [brandResearch.marketPosition, brandResearch.pricePositioning].filter(Boolean)
+        if (contextParts.length) {
+          result.strategy = { ...result.strategy, strategyDescription: contextParts.join('. ') }
+        }
+      }
+      // Enrich pillar DESCRIPTIONS (not titles) with content themes — preserve creative titles
+      if (brandResearch.contentThemes?.length) {
+        const themes = toStringArray(brandResearch.contentThemes)
+        if (result.strategy.strategyPillars?.length) {
+          result.strategy = {
+            ...result.strategy,
+            strategyPillars: result.strategy.strategyPillars.map((pillar, i) => ({
+              ...pillar,
+              // Only fill description if missing or very short
+              description: (pillar.description && pillar.description.length > 10)
+                ? pillar.description
+                : (themes[i] || pillar.description),
+            })),
+          }
+        } else {
+          // No pillars yet — create from themes
+          result.strategy = {
+            ...result.strategy,
+            strategyPillars: themes.slice(0, 3).map(theme => ({ title: theme, description: '' })),
+          }
+        }
       }
     }
   }
 
-  // Enrich with influencer strategy (ALWAYS override — research is real data)
+  // ─────────────────────────────────────────────────────────────────────
+  // INFLUENCER STRATEGY enrichment
+  // ─────────────────────────────────────────────────────────────────────
   if (influencerStrategy) {
+    // ── Influencers ──
     if (result.influencers) {
-      // Always set research recommendations (they're based on actual market analysis)
       if (influencerStrategy.recommendations?.length) {
         result.influencers = {
           ...result.influencers,
-          influencers: influencerStrategy.recommendations.slice(0, 6).map((rec: { name?: string; handle?: string; category?: string; followers?: string; engagement?: string; whyRelevant?: string; contentStyle?: string }) => ({
+          influencers: influencerStrategy.recommendations.slice(0, 6).map((rec: {
+            name?: string; handle?: string; category?: string; followers?: string
+            engagement?: string; whyRelevant?: string; contentStyle?: string
+          }) => ({
             name: rec.name || '',
             username: rec.handle?.replace('@', '') || '',
             profileUrl: rec.handle ? `https://instagram.com/${rec.handle.replace('@', '')}` : '',
@@ -315,27 +385,41 @@ export function enrichStepData(
       if (influencerStrategy.strategySummary) {
         result.influencers = { ...result.influencers, influencerStrategy: influencerStrategy.strategySummary }
       }
+      // Influencer criteria from content themes if not set
+      if (!result.influencers.influencerCriteria?.length && influencerStrategy.contentThemes?.length) {
+        result.influencers = {
+          ...result.influencers,
+          influencerCriteria: toStringArray(influencerStrategy.contentThemes).filter(Boolean),
+        }
+      }
     }
 
-    // Quantities: override with research tiers
+    // ── Quantities: FIX — use recommendedCount (was incorrectly t.count) ──
     if (result.quantities && influencerStrategy.tiers?.length) {
-      const totalFromTiers = influencerStrategy.tiers.reduce((sum: number, t: { count?: number }) => sum + (t.count || 0), 0)
+      const totalFromTiers = influencerStrategy.tiers.reduce(
+        (sum: number, t: { recommendedCount?: number; count?: number }) =>
+          sum + (t.recommendedCount ?? t.count ?? 0),
+        0
+      )
       if (totalFromTiers > 0) {
         result.quantities = { ...result.quantities, influencerCount: totalFromTiers }
       }
     }
 
-    // Media targets: override with KPIs from research
+    // ── Media Targets: FIX — fuzzy Hebrew + English KPI matching (was exact English-only) ──
     if (result.media_targets && influencerStrategy.expectedKPIs?.length) {
       for (const kpi of influencerStrategy.expectedKPIs) {
-        if (kpi.metric === 'Reach' && kpi.target) {
+        if (!kpi.target) continue
+        const m = (kpi.metric || '').toLowerCase()
+        if (m.includes('reach') || m.includes('חשיפה') || m.includes('הגעה')) {
           result.media_targets = { ...result.media_targets, potentialReach: parseNumericTarget(kpi.target) }
-        }
-        if (kpi.metric === 'Engagement' && kpi.target) {
+        } else if (m.includes('engagement') || m.includes('מעורבות') || m.includes('אינגייג')) {
           result.media_targets = { ...result.media_targets, potentialEngagement: parseNumericTarget(kpi.target) }
-        }
-        if (kpi.metric === 'CPE' && kpi.target) {
-          result.media_targets = { ...result.media_targets, cpe: parseFloat(kpi.target) || 0 }
+        } else if (m.includes('cpe') || m.includes('עלות למעורבות') || m.includes('cost per')) {
+          const parsed = parseFloat(kpi.target.replace(/[^0-9.]/g, ''))
+          if (parsed > 0) result.media_targets = { ...result.media_targets, cpe: parsed }
+        } else if (m.includes('impression') || m.includes('חשיפות') || m.includes('נוכחות')) {
+          result.media_targets = { ...result.media_targets, estimatedImpressions: parseNumericTarget(kpi.target) }
         }
       }
     }
