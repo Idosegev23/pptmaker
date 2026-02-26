@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+
+// Emails containing these keywords auto-receive admin role
+const ADMIN_EMAIL_KEYWORDS = ['cto', 'yoav']
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions }
 
@@ -32,6 +36,25 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
+      // Auto-assign admin role for matching emails
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.email) {
+          const emailLower = user.email.toLowerCase()
+          const isAdmin = ADMIN_EMAIL_KEYWORDS.some(kw => emailLower.includes(kw))
+          if (isAdmin) {
+            const serviceClient = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL!,
+              process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            )
+            await serviceClient.from('users').update({ role: 'admin' }).eq('id', user.id)
+            console.log(`[Auth] Auto-promoted ${user.email} to admin`)
+          }
+        }
+      } catch (e) {
+        console.error('[Auth] Admin role check failed:', e)
+      }
+
       return NextResponse.redirect(`${origin}${redirect}`)
     }
   }
