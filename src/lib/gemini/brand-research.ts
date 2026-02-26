@@ -5,14 +5,22 @@
 
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '../utils/json-cleanup'
+import { getConfig } from '../config/admin-config'
+import { PROMPT_DEFAULTS, MODEL_DEFAULTS } from '../config/defaults'
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
 })
 
-const PRO_MODEL = 'gemini-3.1-pro-preview'     // Primary — best reasoning quality
-const FLASH_MODEL = 'gemini-3-flash-preview'   // Fallback when Pro fails/overloaded
+const PRO_MODEL_DEFAULT = MODEL_DEFAULTS['brand_research.primary_model'].value as string
+const FLASH_MODEL_DEFAULT = MODEL_DEFAULTS['brand_research.fallback_model'].value as string
+
+async function getBrandResearchModels(): Promise<string[]> {
+  const primary = await getConfig('ai_models', 'brand_research.primary_model', PRO_MODEL_DEFAULT)
+  const fallback = await getConfig('ai_models', 'brand_research.fallback_model', FLASH_MODEL_DEFAULT)
+  return [primary, fallback]
+}
 
 export interface BrandResearch {
   // Basic Info
@@ -229,17 +237,20 @@ export async function runSingleAgent(
 ): Promise<{ angle: string; data: string }> {
   console.log(`[Research Agent] Starting search for angle: ${angleName}`)
 
-  const prompt = `<role>אתה חוקר מידע עסקי בכיר. השתמש בחיפוש Google כדי למצוא נתונים עדכניים ואמיתיים.</role>
+  // Load prompt template and angle description from admin config
+  const angleConfigMap: Record<string, string> = {
+    'Company & Market Position': 'brand_research.angle_1_company_market',
+    'Target Audience & Consumer': 'brand_research.angle_2_target_audience',
+    'Digital Presence & Campaigns': 'brand_research.angle_3_digital_campaigns',
+    'Israeli Market & Brand Identity': 'brand_research.angle_4_israeli_identity',
+  }
+  const angleKey = angleConfigMap[angleName]
+  const configDescription = angleKey
+    ? (await getConfig('ai_prompts', angleKey, (PROMPT_DEFAULTS as Record<string, { value: unknown }>)[angleKey]?.value as string || angleDescription)).replace(/\{brandName\}/g, brandName)
+    : angleDescription
 
-<context>מותג לחקירה: "${brandName}"</context>
-
-${angleDescription}
-
-<output_format>
-- סכם בפסקאות מפורטות עם נתונים מספריים, שמות ספציפיים וציטוטים.
-- ציין URLs של מקורות בסוף.
-- אם לא מצאת מידע — כתוב "לא נמצא מידע ברשת".
-</output_format>`
+  const agentTemplate = await getConfig('ai_prompts', 'brand_research.agent_prompt_template', PROMPT_DEFAULTS['brand_research.agent_prompt_template'].value as string)
+  const prompt = agentTemplate.replace(/\{brandName\}/g, brandName).replace(/\{angleDescription\}/g, configDescription)
 
   const callAgent = async (model: string) => {
     const response = await ai.models.generateContent({
@@ -254,8 +265,8 @@ ${angleDescription}
     return response.text || `לא נאסף מידע עבור: ${angleName}`
   }
 
-  // Flash first (fast + cheap), Pro fallback if Flash fails
-  const models = [PRO_MODEL, FLASH_MODEL]
+  // Primary model first, fallback if it fails
+  const models = await getBrandResearchModels()
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -393,8 +404,8 @@ ${websiteContext}
 \`\`\`
 `
 
-  // Try Pro first, fallback to Flash if overloaded
-  const synthModels = [PRO_MODEL, FLASH_MODEL]
+  // Try primary model first, fallback if overloaded
+  const synthModels = await getBrandResearchModels()
   for (let attempt = 0; attempt < synthModels.length; attempt++) {
     const model = synthModels[attempt]
     try {
@@ -549,8 +560,9 @@ export async function quickBrandSummary(brandName: string): Promise<{
 `
 
   try {
+    const [primaryModel] = await getBrandResearchModels()
     const response = await ai.models.generateContent({
-      model: PRO_MODEL,
+      model: primaryModel,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],

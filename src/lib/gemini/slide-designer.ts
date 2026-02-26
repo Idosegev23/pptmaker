@@ -30,8 +30,14 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 },
 })
-const PRO_MODEL = 'gemini-3.1-pro-preview'     // Primary — best reasoning quality
-const FLASH_MODEL = 'gemini-3-flash-preview'   // Fallback when Pro fails/overloaded
+const PRO_MODEL_DEFAULT = 'gemini-3.1-pro-preview'
+const FLASH_MODEL_DEFAULT = 'gemini-3-flash-preview'
+
+async function getSlideDesignerModels(): Promise<string[]> {
+  const primary = await getConfig('ai_models', 'slide_designer.primary_model', PRO_MODEL_DEFAULT)
+  const fallback = await getConfig('ai_models', 'slide_designer.fallback_model', FLASH_MODEL_DEFAULT)
+  return [primary, fallback]
+}
 
 // ─── System Instruction (shared persona) ─────────────────
 
@@ -565,7 +571,7 @@ async function generateDesignSystem(
 
   // Flash first (fast + no 503), Pro fallback with exponential backoff
   const sysInstruction = await getSystemInstruction()
-  const models = [PRO_MODEL, FLASH_MODEL]
+  const models = await getSlideDesignerModels()
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -857,7 +863,7 @@ ${slidesDescription}
 
   // Flash first (fast + cheap), Pro fallback with exponential backoff
   const batchSysInstruction = await getSystemInstruction()
-  const batchModels = [PRO_MODEL, FLASH_MODEL]
+  const batchModels = await getSlideDesignerModels()
   for (let attempt = 0; attempt < batchModels.length; attempt++) {
     const model = batchModels[attempt]
     try {

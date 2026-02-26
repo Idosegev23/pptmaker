@@ -360,6 +360,19 @@ export const MODEL_DEFAULTS = {
     value_type: 'text' as const,
     group: 'AI Assist',
   },
+
+  'creative_enhancer.primary_model': {
+    value: 'gemini-3.1-pro-preview',
+    description: 'מודל ראשי — משפר קריאייטיב',
+    value_type: 'text' as const,
+    group: 'משפר קריאייטיב',
+  },
+  'creative_enhancer.fallback_model': {
+    value: 'gemini-3-flash-preview',
+    description: 'מודל גיבוי — משפר קריאייטיב',
+    value_type: 'text' as const,
+    group: 'משפר קריאייטיב',
+  },
 } satisfies Record<string, ConfigDefault>
 
 // ═══════════════════════════════════════════════════════════

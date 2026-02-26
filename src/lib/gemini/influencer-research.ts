@@ -6,14 +6,22 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { BrandResearch } from './brand-research'
 import { parseGeminiJson } from '../utils/json-cleanup'
+import { getConfig } from '../config/admin-config'
+import { PROMPT_DEFAULTS, MODEL_DEFAULTS } from '../config/defaults'
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
 })
 
-const PRO_MODEL = 'gemini-3.1-pro-preview'     // Primary — best reasoning quality
-const FLASH_MODEL = 'gemini-3-flash-preview'   // Fallback when Pro fails/overloaded
+const PRO_MODEL_DEFAULT = MODEL_DEFAULTS['influencer_research.primary_model'].value as string
+const FLASH_MODEL_DEFAULT = MODEL_DEFAULTS['influencer_research.fallback_model'].value as string
+
+async function getInfluencerModels(): Promise<string[]> {
+  const primary = await getConfig('ai_models', 'influencer_research.primary_model', PRO_MODEL_DEFAULT)
+  const fallback = await getConfig('ai_models', 'influencer_research.fallback_model', FLASH_MODEL_DEFAULT)
+  return [primary, fallback]
+}
 
 export interface InfluencerRecommendation {
   name: string
@@ -91,8 +99,11 @@ export async function researchInfluencers(
 ): Promise<InfluencerStrategy> {
   console.log(`[Influencer Research] Starting research for ${brandResearch.brandName} with budget ${budget} ILS`)
   
+  const systemPrompt = await getConfig('ai_prompts', 'influencer_research.system_prompt', PROMPT_DEFAULTS['influencer_research.system_prompt'].value as string)
+  const criticalRules = await getConfig('ai_prompts', 'influencer_research.critical_rules', PROMPT_DEFAULTS['influencer_research.critical_rules'].value as string)
+
   const prompt = `
-אתה מנהל שיווק משפיענים בכיר בישראל. בנה אסטרטגיית משפיענים קפדנית המבוססת על נתוני אמת.
+${systemPrompt}
 
 ## פרטי המותג והקמפיין:
 - שם המותג: ${brandResearch.brandName}
@@ -106,13 +117,7 @@ export async function researchInfluencers(
 - תקציב פנוי: ${budget.toLocaleString()} ש"ח
 - מטרות הקמפיין: ${goals.join(', ')}
 
-## הנחיות קריטיות למחקר:
-1. **השתמש בחיפוש גוגל כדי לאמת משפיענים ישראלים אמיתיים** — עם קהל ישראלי ממשי (לפחות 70%+ עוקבים ישראלים). בשום פנים ואופן אל תמציא שמות או Handles (@).
-2. הצע שכבות פעולה (Tiers) **שמותאמות ריאלית לתקציב**.
-3. הערך עלויות ריאליסטיות בשוק הישראלי.
-4. **בדוק** (דרך חיפוש) האם המשפיעני פרסמו תכנים ממומנים עבור מתחרי המותג. סמן כ-⚠️ אם כן.
-5. הגדר KPIs שגוזרים משמעות כמותית מהתקציב.
-6. לכל המלצת משפיען — ציין באיזה פורמט הוא הכי חזק (Reels/Stories/TikTok/Posts).
+${criticalRules}
 
 ## פורמט תגובה:
 החזר **אך ורק** אובייקט JSON חוקי לפי המבנה הבא (ללא טקסט מקדים או סיומת):
@@ -202,8 +207,8 @@ export async function researchInfluencers(
     return response.text || ''
   }
 
-  // Attempt 1: Pro model, Attempt 2: Flash fallback (handles Pro overload / rate limits)
-  const models = [PRO_MODEL, FLASH_MODEL]
+  // Primary model first, fallback if it fails
+  const models = await getInfluencerModels()
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -262,8 +267,9 @@ export async function getQuickInfluencerSuggestions(
 `
 
   try {
+    const [primaryModel] = await getInfluencerModels()
     const response = await ai.models.generateContent({
-      model: PRO_MODEL,
+      model: primaryModel,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],

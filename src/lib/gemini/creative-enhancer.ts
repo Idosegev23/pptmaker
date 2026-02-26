@@ -6,6 +6,8 @@
 
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '../utils/json-cleanup'
+import { getConfig } from '../config/admin-config'
+import { MODEL_DEFAULTS } from '../config/defaults'
 import type { BrandResearch } from './brand-research'
 import type { CreativeStepData } from '@/types/wizard'
 
@@ -13,8 +15,14 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 },
 })
-const PRO_MODEL = 'gemini-3.1-pro-preview'     // Primary — best reasoning quality
-const FLASH_MODEL = 'gemini-3-flash-preview'   // Fallback when Pro fails/overloaded
+const PRO_MODEL_DEFAULT = MODEL_DEFAULTS['creative_enhancer.primary_model'].value as string
+const FLASH_MODEL_DEFAULT = MODEL_DEFAULTS['creative_enhancer.fallback_model'].value as string
+
+async function getCreativeModels(): Promise<string[]> {
+  const primary = await getConfig('ai_models', 'creative_enhancer.primary_model', PRO_MODEL_DEFAULT)
+  const fallback = await getConfig('ai_models', 'creative_enhancer.fallback_model', FLASH_MODEL_DEFAULT)
+  return [primary, fallback]
+}
 
 /**
  * Enhance a creative concept with competitive intelligence from brand research.
@@ -113,8 +121,8 @@ ${(brandResearch as any).israeliMarketContext || 'לא נמצא'}
 \`\`\`
 `
 
-  // Flash first (fast + cheap), Pro fallback
-  const models = [PRO_MODEL, FLASH_MODEL]
+  // Primary model first, fallback if it fails
+  const models = await getCreativeModels()
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
