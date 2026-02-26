@@ -192,7 +192,7 @@ export async function researchInfluencers(
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }], // Added only strictly supported Google tools
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
       }
     })
 
@@ -248,7 +248,7 @@ export async function getQuickInfluencerSuggestions(
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
       }
     })
 

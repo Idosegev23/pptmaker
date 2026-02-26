@@ -210,22 +210,17 @@ ${angleDescription}
 5. אם לא מצאת מידע כלל על נושא מסוים, ציין במפורש "לא מצאתי מידע על כך ברשת".
   `
 
-  const TIMEOUT_MS = 90_000
-  const searchPromise = ai.models.generateContent({
-    model: AGENT_MODEL,
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }],
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-    },
-  }).then(r => ({ angle: angleName, data: r.text || `לא נאסף מידע עבור: ${angleName}` }))
-
-  const timeoutPromise = new Promise<{ angle: string; data: string }>((_, reject) =>
-    setTimeout(() => reject(new Error('Agent timeout')), TIMEOUT_MS)
-  )
-
+  // No internal timeout — each agent runs in its own Lambda with maxDuration=600
   try {
-    return await Promise.race([searchPromise, timeoutPromise])
+    const response = await ai.models.generateContent({
+      model: AGENT_MODEL,
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      },
+    })
+    return { angle: angleName, data: response.text || `לא נאסף מידע עבור: ${angleName}` }
   } catch (error) {
     console.error(`[Research Agent Error] Failed to gather data for angle: ${angleName}`, error)
     return { angle: angleName, data: `שגיאה באיסוף מידע.` }
