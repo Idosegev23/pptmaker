@@ -17,8 +17,8 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 },
 })
-const MODEL = 'gemini-3.1-pro-preview'
-const FLASH_MODEL = 'gemini-3-flash-preview' // Fallback when Pro is overloaded
+const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast, cheap, ThinkingLevel handles complexity
+const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
 
 export interface ProposalOutput {
   extracted: ExtractedBriefData
@@ -105,102 +105,54 @@ export async function generateProposal(
   const prompt = buildProposalPrompt(clientBriefText, kickoffText, brandResearch, influencerStrategy)
   console.log(`[${agentId}] 📝 Prompt length: ${prompt.length} chars, hasResearch=${!!brandResearch}`)
 
-  try {
-    console.log(`[${agentId}] 🔄 Calling ${MODEL} with LOW thinking + JSON...`)
-    const geminiStart = Date.now()
-
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      },
-    })
-
-    const geminiTime = Date.now() - geminiStart
-    const text = response.text || ''
-    console.log(`[${agentId}] ✅ Gemini responded in ${geminiTime}ms`)
-    console.log(`[${agentId}] 📊 Response size: ${text.length} chars`)
-
-    if (!text) {
-      throw new Error('Gemini returned empty response')
-    }
-
-    console.log(`[${agentId}] 🔄 Parsing JSON...`)
-    const raw = parseGeminiJson<RawProposalResponse>(text)
-
-    // Normalize the response into ProposalOutput
-    const result = normalizeResponse(raw, !!kickoffText, agentId)
-
-    console.log(`[${agentId}] ✅ Proposal generated successfully`)
-    logProposalSummary(result, agentId)
-    console.log(`[${agentId}] ⏱️ TOTAL TIME: ${Date.now() - startTime}ms`)
-
-    return result
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error)
-    console.error(`[${agentId}] ❌ First attempt failed: ${errMsg}`)
-
-    if (errMsg.includes('קצר מדי')) throw error
-
-    // Retry without JSON mime type constraint
+  // Flash first (fast + cheap), Pro fallback
+  const models = [FLASH_MODEL, PRO_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
     try {
-      console.log(`[${agentId}] 🔄 RETRY without responseMimeType...`)
-      const retryStart = Date.now()
+      console.log(`[${agentId}] 🔄 Calling ${model} (attempt ${attempt + 1}/${models.length})...`)
+      const geminiStart = Date.now()
 
       const response = await ai.models.generateContent({
-        model: MODEL,
+        model,
         contents: prompt,
         config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
         },
       })
 
       const text = response.text || ''
-      console.log(`[${agentId}] ✅ Retry responded in ${Date.now() - retryStart}ms (${text.length} chars)`)
+      console.log(`[${agentId}] ✅ Gemini responded in ${Date.now() - geminiStart}ms (${model})`)
+      console.log(`[${agentId}] 📊 Response size: ${text.length} chars`)
 
-      if (!text) throw new Error('Empty response on retry')
+      if (!text) throw new Error('Gemini returned empty response')
 
       const raw = parseGeminiJson<RawProposalResponse>(text)
       const result = normalizeResponse(raw, !!kickoffText, agentId)
 
-      console.log(`[${agentId}] ✅ Retry succeeded`)
+      console.log(`[${agentId}] ✅ Proposal generated successfully`)
+      if (attempt > 0) console.log(`[${agentId}] ✅ Succeeded with fallback model (${model})`)
       logProposalSummary(result, agentId)
-      console.log(`[${agentId}] ⏱️ TOTAL TIME (with retry): ${Date.now() - startTime}ms`)
+      console.log(`[${agentId}] ⏱️ TOTAL TIME: ${Date.now() - startTime}ms`)
 
       return result
-    } catch (retryErr) {
-      const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
-      console.error(`[${agentId}] ❌ Retry also failed: ${retryMsg}`)
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error)
+      console.error(`[${agentId}] ❌ Attempt ${attempt + 1}/${models.length} failed (${model}): ${errMsg}`)
 
-      // Last resort: try Flash model
-      try {
-        console.log(`[${agentId}] ⚡ Last resort: trying ${FLASH_MODEL}...`)
-        const flashStart = Date.now()
-        const response = await ai.models.generateContent({
-          model: FLASH_MODEL,
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          },
-        })
-        const text = response.text || ''
-        if (!text) throw new Error('Empty Flash response')
-        const raw = parseGeminiJson<RawProposalResponse>(text)
-        const result = normalizeResponse(raw, !!kickoffText, agentId)
-        console.log(`[${agentId}] ✅ Flash model succeeded in ${Date.now() - flashStart}ms`)
-        logProposalSummary(result, agentId)
-        return result
-      } catch (flashErr) {
-        const flashMsg = flashErr instanceof Error ? flashErr.message : String(flashErr)
-        console.error(`[${agentId}] ❌ Flash also failed: ${flashMsg}`)
+      if (errMsg.includes('קצר מדי')) throw error
+
+      if (attempt < models.length - 1) {
+        console.log(`[${agentId}] ⚡ Falling back to ${models[attempt + 1]}...`)
+        await new Promise(r => setTimeout(r, 2000))
+      } else {
         console.error(`[${agentId}] ⏱️ TOTAL TIME (all failed): ${Date.now() - startTime}ms`)
-        throw new Error(`שגיאה בעיבוד המסמכים: ${retryMsg}`)
+        throw new Error(`שגיאה בעיבוד המסמכים: ${errMsg}`)
       }
     }
   }
+  throw new Error('שגיאה בעיבוד המסמכים')
 }
 
 // ============================================================

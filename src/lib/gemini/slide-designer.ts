@@ -26,8 +26,8 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 },
 })
-const MODEL = 'gemini-3.1-pro-preview'
-const FLASH_MODEL = 'gemini-3-flash-preview'
+const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast, cheap, ThinkingLevel.HIGH handles complexity
+const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
 
 // ─── Types ─────────────────────────────────────────────
 
@@ -426,8 +426,8 @@ async function generateDesignSystem(
 
 פונט: Heebo. החזר JSON בלבד עם שני חלקים: creativeDirection (object) + כל שאר שדות ה-Design System.`
 
-  // Pro first (quality matters for design), Flash fallback
-  const models = [MODEL, FLASH_MODEL]
+  // Flash first (fast + cheap), Pro fallback
+  const models = [FLASH_MODEL, PRO_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -700,8 +700,8 @@ ${slidesDescription}
 
 החזר JSON: { "slides": [{ "id": "slide-N", "slideType": "TYPE", "label": "שם בעברית", "background": { "type": "solid"|"gradient", "value": "..." }, "elements": [...] }] }`
 
-  // Pro first (quality matters for slides), Flash fallback
-  const batchModels = [MODEL, FLASH_MODEL]
+  // Flash first (fast + cheap), Pro fallback
+  const batchModels = [FLASH_MODEL, PRO_MODEL]
   for (let attempt = 0; attempt < batchModels.length; attempt++) {
     const model = batchModels[attempt]
     try {
