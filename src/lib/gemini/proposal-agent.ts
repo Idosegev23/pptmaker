@@ -15,6 +15,7 @@ import type { WizardStepDataMap } from '@/types/wizard'
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 const MODEL = 'gemini-3.1-pro-preview'
+const FLASH_MODEL = 'gemini-3-flash-preview' // Fast + cheap for extraction tasks
 
 export interface ProposalOutput {
   extracted: ExtractedBriefData
@@ -61,13 +62,13 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
 
   try {
     const response = await ai.models.generateContent({
-      model: MODEL,
+      model: FLASH_MODEL,
       contents: prompt,
       config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 2000 },
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const extracted = parseGeminiJson<any>(response.text || '{}')
-    console.log(`[${agentId}] ✅ Extraction done. Brand: ${extracted?.brand?.name || 'N/A'}`)
+    console.log(`[${agentId}] ✅ Extraction done (Flash). Brand: ${extracted?.brand?.name || 'N/A'}`)
     return extracted
   } catch (err) {
     console.error(`[${agentId}] ❌ Extraction failed:`, err)

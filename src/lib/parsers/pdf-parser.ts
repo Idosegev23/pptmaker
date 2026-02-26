@@ -15,7 +15,7 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
 }
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const MODEL = 'gemini-3.1-pro-preview'
+const MODEL = 'gemini-3-flash-preview' // Fast OCR — no need for Pro reasoning
 
 /**
  * Parse PDF: fast text extraction with pdf-parse → fallback to Gemini Vision for scanned/garbled PDFs.
