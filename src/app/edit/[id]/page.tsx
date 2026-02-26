@@ -47,6 +47,8 @@ export default function PresentationEditorPage() {
   const [aiRewriteState, setAiRewriteState] = useState<{ elementId: string; loading: boolean } | null>(null)
   const [aiDesignInstruction, setAiDesignInstruction] = useState('')
   const [isRegenerating, setIsRegenerating] = useState(false)
+  const [gridVisible, setGridVisible] = useState(false)
+  const [snapToGrid, setSnapToGrid] = useState(false)
 
   const editor = usePresentationEditor(EMPTY_PRESENTATION)
   const slideContainerRef = useRef<HTMLDivElement>(null)
@@ -148,7 +150,7 @@ export default function PresentationEditorPage() {
     }
   }, [editor.selectedSlideIndex])
 
-  // ─── Keyboard shortcuts (undo/redo) ──────────────────
+  // ─── Keyboard shortcuts (undo/redo, grid toggle) ─────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
@@ -157,6 +159,14 @@ export default function PresentationEditorPage() {
           editor.redo()
         } else {
           editor.undo()
+        }
+      }
+      // G — toggle grid (only when not typing in an input)
+      if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const tag = (e.target as HTMLElement)?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !(e.target as HTMLElement)?.isContentEditable) {
+          e.preventDefault()
+          setGridVisible(prev => !prev)
         }
       }
     }
@@ -520,6 +530,10 @@ export default function PresentationEditorPage() {
         onDuplicate={handleDuplicateElement}
         onDelete={handleDeleteElement}
         selectedElement={editor.selectedElement}
+        gridVisible={gridVisible}
+        onToggleGrid={() => setGridVisible(prev => !prev)}
+        snapToGrid={snapToGrid}
+        onToggleSnap={() => setSnapToGrid(prev => !prev)}
       />
 
       {/* ── Main content ─────────────────────────────── */}
@@ -610,6 +624,8 @@ export default function PresentationEditorPage() {
                 onElementUpdate={editor.updateElement}
                 onElementDelete={editor.deleteElement}
                 onDuplicateElement={editor.duplicateElement}
+                gridVisible={gridVisible}
+                snapToGrid={snapToGrid}
               />
             </div>
           )}

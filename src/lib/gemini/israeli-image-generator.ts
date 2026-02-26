@@ -54,7 +54,7 @@ async function generateWithRetry(
 ): Promise<Buffer | null> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`[Israeli Image] Attempt ${attempt}/${MAX_RETRIES} with generateContent${logoBuffer ? ' (with logo ref)' : ''}`)
+      console.log(`[Israeli Image] Attempt ${attempt}/${MAX_RETRIES} | Model: ${IMAGE_MODEL} | generateContent${logoBuffer ? ' (with logo ref)' : ''}`)
 
       // Build contents: text prompt + optional logo as reference image
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,6 +74,7 @@ async function generateWithRetry(
         contents.push({ text: prompt })
       }
 
+      const callStart = Date.now()
       const response = await ai.models.generateContent({
         model: IMAGE_MODEL,
         contents,
@@ -85,14 +86,27 @@ async function generateWithRetry(
           },
         },
       })
+      const callDuration = ((Date.now() - callStart) / 1000).toFixed(1)
 
       // Extract image from response parts
       const parts = response.candidates?.[0]?.content?.parts
+      const candidateCount = response.candidates?.length || 0
+      const partCount = parts?.length || 0
+      const hasImage = parts?.some(p => !!p.inlineData?.data) || false
+      const hasText = parts?.some(p => !!p.text) || false
+      console.log(`[Israeli Image] Response in ${callDuration}s: ${candidateCount} candidates, ${partCount} parts, hasImage=${hasImage}, hasText=${hasText}`)
+
+      if (hasText && !hasImage) {
+        const textContent = parts?.find(p => p.text)?.text?.slice(0, 200)
+        console.log(`[Israeli Image] Model returned text instead of image: "${textContent}"`)
+      }
+
       if (parts) {
         for (const part of parts) {
           const inlineData = part.inlineData
           if (inlineData?.data) {
-            console.log(`[Israeli Image] Success on attempt ${attempt}`)
+            const sizeKb = Math.round(Buffer.from(inlineData.data, 'base64').length / 1024)
+            console.log(`[Israeli Image] Success on attempt ${attempt} (${sizeKb}KB)`)
             return Buffer.from(inlineData.data, 'base64')
           }
         }
@@ -490,7 +504,14 @@ export async function generateSmartImages(
   
   // Filter out nulls
   const images = results.filter((img): img is SmartGeneratedImage => img !== null)
-  console.log(`[Smart Image] Generated ${images.length}/${sortedPrompts.length} images`)
+  const succeeded = images.length
+  const failed = sortedPrompts.length - succeeded
+  console.log(`[Smart Image] Generation complete: ${succeeded} succeeded, ${failed} failed out of ${sortedPrompts.length} total`)
+  for (let i = 0; i < sortedPrompts.length; i++) {
+    const sp = sortedPrompts[i]
+    const ok = results[i] !== null
+    console.log(`[Smart Image]   ${ok ? 'OK' : 'FAIL'} — ${sp.imageId} (${sp.priority}, ${sp.placement})`)
+  }
   
   // Create legacy mapping for backward compatibility
   const legacyMapping: SmartImageSet['legacyMapping'] = {}

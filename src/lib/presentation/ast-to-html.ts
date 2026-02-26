@@ -42,6 +42,7 @@ function renderBackground(bg: Slide['background']): string {
 function renderTextElement(el: TextElement, defaultFont: string): string {
   const isGradientText = !!el.gradientFill
   const fontFamily = el.fontFamily || defaultFont || 'Heebo'
+  const overflowVisible = ['title', 'subtitle', 'decorative'].includes(el.role || '')
   const styles = [
     `position: absolute`,
     `left: ${el.x}px`,
@@ -55,7 +56,7 @@ function renderTextElement(el: TextElement, defaultFont: string): string {
     `text-align: ${el.textAlign}`,
     `white-space: pre-wrap`,
     `word-wrap: break-word`,
-    `overflow: hidden`,
+    `overflow: ${overflowVisible ? 'visible' : 'hidden'}`,
     `direction: rtl`,
     `font-family: '${fontFamily}', sans-serif`,
   ]

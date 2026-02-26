@@ -106,6 +106,7 @@ export type TextRole =
   | 'subtitle'
   | 'body'
   | 'caption'
+  | 'label'
   | 'metric-value'
   | 'metric-label'
   | 'list-item'

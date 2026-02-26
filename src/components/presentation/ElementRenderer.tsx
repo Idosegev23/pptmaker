@@ -23,6 +23,7 @@ function TextElementView({ element, isEditing, onTextChange }: {
   onTextChange?: (content: string) => void
 }) {
   const isGradientText = !!element.gradientFill
+  const overflowVisible = ['title', 'subtitle', 'decorative'].includes(element.role || '')
 
   // Dynamically load custom font if specified
   useEffect(() => {
@@ -55,7 +56,7 @@ function TextElementView({ element, isEditing, onTextChange }: {
     fontFamily: `'${fontFamily}', sans-serif`,
     whiteSpace: 'pre-wrap',
     wordWrap: 'break-word',
-    overflow: 'hidden',
+    overflow: overflowVisible ? 'visible' : 'hidden',
     direction: 'rtl',
     backgroundColor: element.backgroundColor || undefined,
     borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,

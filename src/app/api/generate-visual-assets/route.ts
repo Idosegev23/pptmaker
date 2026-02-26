@@ -271,6 +271,7 @@ export async function POST(request: NextRequest) {
     } : undefined
 
     try {
+      console.log(`[Visual Assets][${requestId}] Calling generateSmartImages | Model: gemini-3-pro-image-preview | brand=${brandName}, hasLogo=${!!logoUrl}, hasBrandColors=${!!brandColors}`)
       // Pass logoUrl so Gemini integrates client logo natively into generated images
       const smartImageSet = await generateSmartImages(
         researchForImages,

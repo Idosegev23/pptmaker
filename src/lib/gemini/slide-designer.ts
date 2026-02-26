@@ -156,76 +156,24 @@ const PACING_MAP: Record<string, PacingDirective> = {
   closing:   { energy: 'finale', density: 'minimal', surprise: true, maxElements: 8, minWhitespace: 45 },
 }
 
-// ─── Anti-Patterns Blacklist ──────────────────────────
+// ─── Anti-Patterns (condensed) ──────────────────────────
 const ANTI_PATTERNS = `
-## ❌ דפוסים אסורים (Anti-Patterns) — הפרה = פסילה:
-1. ❌ טקסט ממורכז בדיוק באמצע המסך (x:960, y:540) — BORING
-2. ❌ כל האלמנטים מיושרים לאותו קו אנכי — שטוח ומת
-3. ❌ 3 כרטיסים זהים ברוחב שווה בשורה — PowerPoint גנרי
-4. ❌ gradient ליניארי פשוט (שמאל→ימין או למעלה→למטה) — 2015
-5. ❌ עיגול מאחורי טקסט כ"הדגשה" — קלישאה
-6. ❌ borderRadius: 8 על הכל — זה UI, לא editorial design
-7. ❌ אייקונים קטנים ליד כל bullet point — PowerPoint vibes
-8. ❌ כל הטקסטים באותו fontSize (למשל הכל 24px) — אין היררכיה
-9. ❌ יותר מ-3 צבעים שונים לטקסט באותו שקף — בלגן
-10. ❌ אלמנטים שממוקמים "בערך" — כל מיקום חייב להיות מכוון ומדויק
-11. ❌ opacity: 0.5 על טקסט קריא — חייב להיות readable
-12. ❌ rotation על body text — רק על דקורטיבי/watermark
+❌ אסור: טקסט ממורכז במרכז המסך | 3 כרטיסים זהים בשורה | כל הfonts באותו גודל | gradient ליניארי פשוט | rotation על body text | opacity < 0.7 על טקסט קריא
 `
 
-// ─── Depth Layering System ───────────────────────────
+// ─── Depth Layering (condensed) ───────────────────────
 const DEPTH_LAYERS = `
-## שכבות עומק (Depth Layers) — כל אלמנט חייב לשבת בשכבה אחת:
-- Layer 0 (zIndex: 0-1):    BACKGROUND — aurora, gradient, texture, full-bleed color
-- Layer 1 (zIndex: 2-3):    DECORATIVE — watermark text, geometric shapes, motif patterns, thin architectural lines
-- Layer 2 (zIndex: 4-5):    STRUCTURE — cards, containers, dividers, image frames
-- Layer 3 (zIndex: 6-8):    CONTENT — body text, data, images, influencer cards
-- Layer 4 (zIndex: 9-10):   HERO — main title, key number, focal element, brand name
-
-חוק: אלמנטים מאותה שכבה לא חופפים (אלא אם אחד מהם decorative עם opacity < 0.3).
+zIndex: 0-1=BG(gradient/aurora) | 2-3=DECOR(watermark,shapes) | 4-5=STRUCTURE(cards,dividers) | 6-8=CONTENT(text,data,images) | 9-10=HERO(title,key number)
 `
 
-// ─── Composition Rules ───────────────────────────────
+// ─── Composition Rules (condensed) ────────────────────
 const COMPOSITION_RULES = `
-## חוקי קומפוזיציה (Composition Rules):
-
-### Rule of Thirds:
-נקודות העניין הויזואליות חייבות לשבת על אחד מ-4 צמתי ⅓:
-- נקודה A: x=640, y=360
-- נקודה B: x=1280, y=360
-- נקודה C: x=640, y=720
-- נקודה D: x=1280, y=720
-הכותרת הראשית תמיד על נקודה A או B (צד ימין — RTL).
-
-### Diagonal Dominance:
-אלמנטים צריכים ליצור קו אלכסוני מנחה דינמי (מימין-למעלה לשמאל-למטה) — לא ישר ולא סטטי.
-
-### Focal Point Triangle:
-ב-3 האלמנטים הראשיים (title, visual, supporting) — מקמם אותם כמשולש שמקיף את מרכז העניין.
-
-### Scale Contrast (חובה):
-היחס בין הפונט הגדול ביותר לפונט הקטן ביותר בשקף חייב להיות לפחות 5:1.
-למשל: אם הכותרת 96px, caption צריך להיות 18px או פחות.
-שקפי peak (cover, insight, bigIdea, closing): יחס 10:1 לפחות (למשל 300px ו-18px).
+- Rule of Thirds: focal points at (640,360), (1280,360), (640,720), (1280,720). Title on right ⅓ (RTL)
+- Scale Contrast: max font / min font ≥ 5:1 (peak slides: ≥ 10:1)
+- 80px+ clear space around main title
+- Diagonal flow: right-top → left-bottom, never static/centered
+- 3 main elements form a triangle around the focal point
 `
-
-// ─── Layout Techniques Palette ────────────────────────
-const LAYOUT_TECHNIQUES = [
-  'Typographic Brutalism',
-  'Editorial Bleed',
-  'Bento Box',
-  'Swiss Grid',
-  'Deconstructed Collage',
-  'Cinematic Widescreen',
-  'Kinetic Typography (frozen)',
-  'Data Art',
-  'Negative Space Dominance',
-  'Split Screen Asymmetry',
-  'Overlay Chaos (controlled)',
-  'Magazine Spread',
-  'Architectural Grid',
-  'Poster Style (single focal)',
-] as const
 
 // ─── Color Temperature ────────────────────────────────
 const TEMPERATURE_MAP: Record<string, 'cold' | 'neutral' | 'warm'> = {
@@ -424,7 +372,19 @@ async function generateDesignSystem(
 - type: (diagonal-lines / dots / circles / angular-cuts / wave / grid-lines / organic-blobs / triangles)
 - opacity: 0.05-0.2, color: צבע, implementation: תיאור CSS
 
-פונט: Heebo. החזר JSON בלבד עם שני חלקים: creativeDirection (object) + כל שאר שדות ה-Design System.`
+פונט: Heebo. החזר JSON בלבד במבנה הבא (flat, לא nested):
+
+{
+  "creativeDirection": { "visualMetaphor": "...", "visualTension": "...", "oneRule": "...", "colorStory": "...", "typographyVoice": "...", "emotionalArc": "..." },
+  "colors": { "primary": "#...", "secondary": "#...", "accent": "#...", "background": "#0a0a12", "text": "#f0f0f5", "cardBg": "#...", "cardBorder": "#...", "gradientStart": "#...", "gradientEnd": "#...", "muted": "#...", "highlight": "#...", "auroraA": "#...50", "auroraB": "#...50", "auroraC": "#...60" },
+  "fonts": { "heading": "Heebo", "body": "Heebo" },
+  "typography": { "displaySize": 104, "headingSize": 56, "subheadingSize": 32, "bodySize": 22, "captionSize": 15, "letterSpacingTight": -3, "letterSpacingWide": 5, "lineHeightTight": 1.0, "lineHeightRelaxed": 1.5, "weightPairs": [[800, 400]] },
+  "spacing": { "unit": 8, "cardPadding": 40, "cardGap": 32, "safeMargin": 80 },
+  "effects": { "borderRadius": "soft", "borderRadiusValue": 16, "decorativeStyle": "geometric", "shadowStyle": "none", "auroraGradient": "radial-gradient(...)" },
+  "motif": { "type": "diagonal-lines", "opacity": 0.08, "color": "#...", "implementation": "repeating-linear-gradient(...)" }
+}
+
+חשוב: הJSON חייב להיות flat — כל השדות ברמה העליונה, לא nested תחת "designSystem".`
 
   // Flash first (fast + no 503), Pro fallback
   const models = [FLASH_MODEL, PRO_MODEL]
@@ -539,6 +499,18 @@ async function generateSlidesBatchAST(
   // Creative Direction from Design System (if available)
   const cd = designSystem.creativeDirection
 
+  // ── Image sizing hints per slide type ──
+  const IMAGE_SIZE_HINTS: Record<string, string> = {
+    cover: 'Full-bleed (1920×1080) or right-half (960×1080). Image is the hero.',
+    brief: 'Right 40% (768×800), vertically centered. Leave left for text.',
+    audience: 'Right 45% (864×900). People-focused, large and immersive.',
+    insight: 'Background overlay (1920×1080) with gradient on top, or right 50%.',
+    bigIdea: 'Right 60% (1152×1080) full height. The visual IS the idea.',
+    strategy: 'Accent image, 30% (576×600), positioned as visual anchor.',
+    approach: 'Small accent (480×480), positioned at rule-of-thirds intersection.',
+    closing: 'Background overlay (1920×1080) at low opacity, or centered accent.',
+  }
+
   // ── Build per-slide directives with pacing & layout ──
   const slidesDescription = slides.map((slide, i) => {
     const globalIndex = batchContext.slideIndex + i
@@ -546,13 +518,14 @@ async function generateSlidesBatchAST(
     const temperature = TEMPERATURE_MAP[slide.slideType] || 'neutral'
     const contentJson = JSON.stringify(slide.content, null, 2)
     const hasTension = ['cover', 'insight', 'bigIdea', 'closing'].includes(slide.slideType)
+    const imageSizeHint = IMAGE_SIZE_HINTS[slide.slideType] || 'At least 40% of slide area'
 
     return `
 ═══ שקף ${globalIndex + 1}/${batchContext.totalSlides}: "${slide.title}" (${slide.slideType}) ═══
 🌡️ Temperature: ${temperature} | ⚡ Energy: ${pacing.energy} | 📊 Density: ${pacing.density}
 ${hasTension ? '🔥 TENSION POINT — חובה נקודת מתח ויזואלית אחת בשקף הזה!' : ''}
 📐 מקסימום ${pacing.maxElements} אלמנטים | לפחות ${pacing.minWhitespace}% רווח לבן
-${slide.imageUrl ? `🖼️ Image: ${slide.imageUrl} — חובה element מסוג "image"!` : '🚫 אין תמונה — השתמש ב-shapes דקורטיביים, watermarks, טיפוגרפיה דרמטית'}
+${slide.imageUrl ? `🖼️ Image: ${slide.imageUrl} — חובה element מסוג "image"!\n📏 Image sizing: ${imageSizeHint}` : '🚫 אין תמונה — השתמש ב-shapes דקורטיביים, watermarks, טיפוגרפיה דרמטית'}
 תוכן:
 \`\`\`json
 ${contentJson}
@@ -607,37 +580,16 @@ ${DEPTH_LAYERS}
 
 ${ANTI_PATTERNS}
 
-## Micro-Typography:
-- כותרות ענקיות (60px+): letterSpacing: ${typo.letterSpacingTight} (tight!) + lineHeight: ${typo.lineHeightTight}
-- Labels/subtitles: letterSpacing: ${typo.letterSpacingWide} (spaced out!) + fontWeight: ${typo.weightPairs[0]?.[1] || 300}
-- כותרות: fontWeight: ${typo.weightPairs[0]?.[0] || 900} | גוף: fontWeight: ${typo.weightPairs[0]?.[1] || 300}
-- מספרים ענקים (metrics/budget): fontWeight 900, letterSpacing: -4, fontSize 80-140px
+## Typography:
+- כותרות (60px+): letterSpacing ${typo.letterSpacingTight}, lineHeight ${typo.lineHeightTight}, weight ${typo.weightPairs[0]?.[0] || 900}
+- גוף/labels: letterSpacing ${typo.letterSpacingWide}, weight ${typo.weightPairs[0]?.[1] || 300}
+- מספרים ענקים: weight 900, letterSpacing -4, fontSize 80-140px
+- Watermark: role "decorative", fontSize 200-400, opacity 0.03-0.08, rotation -5° to -15°, textStroke
 
-## White Space:
-רווח לבן הוא אלמנט עיצובי פעיל. הכותרת הראשית חייבת מרחק של 80px+ מכל אלמנט אחר.
-
-## Visual Anchor:
-כל שקף חייב anchor ויזואלי — האלמנט הראשון שהעין רואה. סדר: anchor → title → details.
-
-## Frozen Motion:
-אלמנטים דקורטיביים שנראים "באמצע תנועה": rotation 3-8°, x קרוב לקצה, clipPath שחותך.
-
-## Layout Techniques (בחר אחת לכל שקף):
-${LAYOUT_TECHNIQUES.map((t, i) => `${i + 1}. ${t}`).join('\n')}
-אסור לחזור על אותה טכניקה יותר מפעמיים! שקפי peak (cover/insight/bigIdea/closing) = הטכניקות הכי דרמטיות.
-
-══════════════════════════════════
-🛠️ EDITORIAL DESIGN RULES (THE WOW FACTOR!)
-══════════════════════════════════
-
-1. **שבור את התבנית:** אף שקף לא נראה כמו PowerPoint עם כותרת ובולטים. לייאוט א-סימטרי!
-2. **Watermarks ענקיים:** בכל שקף — טקסט רקע עצום (200-400px) עם opacity 0.03-0.08, rotation -5 עד -15. זה נותן עומק!
-3. **clip-path / shapes דינמיים:** אל תעשה רק ריבועים. shapes בזווית, עיגולים שגולשים מחוץ למסך, קווים אלכסוניים
-4. **טיפוגרפיה אדירה:** כותרות שחותכות את המסך. textStroke (קו מתאר) לטקסט דקורטיבי. ניגוד חד בין weight 900 ל-300
-5. **מספרים = drama:** נתון של "500K" מקבל fontSize: 120+, accent color, ושטח ענק. הטקסט שמתחתיו קטן ומגזיני
-6. **Gradient overlays:** גרדיאנטים מעל תמונות (linear-gradient to top) כדי שטקסט יבלוט
-7. **קווים ומפרידים אלגנטיים:** קווים דקים (1-2px) ב-accent color, מפרידים בין אזורים, מסגרות חלקיות
-8. **כרטיסים = לא סתם ריבועים:** offset borders, רקעים מדורגים, fake-3d shadow (shape ב-+12px offset)
+## Design Principles:
+- א-סימטרי! לא PowerPoint. כל שקף שונה מקודמו
+- Fake 3D shadows (shape offset +12px, opacity 0.15), gradient overlays על תמונות
+- קווים דקים (1-2px) ב-accent color כמפרידים אלגנטיים
 
 ══════════════════════════════════
 📦 ELEMENT TYPES (JSON FORMAT)
@@ -919,22 +871,24 @@ function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDesignSys
 
   if (allTitles.length < 3) return slides
 
-  const regularTitles = allTitles.filter(t =>
-    slides[t.slideIndex]?.slideType !== 'cover' && slides[t.slideIndex]?.slideType !== 'closing'
-  )
+  // Skip peak-energy slides that intentionally use different sizes/positions
+  const regularTitles = allTitles.filter(t => {
+    const st = slides[t.slideIndex]?.slideType
+    return st !== 'cover' && st !== 'closing' && st !== 'bigIdea' && st !== 'insight'
+  })
 
   if (regularTitles.length > 0) {
-    // Align title Y positions to median
+    // Align title Y positions to median (only fix wild outliers, 100px+ deviation)
     const medianY = regularTitles.map(t => t.y).sort((a, b) => a - b)[Math.floor(regularTitles.length / 2)]
     for (const t of regularTitles) {
-      if (Math.abs(t.y - medianY) > 60) t.element.y = medianY
+      if (Math.abs(t.y - medianY) > 100) t.element.y = medianY
     }
 
-    // Normalize heading font sizes
+    // Normalize heading font sizes (only fix unintentional drift, 6-15px range)
     const headingSizes = regularTitles.map(t => t.element.fontSize || 48)
     const medianSize = headingSizes.sort((a, b) => a - b)[Math.floor(headingSizes.length / 2)]
     for (const t of regularTitles) {
-      if (Math.abs(t.fontSize - medianSize) > 6 && Math.abs(t.fontSize - medianSize) < 30) {
+      if (Math.abs(t.fontSize - medianSize) > 6 && Math.abs(t.fontSize - medianSize) < 15) {
         t.element.fontSize = medianSize
       }
     }
@@ -1089,7 +1043,7 @@ function buildSlideBatches(
       },
     })
   }
-  batch3.push({ slideType: 'closing', title: 'סיום', content: { brandName: data.brandName || '', headline: "LET'S CREATE TOGETHER", subheadline: `נשמח להתחיל לעבוד עם ${data.brandName}` } })
+  batch3.push({ slideType: 'closing', title: 'סיום', content: { brandName: data.brandName || '', headline: 'בואו ניצור ביחד', subheadline: `נשמח להתחיל לעבוד עם ${data.brandName}` } })
 
   return [batch1, batch2, batch3]
 }

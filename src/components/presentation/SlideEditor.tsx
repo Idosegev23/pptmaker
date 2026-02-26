@@ -5,6 +5,11 @@ import { Rnd } from 'react-rnd'
 import type { Slide, SlideElement, DesignSystem } from '@/types/presentation'
 import { CANVAS_WIDTH, CANVAS_HEIGHT, isTextElement } from '@/types/presentation'
 import ElementRenderer from './ElementRenderer'
+import GridOverlay from './GridOverlay'
+
+function snapValue(value: number, gridSize: number): number {
+  return Math.round(value / gridSize) * gridSize
+}
 
 interface SlideEditorProps {
   slide: Slide
@@ -15,6 +20,9 @@ interface SlideEditorProps {
   onElementUpdate: (id: string, changes: Partial<SlideElement>) => void
   onElementDelete?: (id: string) => void
   onDuplicateElement?: (id: string) => void
+  gridSize?: number
+  snapToGrid?: boolean
+  gridVisible?: boolean
 }
 
 function getBackgroundStyle(bg: Slide['background']): React.CSSProperties {
@@ -39,6 +47,9 @@ export default function SlideEditor({
   onElementUpdate,
   onElementDelete,
   onDuplicateElement,
+  gridSize = 80,
+  snapToGrid = false,
+  gridVisible = false,
 }: SlideEditorProps) {
   const [editingTextId, setEditingTextId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -71,12 +82,12 @@ export default function SlideEditor({
         onDuplicateElement?.(selectedElementId)
       }
 
-      // Arrow keys — nudge selected element
+      // Arrow keys — nudge selected element (Shift = bigger step, with snap uses gridSize)
       if (selectedElementId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         const el = slide.elements.find(el => el.id === selectedElementId)
         if (el && !el.locked) {
           e.preventDefault()
-          const step = e.shiftKey ? 10 : 1
+          const step = e.shiftKey ? (snapToGrid ? gridSize : 10) : 1
           const changes: Partial<SlideElement> = {}
           switch (e.key) {
             case 'ArrowUp': changes.y = el.y - step; break
@@ -90,7 +101,7 @@ export default function SlideEditor({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedElementId, editingTextId, slide.elements, onElementSelect, onElementDelete, onDuplicateElement, onElementUpdate])
+  }, [selectedElementId, editingTextId, slide.elements, onElementSelect, onElementDelete, onDuplicateElement, onElementUpdate, snapToGrid, gridSize])
 
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget || (e.target as HTMLElement).dataset?.canvas === 'true') {
@@ -146,6 +157,7 @@ export default function SlideEditor({
           ...getBackgroundStyle(slide.background),
         }}
       >
+        <GridOverlay gridSize={gridSize} visible={gridVisible} />
         {sortedElements.map((element) => {
           const isSelected = selectedElementId === element.id
           const isEditingText = editingTextId === element.id
@@ -160,18 +172,16 @@ export default function SlideEditor({
               disableDragging={isLocked || isEditingText}
               enableResizing={!isLocked && !isEditingText && isSelected}
               onDragStop={(_e, d) => {
-                onElementUpdate(element.id, {
-                  x: Math.round(d.x),
-                  y: Math.round(d.y),
-                } as Partial<SlideElement>)
+                const x = snapToGrid ? snapValue(Math.round(d.x), gridSize) : Math.round(d.x)
+                const y = snapToGrid ? snapValue(Math.round(d.y), gridSize) : Math.round(d.y)
+                onElementUpdate(element.id, { x, y } as Partial<SlideElement>)
               }}
               onResizeStop={(_e, _direction, ref, _delta, position) => {
-                onElementUpdate(element.id, {
-                  width: Math.round(parseFloat(ref.style.width)),
-                  height: Math.round(parseFloat(ref.style.height)),
-                  x: Math.round(position.x),
-                  y: Math.round(position.y),
-                } as Partial<SlideElement>)
+                const x = snapToGrid ? snapValue(Math.round(position.x), gridSize) : Math.round(position.x)
+                const y = snapToGrid ? snapValue(Math.round(position.y), gridSize) : Math.round(position.y)
+                const w = snapToGrid ? snapValue(Math.round(parseFloat(ref.style.width)), gridSize) : Math.round(parseFloat(ref.style.width))
+                const h = snapToGrid ? snapValue(Math.round(parseFloat(ref.style.height)), gridSize) : Math.round(parseFloat(ref.style.height))
+                onElementUpdate(element.id, { width: w, height: h, x, y } as Partial<SlideElement>)
               }}
               bounds="parent"
               style={{

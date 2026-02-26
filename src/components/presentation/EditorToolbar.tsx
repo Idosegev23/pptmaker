@@ -10,6 +10,10 @@ interface EditorToolbarProps {
   onDuplicate: () => void
   onDelete: () => void
   selectedElement: SlideElement | null
+  gridVisible?: boolean
+  onToggleGrid?: () => void
+  snapToGrid?: boolean
+  onToggleSnap?: () => void
 }
 
 export default function EditorToolbar({
@@ -19,6 +23,10 @@ export default function EditorToolbar({
   onDuplicate,
   onDelete,
   selectedElement,
+  gridVisible,
+  onToggleGrid,
+  snapToGrid,
+  onToggleSnap,
 }: EditorToolbarProps) {
   const [showShapeMenu, setShowShapeMenu] = useState(false)
 
@@ -133,6 +141,43 @@ export default function EditorToolbar({
           label="מחק"
           variant="danger"
         />
+
+        {onToggleGrid && (
+          <>
+            {/* Separator */}
+            <div className="w-px h-5 bg-white/10 mx-1" />
+
+            {/* Grid toggle */}
+            <ToolbarButton
+              onClick={onToggleGrid}
+              title="הצג/הסתר רשת (G)"
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+                </svg>
+              }
+              label="רשת"
+              active={gridVisible}
+            />
+
+            {/* Snap toggle */}
+            {onToggleSnap && (
+              <ToolbarButton
+                onClick={onToggleSnap}
+                title="הצמד לרשת"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                }
+                label="הצמד"
+                active={snapToGrid}
+              />
+            )}
+          </>
+        )}
       </div>
     </div>
   )
@@ -148,6 +193,7 @@ function ToolbarButton({
   label,
   variant,
   hasDropdown,
+  active,
 }: {
   onClick: () => void
   disabled?: boolean
@@ -156,8 +202,10 @@ function ToolbarButton({
   label: string
   variant?: 'danger'
   hasDropdown?: boolean
+  active?: boolean
 }) {
   const baseClasses = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors'
+  const activeClasses = 'text-blue-400 bg-blue-500/15 ring-1 ring-blue-500/30'
   const enabledClasses = variant === 'danger'
     ? 'text-red-400/70 hover:text-red-300 hover:bg-red-500/10'
     : 'text-gray-400 hover:text-white hover:bg-white/10'
@@ -168,7 +216,7 @@ function ToolbarButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`${baseClasses} ${disabled ? disabledClasses : enabledClasses}`}
+      className={`${baseClasses} ${disabled ? disabledClasses : active ? activeClasses : enabledClasses}`}
     >
       {icon}
       <span>{label}</span>
