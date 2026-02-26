@@ -47,7 +47,7 @@ export async function generateProposal(
   console.log(`[${agentId}] 📝 Prompt length: ${prompt.length} chars`)
 
   try {
-    console.log(`[${agentId}] 🔄 Calling ${MODEL} with HIGH thinking + JSON...`)
+    console.log(`[${agentId}] 🔄 Calling ${MODEL} with LOW thinking + JSON...`)
     const geminiStart = Date.now()
 
     const response = await ai.models.generateContent({
@@ -55,7 +55,7 @@ export async function generateProposal(
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
       },
     })
 
@@ -94,7 +94,7 @@ export async function generateProposal(
         model: MODEL,
         contents: prompt,
         config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         },
       })
 
