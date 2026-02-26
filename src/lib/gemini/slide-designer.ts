@@ -22,8 +22,12 @@ import type {
   ImageElement,
 } from '@/types/presentation'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 },
+})
 const MODEL = 'gemini-3.1-pro-preview'
+const FLASH_MODEL = 'gemini-3-flash-preview'
 
 // ─── Types ─────────────────────────────────────────────
 
@@ -422,26 +426,40 @@ async function generateDesignSystem(
 
 פונט: Heebo. החזר JSON בלבד עם שני חלקים: creativeDirection (object) + כל שאר שדות ה-Design System.`
 
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: { responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH } },
-    })
+  // Pro first (quality matters for design), Flash fallback
+  const models = [MODEL, FLASH_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
+    try {
+      console.log(`[SlideDesigner][${requestId}] Calling ${model} for design system (attempt ${attempt + 1}/${models.length})...`)
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: { responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH } },
+      })
 
-    const parsed = parseGeminiJson<PremiumDesignSystem>(response.text || '')
-    if (parsed?.colors?.primary) {
-      parsed.colors = validateAndFixColors(parsed.colors)
-      parsed.fonts = parsed.fonts || { heading: 'Heebo', body: 'Heebo' }
-      parsed.direction = 'rtl'
-      console.log(`[SlideDesigner][${requestId}] Design system ready. Style: ${parsed.effects?.decorativeStyle}`)
-      return parsed
+      const parsed = parseGeminiJson<PremiumDesignSystem>(response.text || '')
+      if (parsed?.colors?.primary) {
+        parsed.colors = validateAndFixColors(parsed.colors)
+        parsed.fonts = parsed.fonts || { heading: 'Heebo', body: 'Heebo' }
+        parsed.direction = 'rtl'
+        console.log(`[SlideDesigner][${requestId}] Design system ready. Style: ${parsed.effects?.decorativeStyle} (model: ${model})`)
+        if (attempt > 0) console.log(`[SlideDesigner][${requestId}] ✅ Design system succeeded with fallback (${model})`)
+        return parsed
+      }
+      throw new Error('Invalid design system response')
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[SlideDesigner][${requestId}] Design system attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
+      if (attempt < models.length - 1) {
+        console.log(`[SlideDesigner][${requestId}] ⚡ Falling back to ${models[attempt + 1]}...`)
+        await new Promise(r => setTimeout(r, 2000))
+      }
     }
-    throw new Error('Invalid design system response')
-  } catch (error) {
-    console.error(`[SlideDesigner][${requestId}] Design system failed, using fallback:`, error)
-    return buildFallbackDesignSystem(brand)
   }
+
+  console.error(`[SlideDesigner][${requestId}] All design system attempts failed, using fallback`)
+  return buildFallbackDesignSystem(brand)
 }
 
 function buildFallbackDesignSystem(brand: BrandDesignInput): PremiumDesignSystem {
@@ -682,39 +700,53 @@ ${slidesDescription}
 
 החזר JSON: { "slides": [{ "id": "slide-N", "slideType": "TYPE", "label": "שם בעברית", "background": { "type": "solid"|"gradient", "value": "..." }, "elements": [...] }] }`
 
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-        maxOutputTokens: 32000,
-      },
-    })
+  // Pro first (quality matters for slides), Flash fallback
+  const batchModels = [MODEL, FLASH_MODEL]
+  for (let attempt = 0; attempt < batchModels.length; attempt++) {
+    const model = batchModels[attempt]
+    try {
+      console.log(`[SlideDesigner][${requestId}] Calling ${model} for batch (attempt ${attempt + 1}/${batchModels.length})...`)
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          maxOutputTokens: 32000,
+        },
+      })
 
-    const parsed = parseGeminiJson<{ slides: Slide[] }>(response.text || '')
+      const parsed = parseGeminiJson<{ slides: Slide[] }>(response.text || '')
 
-    if (parsed?.slides?.length > 0) {
-      console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} AST slides`)
+      if (parsed?.slides?.length > 0) {
+        console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} AST slides (model: ${model})`)
+        if (attempt > 0) console.log(`[SlideDesigner][${requestId}] ✅ Batch succeeded with fallback (${model})`)
 
-      return parsed.slides.map((slide, i) => ({
-        id: slide.id || `slide-${batchContext.slideIndex + i}`,
-        slideType: (slide.slideType || slides[i]?.slideType || 'closing') as SlideType,
-        label: slide.label || slides[i]?.title || `שקף ${batchContext.slideIndex + i + 1}`,
-        background: slide.background || { type: 'solid', value: colors.background },
-        elements: (slide.elements || []).map((el, j) => ({
-          ...el,
-          id: el.id || `el-${batchContext.slideIndex + i}-${j}`,
-        })),
-      }))
+        return parsed.slides.map((slide, i) => ({
+          id: slide.id || `slide-${batchContext.slideIndex + i}`,
+          slideType: (slide.slideType || slides[i]?.slideType || 'closing') as SlideType,
+          label: slide.label || slides[i]?.title || `שקף ${batchContext.slideIndex + i + 1}`,
+          background: slide.background || { type: 'solid', value: colors.background },
+          elements: (slide.elements || []).map((el, j) => ({
+            ...el,
+            id: el.id || `el-${batchContext.slideIndex + i}-${j}`,
+          })),
+        }))
+      }
+
+      throw new Error('No slides in AST response')
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[SlideDesigner][${requestId}] Batch attempt ${attempt + 1}/${batchModels.length} failed (${model}): ${msg}`)
+      if (attempt < batchModels.length - 1) {
+        console.log(`[SlideDesigner][${requestId}] ⚡ Falling back to ${batchModels[attempt + 1]}...`)
+        await new Promise(r => setTimeout(r, 2000))
+      } else {
+        throw error
+      }
     }
-
-    throw new Error('No slides in AST response')
-  } catch (error) {
-    console.error(`[SlideDesigner][${requestId}] Batch ${batchIndex + 1} failed:`, error)
-    throw error
   }
+  throw new Error('All slide generation attempts failed')
 }
 
 // ═══════════════════════════════════════════════════════════

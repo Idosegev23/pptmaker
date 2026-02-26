@@ -7,11 +7,15 @@
 import { GoogleGenAI } from '@google/genai'
 
 // Initialize the Google GenAI client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 },
+})
 
 // Models setup
 const IMAGE_MODEL = 'gemini-3-pro-image-preview' // The multimodal image generation model
-const TEXT_MODEL = 'gemini-3.1-pro-preview'      // Used for search grounding and prompt enhancement
+const FLASH_TEXT_MODEL = 'gemini-3-flash-preview' // Primary for text/grounding — fast + cheap
+const PRO_TEXT_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
 
 export interface GeneratedImage {
   base64: string
@@ -104,21 +108,36 @@ Instructions:
 5. RETURN ONLY THE ENGLISH PROMPT. Do not include any intro, outro, or markdown blocks.
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: groundingPrompt,
-      config: {
-        tools: [{ googleSearch: {} }],
+  // Flash first (fast + cheap for grounding), Pro fallback
+  const models = [FLASH_TEXT_MODEL, PRO_TEXT_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: groundingPrompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+        }
+      });
+
+      const text = response.text?.trim()
+      if (text) {
+        if (attempt > 0) console.log(`[Gemini Image] ✅ Grounding succeeded with fallback (${model})`)
+        return text
       }
-    });
-    
-    return response.text?.trim() || userPrompt;
-  } catch (error) {
-    console.error('[Gemini Image] Error in Search Grounding, falling back to original prompt:', error);
-    // Translation fallback to English for better image generation
-    return `Professional high quality image of: ${userPrompt}`;
+      throw new Error('Empty grounding response')
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[Gemini Image] Grounding attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
+      if (attempt < models.length - 1) {
+        await new Promise(r => setTimeout(r, 2000))
+      }
+    }
   }
+
+  console.error('[Gemini Image] All grounding attempts failed, using original prompt')
+  return `Professional high quality image of: ${userPrompt}`;
 }
 
 /**

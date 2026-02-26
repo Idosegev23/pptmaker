@@ -7,8 +7,12 @@ import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '../utils/json-cleanup'
 import type { ExtractedBriefData } from '@/types/brief'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const MODEL = 'gemini-3.1-pro-preview'
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 },
+})
+const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast + cheap for extraction
+const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
 
 /**
  * Extract structured data from uploaded documents
@@ -36,106 +40,51 @@ export async function extractFromDocuments(
     throw new Error('טקסט הבריף קצר מדי לניתוח. ודא שהמסמך נקרא בהצלחה.')
   }
 
-  try {
-    console.log(`[${extractorId}] 🔄 Calling ${MODEL} with JSON mime type + HIGH thinking...`)
-    const geminiStart = Date.now()
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-      },
-    })
-
-    const geminiTime = Date.now() - geminiStart
-    const text = response.text || ''
-    console.log(`[${extractorId}] ✅ Gemini responded in ${geminiTime}ms`)
-    console.log(`[${extractorId}] 📊 Response size: ${text.length} chars`)
-    console.log(`[${extractorId}] 📝 Response preview: ${text.slice(0, 300).replace(/\n/g, ' ')}`)
-
-    if (!text) {
-      console.error(`[${extractorId}] ❌ Gemini returned empty response`)
-      throw new Error('Gemini returned empty response')
-    }
-
-    console.log(`[${extractorId}] 🔄 Parsing JSON response...`)
-    const parseStart = Date.now()
-    const extracted = parseGeminiJson<ExtractedBriefData>(text)
-    console.log(`[${extractorId}] ✅ JSON parsed in ${Date.now() - parseStart}ms`)
-
-    // Log extracted data summary
-    console.log(`[${extractorId}] 📊 Extracted data summary:`)
-    console.log(`[${extractorId}]   Brand: ${extracted.brand?.name || 'NOT FOUND'}`)
-    console.log(`[${extractorId}]   Official name: ${extracted.brand?.officialName || 'N/A'}`)
-    console.log(`[${extractorId}]   Industry: ${extracted.brand?.industry || 'N/A'}`)
-    console.log(`[${extractorId}]   Background: ${extracted.brand?.background?.slice(0, 100) || 'N/A'}`)
-    console.log(`[${extractorId}]   Budget: ${extracted.budget?.amount || 0} ${extracted.budget?.currency || '₪'}`)
-    console.log(`[${extractorId}]   Goals: [${extracted.campaignGoals?.join(', ') || 'none'}]`)
-    console.log(`[${extractorId}]   Target: ${extracted.targetAudience?.primary?.gender || 'N/A'} ${extracted.targetAudience?.primary?.ageRange || ''}`)
-    console.log(`[${extractorId}]   Key insight: ${extracted.keyInsight?.slice(0, 80) || 'none'}`)
-    console.log(`[${extractorId}]   Strategy: ${extracted.strategyDirection?.slice(0, 80) || 'none'}`)
-    console.log(`[${extractorId}]   Creative: ${extracted.creativeDirection?.slice(0, 80) || 'none'}`)
-    console.log(`[${extractorId}]   Deliverables: ${extracted.deliverables?.length || 0}`)
-    console.log(`[${extractorId}]   Influencer prefs: ${extracted.influencerPreferences?.types?.join(', ') || 'none'}`)
-    console.log(`[${extractorId}]   Timeline: ${extracted.timeline?.duration || 'N/A'}`)
-
-    // Validate and set defaults
-    console.log(`[${extractorId}] 🔄 Validating and normalizing...`)
-    const result = validateAndNormalize(extracted, !!kickoffText)
-    console.log(`[${extractorId}] ✅ Validation complete`)
-    console.log(`[${extractorId}]   Confidence: ${result._meta?.confidence}`)
-    console.log(`[${extractorId}]   Warnings: [${result._meta?.warnings?.join(', ') || 'none'}]`)
-    console.log(`[${extractorId}] ⏱️ TOTAL TIME: ${Date.now() - startTime}ms`)
-
-    return result
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error)
-    const elapsed = Date.now() - startTime
-    console.error(`[${extractorId}] ❌ Extraction failed after ${elapsed}ms:`, errMsg)
-
-    // Don't retry if input validation failed
-    if (errMsg.includes('קצר מדי')) {
-      throw error
-    }
-
-    // Try with less strict settings (no JSON mime type constraint)
+  // Pro first (with JSON mime), Flash fallback if Pro overloaded
+  const models = [FLASH_MODEL, PRO_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
     try {
-      console.log(`[${extractorId}] 🔄 RETRY - calling ${MODEL} without responseMimeType constraint...`)
-      const retryStart = Date.now()
+      console.log(`[${extractorId}] 🔄 Calling ${model} (attempt ${attempt + 1}/${models.length})...`)
+      const geminiStart = Date.now()
       const response = await ai.models.generateContent({
-        model: MODEL,
+        model,
         contents: prompt,
-        config: {},
+        config: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        },
       })
 
-      const retryTime = Date.now() - retryStart
       const text = response.text || ''
-      console.log(`[${extractorId}] ✅ Retry Gemini responded in ${retryTime}ms`)
-      console.log(`[${extractorId}] 📊 Retry response size: ${text.length} chars`)
-      console.log(`[${extractorId}] 📝 Retry response preview: ${text.slice(0, 300).replace(/\n/g, ' ')}`)
+      console.log(`[${extractorId}] ✅ Gemini responded in ${Date.now() - geminiStart}ms (${model})`)
+      console.log(`[${extractorId}] 📊 Response size: ${text.length} chars`)
 
-      if (!text) {
-        console.error(`[${extractorId}] ❌ Retry: Gemini returned empty response`)
-        throw new Error('Gemini returned empty response on retry')
-      }
+      if (!text) throw new Error('Gemini returned empty response')
 
-      console.log(`[${extractorId}] 🔄 Parsing retry JSON response...`)
       const extracted = parseGeminiJson<ExtractedBriefData>(text)
+
+      console.log(`[${extractorId}] 📊 Brand: ${extracted.brand?.name || 'NOT FOUND'}, Budget: ${extracted.budget?.amount || 0}`)
+      if (attempt > 0) console.log(`[${extractorId}] ✅ Succeeded with fallback model (${model})`)
+
       const result = validateAndNormalize(extracted, !!kickoffText)
-      console.log(`[${extractorId}] ✅ Retry succeeded`)
-      console.log(`[${extractorId}]   Brand: ${result.brand?.name || 'NOT FOUND'}`)
-      console.log(`[${extractorId}]   Confidence: ${result._meta?.confidence}`)
-      console.log(`[${extractorId}] ⏱️ TOTAL TIME (with retry): ${Date.now() - startTime}ms`)
+      console.log(`[${extractorId}] ✅ Done. Confidence: ${result._meta?.confidence} — ${Date.now() - startTime}ms total`)
       return result
-    } catch (retryError) {
-      const retryMsg = retryError instanceof Error ? retryError.message : String(retryError)
-      console.error(`[${extractorId}] ❌ Retry also failed:`, retryMsg)
-      console.error(`[${extractorId}] ❌ Stack:`, retryError instanceof Error ? retryError.stack : 'N/A')
-      console.error(`[${extractorId}] ⏱️ TOTAL TIME (failed): ${Date.now() - startTime}ms`)
-      throw new Error(`שגיאה בחילוץ מידע מהמסמכים: ${retryMsg}`)
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error)
+      console.error(`[${extractorId}] Attempt ${attempt + 1}/${models.length} failed (${model}): ${errMsg}`)
+
+      if (errMsg.includes('קצר מדי')) throw error
+
+      if (attempt < models.length - 1) {
+        console.log(`[${extractorId}] ⚡ Falling back to ${models[attempt + 1]}...`)
+        await new Promise(r => setTimeout(r, 2000))
+      } else {
+        throw new Error(`שגיאה בחילוץ מידע מהמסמכים: ${errMsg}`)
+      }
     }
   }
+  throw new Error('שגיאה בחילוץ מידע מהמסמכים')
 }
 
 function buildExtractionPrompt(clientBriefText: string, kickoffText?: string): string {

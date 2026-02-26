@@ -10,8 +10,12 @@ import type { BrandColors } from './color-extractor'
 import type { ImageStrategy, ImagePlan } from './image-strategist'
 import { parseGeminiJson } from '../utils/json-cleanup'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const TEXT_MODEL = 'gemini-3.1-pro-preview'
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 },
+})
+const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast + cheap
+const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
 
 export interface SmartImagePrompt {
   imageId: string
@@ -110,32 +114,44 @@ ${imagePlans}
 \`\`\`
 `
 
-  try {
-    const response = await ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-      },
-    })
+  // Flash first (fast + cheap), Pro fallback
+  const models = [FLASH_MODEL, PRO_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
+    try {
+      console.log(`[Smart Prompts] Calling ${model} (attempt ${attempt + 1}/${models.length})...`)
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        },
+      })
 
-    const text = response.text || ''
-    const result = parseGeminiJson<GeneratedPrompts>(text)
-    
-    if (result && result.prompts && result.prompts.length > 0) {
-      console.log(`[Smart Prompts] Generated ${result.prompts.length} premium prompts`)
-      console.log(`[Smart Prompts] Style guide: ${result.styleGuide}`)
-      return result
+      const text = response.text || ''
+      const result = parseGeminiJson<GeneratedPrompts>(text)
+
+      if (result && result.prompts && result.prompts.length > 0) {
+        console.log(`[Smart Prompts] Generated ${result.prompts.length} premium prompts (model: ${model})`)
+        console.log(`[Smart Prompts] Style guide: ${result.styleGuide}`)
+        if (attempt > 0) console.log(`[Smart Prompts] ✅ Succeeded with fallback model (${model})`)
+        return result
+      }
+
+      throw new Error('Invalid prompts response')
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[Smart Prompts] Attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
+      if (attempt < models.length - 1) {
+        console.log(`[Smart Prompts] ⚡ Falling back to ${models[attempt + 1]}...`)
+        await new Promise(r => setTimeout(r, 2000))
+      }
     }
-    
-    throw new Error('Invalid prompts response')
-  } catch (error) {
-    console.error('[Smart Prompts] Error:', error)
-    
-    // Fallback prompts
-    return getDefaultPrompts(strategy, brandResearch, brandColors)
   }
+
+  console.error('[Smart Prompts] All attempts failed, using defaults')
+  return getDefaultPrompts(strategy, brandResearch, brandColors)
 }
 
 /**

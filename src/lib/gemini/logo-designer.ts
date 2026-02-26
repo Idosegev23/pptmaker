@@ -5,12 +5,16 @@
 
 import { GoogleGenAI } from '@google/genai'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 },
+})
 
 // Model for image generation - Nano Banana Pro
 const IMAGE_MODEL = 'gemini-3-pro-image-preview'
-// Model for analysis - Gemini 3 Pro
-const ANALYSIS_MODEL = 'gemini-3.1-pro-preview'
+// Model for analysis — Flash primary, Pro fallback
+const FLASH_ANALYSIS_MODEL = 'gemini-3-flash-preview'
+const PRO_ANALYSIS_MODEL = 'gemini-3.1-pro-preview'
 
 export interface LogoDesign {
   type: 'watermark' | 'pattern' | 'hero-background' | 'color-extraction' | 'decorative'
@@ -50,24 +54,10 @@ export async function analyzeLogoForDesign(
     return getDefaultLogoAnalysis()
   }
   
-  try {
-    // Fetch logo as base64
-    const logoData = await fetchImageAsBase64(logoUrl)
-    
-    const response = await ai.models.generateContent({
-      model: ANALYSIS_MODEL, // Use analysis model for text-based analysis
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              inlineData: {
-                mimeType: 'image/png',
-                data: logoData,
-              },
-            },
-            {
-              text: `אתה מעצב גרפי בכיר. נתח את הלוגו הזה ותן לי:
+  const logoData = await fetchImageAsBase64(logoUrl).catch(() => null)
+  if (!logoData) return getDefaultLogoAnalysis()
+
+  const analysisPrompt = `אתה מעצב גרפי בכיר. נתח את הלוגו הזה ותן לי:
 
 1. **צבעים** - חלץ את הצבעים המדויקים (hex codes):
    - צבע ראשי
@@ -103,25 +93,44 @@ export async function analyzeLogoForDesign(
     "fontSuggestions": ["פונט1", "פונט2", "פונט3"]
   }
 }
-\`\`\``,
-            },
-          ],
-        },
-      ],
-    })
+\`\`\``
 
-    const text = response.text || ''
-    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[1]) as LogoAnalysis
+  // Flash first (fast + cheap for vision), Pro fallback
+  const models = [FLASH_ANALYSIS_MODEL, PRO_ANALYSIS_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: 'image/png', data: logoData } },
+              { text: analysisPrompt },
+            ],
+          },
+        ],
+      })
+
+      const text = response.text || ''
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
+      if (jsonMatch) {
+        if (attempt > 0) console.log(`[Logo Designer] ✅ Analysis succeeded with fallback (${model})`)
+        return JSON.parse(jsonMatch[1]) as LogoAnalysis
+      }
+      throw new Error('No JSON in response')
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[Logo Designer] Analysis attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
+      if (attempt < models.length - 1) {
+        await new Promise(r => setTimeout(r, 2000))
+      }
     }
-    
-    // Fallback
-    return getDefaultLogoAnalysis()
-  } catch (error) {
-    console.error('[Logo Designer] Analysis error:', error)
-    return getDefaultLogoAnalysis()
   }
+
+  console.error('[Logo Designer] All analysis attempts failed, using defaults')
+  return getDefaultLogoAnalysis()
 }
 
 /**

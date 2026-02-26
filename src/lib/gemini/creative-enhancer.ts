@@ -9,8 +9,12 @@ import { parseGeminiJson } from '../utils/json-cleanup'
 import type { BrandResearch } from './brand-research'
 import type { CreativeStepData } from '@/types/wizard'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const MODEL = 'gemini-3.1-pro-preview'
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 },
+})
+const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast + cheap
+const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
 
 /**
  * Enhance a creative concept with competitive intelligence from brand research.
@@ -109,38 +113,52 @@ ${(brandResearch as any).israeliMarketContext || 'לא נמצא'}
 \`\`\`
 `
 
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: {
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-      },
-    })
+  // Flash first (fast + cheap), Pro fallback
+  const models = [FLASH_MODEL, PRO_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
+    try {
+      console.log(`[CreativeEnhancer] Calling ${model} (attempt ${attempt + 1}/${models.length})...`)
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        },
+      })
 
-    const text = response.text || ''
-    const enhanced = parseGeminiJson<Partial<CreativeStepData>>(text)
+      const text = response.text || ''
+      const enhanced = parseGeminiJson<Partial<CreativeStepData>>(text)
 
-    // Merge — preserve referenceImages and any field not returned
-    const result: CreativeStepData = {
-      ...existingCreative,
-      activityTitle: enhanced.activityTitle || existingCreative.activityTitle,
-      activityConcept: enhanced.activityConcept || existingCreative.activityConcept,
-      activityDescription: enhanced.activityDescription || existingCreative.activityDescription,
-      activityDifferentiator: enhanced.activityDifferentiator || existingCreative.activityDifferentiator,
-      // Preserve original approach titles, only update descriptions
-      activityApproach: (enhanced.activityApproach && enhanced.activityApproach.length > 0)
-        ? existingCreative.activityApproach.map((orig, i) => ({
-            title: orig.title, // Always keep original title
-            description: enhanced.activityApproach![i]?.description || orig.description,
-          }))
-        : existingCreative.activityApproach,
+      // Merge — preserve referenceImages and any field not returned
+      const result: CreativeStepData = {
+        ...existingCreative,
+        activityTitle: enhanced.activityTitle || existingCreative.activityTitle,
+        activityConcept: enhanced.activityConcept || existingCreative.activityConcept,
+        activityDescription: enhanced.activityDescription || existingCreative.activityDescription,
+        activityDifferentiator: enhanced.activityDifferentiator || existingCreative.activityDifferentiator,
+        // Preserve original approach titles, only update descriptions
+        activityApproach: (enhanced.activityApproach && enhanced.activityApproach.length > 0)
+          ? existingCreative.activityApproach.map((orig, i) => ({
+              title: orig.title, // Always keep original title
+              description: enhanced.activityApproach![i]?.description || orig.description,
+            }))
+          : existingCreative.activityApproach,
+      }
+
+      console.log(`[CreativeEnhancer] Enhanced: "${result.activityTitle}" (model: ${model})`)
+      if (attempt > 0) console.log(`[CreativeEnhancer] ✅ Succeeded with fallback model (${model})`)
+      return result
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`[CreativeEnhancer] Attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
+      if (attempt < models.length - 1) {
+        console.log(`[CreativeEnhancer] ⚡ Falling back to ${models[attempt + 1]}...`)
+        await new Promise(r => setTimeout(r, 2000))
+      }
     }
-
-    console.log(`[CreativeEnhancer] Enhanced: "${result.activityTitle}"`)
-    return result
-  } catch (err) {
-    console.error('[CreativeEnhancer] Enhancement failed, returning original:', err)
-    return existingCreative
   }
+
+  console.error('[CreativeEnhancer] All attempts failed, returning original')
+  return existingCreative
 }

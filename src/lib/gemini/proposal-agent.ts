@@ -13,9 +13,12 @@ import { parseGeminiJson } from '../utils/json-cleanup'
 import type { ExtractedBriefData } from '@/types/brief'
 import type { WizardStepDataMap } from '@/types/wizard'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 },
+})
 const MODEL = 'gemini-3.1-pro-preview'
-const FLASH_MODEL = 'gemini-3-flash-preview' // Fast + cheap for extraction tasks
+const FLASH_MODEL = 'gemini-3-flash-preview' // Fallback when Pro is overloaded
 
 export interface ProposalOutput {
   extracted: ExtractedBriefData
@@ -170,8 +173,32 @@ export async function generateProposal(
     } catch (retryErr) {
       const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
       console.error(`[${agentId}] ❌ Retry also failed: ${retryMsg}`)
-      console.error(`[${agentId}] ⏱️ TOTAL TIME (failed): ${Date.now() - startTime}ms`)
-      throw new Error(`שגיאה בעיבוד המסמכים: ${retryMsg}`)
+
+      // Last resort: try Flash model
+      try {
+        console.log(`[${agentId}] ⚡ Last resort: trying ${FLASH_MODEL}...`)
+        const flashStart = Date.now()
+        const response = await ai.models.generateContent({
+          model: FLASH_MODEL,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          },
+        })
+        const text = response.text || ''
+        if (!text) throw new Error('Empty Flash response')
+        const raw = parseGeminiJson<RawProposalResponse>(text)
+        const result = normalizeResponse(raw, !!kickoffText, agentId)
+        console.log(`[${agentId}] ✅ Flash model succeeded in ${Date.now() - flashStart}ms`)
+        logProposalSummary(result, agentId)
+        return result
+      } catch (flashErr) {
+        const flashMsg = flashErr instanceof Error ? flashErr.message : String(flashErr)
+        console.error(`[${agentId}] ❌ Flash also failed: ${flashMsg}`)
+        console.error(`[${agentId}] ⏱️ TOTAL TIME (all failed): ${Date.now() - startTime}ms`)
+        throw new Error(`שגיאה בעיבוד המסמכים: ${retryMsg}`)
+      }
     }
   }
 }

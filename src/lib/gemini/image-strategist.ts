@@ -10,8 +10,12 @@ import type { BrandColors } from './color-extractor'
 import type { ProposalContent } from '../openai/proposal-writer'
 import { parseGeminiJson } from '../utils/json-cleanup'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
-const TEXT_MODEL = 'gemini-3.1-pro-preview'
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: { timeout: 540_000 },
+})
+const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast + cheap
+const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
 
 export interface ImagePlan {
   id: string
@@ -97,32 +101,44 @@ ${proposalContent?.goals?.map(g => `- ${g.title}: ${g.description}`).join('\n') 
 - התיאור ב-rationale חייב להיות ספציפי וישראלי
 - אל תכתוב תיאורים גנריים - תהיה יצירתי ומדויק`
 
-  try {
-    const response = await ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-      },
-    })
+  // Flash first (fast + cheap), Pro fallback
+  const models = [FLASH_MODEL, PRO_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
+    try {
+      console.log(`[Image Strategist] Calling ${model} (attempt ${attempt + 1}/${models.length})...`)
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        },
+      })
 
-    const text = response.text || ''
-    const strategy = parseGeminiJson<ImageStrategy>(text)
+      const text = response.text || ''
+      const strategy = parseGeminiJson<ImageStrategy>(text)
 
-    if (strategy && strategy.images && strategy.images.length > 0) {
-      console.log(`[Image Strategist] Created strategy with ${strategy.images.length} images`)
-      console.log(`[Image Strategist] Concept: ${strategy.conceptSummary}`)
-      return strategy
+      if (strategy && strategy.images && strategy.images.length > 0) {
+        console.log(`[Image Strategist] Created strategy with ${strategy.images.length} images (model: ${model})`)
+        console.log(`[Image Strategist] Concept: ${strategy.conceptSummary}`)
+        if (attempt > 0) console.log(`[Image Strategist] ✅ Succeeded with fallback model (${model})`)
+        return strategy
+      }
+
+      throw new Error('Invalid strategy response')
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[Image Strategist] Attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
+      if (attempt < models.length - 1) {
+        console.log(`[Image Strategist] ⚡ Falling back to ${models[attempt + 1]}...`)
+        await new Promise(r => setTimeout(r, 2000))
+      }
     }
-
-    throw new Error('Invalid strategy response')
-  } catch (error) {
-    console.error('[Image Strategist] Error:', error)
-
-    // Fallback strategy
-    return getDefaultStrategy(brandResearch)
   }
+
+  console.error('[Image Strategist] All attempts failed, using defaults')
+  return getDefaultStrategy(brandResearch)
 }
 
 /**

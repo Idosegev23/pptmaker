@@ -12,8 +12,8 @@ const ai = new GoogleGenAI({
   httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
 })
 
-const MODEL = 'gemini-3.1-pro-preview'
-const FLASH_MODEL = 'gemini-3-flash-preview' // Fallback when Pro is overloaded
+const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast + cheap for research
+const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
 
 export interface InfluencerRecommendation {
   name: string
@@ -203,7 +203,7 @@ export async function researchInfluencers(
   }
 
   // Attempt 1: Pro model, Attempt 2: Flash fallback (handles Pro overload / rate limits)
-  const models = [MODEL, FLASH_MODEL]
+  const models = [FLASH_MODEL, PRO_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -263,7 +263,7 @@ export async function getQuickInfluencerSuggestions(
 
   try {
     const response = await ai.models.generateContent({
-      model: MODEL,
+      model: FLASH_MODEL,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],

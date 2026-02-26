@@ -221,11 +221,19 @@ export default function ResearchPage() {
         return res.json()
       })
 
-      // Wait for brand synthesis to finish first
-      const brandResult = await Promise.allSettled([synthesizePromise])
+      // Wait for brand synthesis — with 2-min safety timeout so influencer can start even if synthesis hangs
+      console.log('[Research] Waiting for brand synthesis...')
+      const synthesisTimeout = new Promise<{ status: 'rejected'; reason: Error }>((resolve) =>
+        setTimeout(() => resolve({ status: 'rejected' as const, reason: new Error('Synthesis timeout (2min)') }), 120_000)
+      )
+      const brandResult = await Promise.allSettled([
+        Promise.race([synthesizePromise, synthesisTimeout.then(() => { throw new Error('Synthesis timeout') })])
+      ])
+      console.log('[Research] Brand synthesis settled:', brandResult[0].status)
 
       // THEN run influencer research (sequential — avoids overloading Gemini API)
       setStage('influencer_research')
+      console.log('[Research] Starting influencer research...')
       const influencerResult = await Promise.allSettled([
         fetch('/api/influencers', {
           method: 'POST',
@@ -248,10 +256,12 @@ export default function ResearchPage() {
           }),
         }).then(async res => {
           setInfluencerDone(true)
+          console.log(`[Research] Influencer API returned: ${res.status}`)
           if (!res.ok) throw new Error('Influencer research failed')
           return res.json()
         })
       ])
+      console.log('[Research] Influencer research settled:', influencerResult[0].status)
 
       const brandSettled = brandResult[0]
       const influencerSettled = influencerResult[0]
@@ -455,8 +465,14 @@ export default function ResearchPage() {
         const a = document.createElement('a')
         a.href = url
         a.download = `research-${brandName || 'report'}-${new Date().toISOString().slice(0, 10)}.pdf`
+        a.style.display = 'none'
+        document.body.appendChild(a)
         a.click()
-        URL.revokeObjectURL(url)
+        // Delay cleanup so the browser can start the download
+        setTimeout(() => {
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        }, 200)
       } else {
         console.error('[Research] PDF generation failed:', result.error)
       }
