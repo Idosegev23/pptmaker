@@ -442,7 +442,30 @@ async function generateDesignSystem(
         },
       })
 
-      const parsed = parseGeminiJson<PremiumDesignSystem>(response.text || '')
+      const rawText = response.text || ''
+      console.log(`[SlideDesigner][${requestId}] Raw response length: ${rawText.length} chars (model: ${model})`)
+      if (rawText.length < 100) {
+        console.error(`[SlideDesigner][${requestId}] Response too short: "${rawText}"`)
+      }
+
+      const parsed = parseGeminiJson<PremiumDesignSystem>(rawText)
+
+      // Debug: log what keys we got
+      const topKeys = parsed ? Object.keys(parsed).join(', ') : 'null'
+      console.log(`[SlideDesigner][${requestId}] Parsed keys: [${topKeys}]`)
+      if (parsed && !parsed.colors) {
+        // Maybe colors are nested under a different key (e.g., "designSystem.colors")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = parsed as any
+        if (p.designSystem?.colors) {
+          console.log(`[SlideDesigner][${requestId}] Found colors under designSystem key — unwrapping`)
+          Object.assign(parsed, p.designSystem)
+        } else if (p.design_system?.colors) {
+          console.log(`[SlideDesigner][${requestId}] Found colors under design_system key — unwrapping`)
+          Object.assign(parsed, p.design_system)
+        }
+      }
+
       if (parsed?.colors?.primary) {
         parsed.colors = validateAndFixColors(parsed.colors)
         parsed.fonts = parsed.fonts || { heading: 'Heebo', body: 'Heebo' }
@@ -451,7 +474,7 @@ async function generateDesignSystem(
         if (attempt > 0) console.log(`[SlideDesigner][${requestId}] ✅ Design system succeeded with fallback (${model})`)
         return parsed
       }
-      throw new Error(`Invalid design system response — parsed colors missing`)
+      throw new Error(`Invalid design system response — parsed colors missing. Keys: [${topKeys}]`)
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       console.error(`[SlideDesigner][${requestId}] Design system attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
