@@ -51,6 +51,7 @@ export default function CreateProposalPage() {
   const [brandFacts, setBrandFacts] = useState<string[]>([])
   const [showResearchModal, setShowResearchModal] = useState(false)
   const [pendingDocId, setPendingDocId] = useState<string | null>(null)
+  const [buildingProposal, setBuildingProposal] = useState(false)
 
   // Auto scroll logs for that "Terminal" effect
   useEffect(() => {
@@ -200,10 +201,9 @@ export default function CreateProposalPage() {
       if (!processRes.ok) throw new Error(processData.error || 'שגיאה בעיבוד המסמכים')
 
       const extracted: ExtractedBriefData = processData.extracted
-      const stepData = processData.stepData
       setBrandInfo(extracted)
 
-      addLog('success', `בניית ליבת ההצעה הושלמה (${processElapsed}s) - רמת ביטחון: ${extracted._meta?.confidence?.toUpperCase() || 'N/A'}`)
+      addLog('success', `מסמכים נותחו בהצלחה (${processElapsed}s) - רמת ביטחון: ${extracted._meta?.confidence?.toUpperCase() || 'N/A'}`)
 
       if (extracted.brand?.name) {
         addLog('success', `מותג אומת וזוהה: ${extracted.brand.name}${extracted.brand.industry ? ` | תעשייה: ${extracted.brand.industry}` : ''}`)
@@ -213,12 +213,6 @@ export default function CreateProposalPage() {
 
       if (extracted.budget?.amount && extracted.budget.amount > 0) {
         addLog('detail', `תקציב שאותר: ${extracted.budget.currency}${extracted.budget.amount.toLocaleString()}`)
-      }
-      if (stepData?.key_insight?.keyInsight) {
-        addLog('detail', `תובנה מרכזית פוצחה: ${stepData.key_insight.keyInsight.slice(0, 60)}...`)
-      }
-      if (stepData?.creative?.activityTitle) {
-        addLog('detail', `קונספט קריאייטיבי: "${stepData.creative.activityTitle}"`)
       }
       if (extracted._meta?.warnings?.length) {
         extracted._meta.warnings.forEach((w: string) => addLog('warning', w))
@@ -231,7 +225,7 @@ export default function CreateProposalPage() {
 
       // === STEP 3: Create Document ===
       setStage('creating')
-      addLog('info', 'מרכיב ואורז את הצעת המחיר למסמך אינטראקטיבי...')
+      addLog('info', 'שומר מסמך ומכין לשלב הבא...')
 
       const docRes = await fetch('/api/documents', {
         method: 'POST',
@@ -244,9 +238,12 @@ export default function CreateProposalPage() {
           data: {
             brandName: extracted.brand?.name || '',
             _extractedData: extracted,
-            _stepData: stepData,
+            // Store raw texts so build-proposal can use them later
+            _briefText: briefText,
+            _kickoffText: kickoffText || null,
+            _stepData: null, // filled by /api/build-proposal after popup choice
             _pipelineStatus: {
-              textGeneration: 'complete',
+              textGeneration: 'pending',
               research: 'pending',
               visualAssets: 'pending',
               slideGeneration: 'pending',
@@ -868,7 +865,8 @@ export default function CreateProposalPage() {
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => router.push(`/research/${pendingDocId}`)}
-                className="w-full bg-[#f2cc0d] text-[#0f172a] font-extrabold text-base py-4 rounded-2xl hover:bg-[#e0bc00] transition-all active:scale-95 shadow-[0_4px_20px_rgba(242,204,13,0.3)] flex items-center justify-center gap-2"
+                disabled={buildingProposal}
+                className="w-full bg-[#f2cc0d] text-[#0f172a] font-extrabold text-base py-4 rounded-2xl hover:bg-[#e0bc00] transition-all active:scale-95 shadow-[0_4px_20px_rgba(242,204,13,0.3)] flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -877,10 +875,43 @@ export default function CreateProposalPage() {
               </button>
 
               <button
-                onClick={() => router.push(`/wizard/${pendingDocId}`)}
-                className="w-full bg-white/10 text-white font-semibold text-base py-4 rounded-2xl hover:bg-white/15 transition-all active:scale-95 border border-white/10"
+                disabled={buildingProposal}
+                onClick={async () => {
+                  setBuildingProposal(true)
+                  try {
+                    // Build proposal from docs only (no research)
+                    const res = await fetch('/api/build-proposal', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ documentId: pendingDocId }),
+                    })
+                    const data = await res.json()
+                    if (res.ok && data.stepData) {
+                      // Patch document with generated step data
+                      await fetch(`/api/documents/${pendingDocId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          _stepData: data.stepData,
+                          _extractedData: data.extracted,
+                          _pipelineStatus: { textGeneration: 'complete', research: 'skipped', visualAssets: 'pending', slideGeneration: 'pending' },
+                        }),
+                      })
+                    }
+                  } catch (err) {
+                    console.error('Build proposal (no research) failed:', err)
+                  } finally {
+                    router.push(`/wizard/${pendingDocId}`)
+                  }
+                }}
+                className="w-full bg-white/10 text-white font-semibold text-base py-4 rounded-2xl hover:bg-white/15 transition-all active:scale-95 border border-white/10 flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                לא תודה, עבור ישירות לעריכה
+                {buildingProposal ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    בונה הצעה...
+                  </>
+                ) : 'לא תודה, עבור ישירות לעריכה'}
               </button>
             </div>
           </div>

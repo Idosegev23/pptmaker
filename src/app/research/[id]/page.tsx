@@ -369,8 +369,28 @@ export default function ResearchPage() {
       const influencerStrategy = researchResults.influencer
       const colors = researchResults.colors
 
-      // Enrich wizard step data with research
-      const enriched = enrichStepData(existingStepDataRef, brandResearch, influencerStrategy)
+      // Call build-proposal: generates full wizard content from docs + research together
+      let enriched = existingStepDataRef
+      try {
+        const buildRes = await fetch('/api/build-proposal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId, brandResearch, influencerStrategy }),
+        })
+        if (buildRes.ok) {
+          const buildData = await buildRes.json()
+          if (buildData.stepData) {
+            enriched = buildData.stepData
+            console.log('[Research] build-proposal succeeded with research data')
+          }
+        } else {
+          console.warn('[Research] build-proposal failed, falling back to enrichStepData')
+          enriched = enrichStepData(existingStepDataRef, brandResearch, influencerStrategy)
+        }
+      } catch (buildErr) {
+        console.warn('[Research] build-proposal error, falling back:', buildErr)
+        enriched = enrichStepData(existingStepDataRef, brandResearch, influencerStrategy)
+      }
 
       // Attach research data for wizard
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

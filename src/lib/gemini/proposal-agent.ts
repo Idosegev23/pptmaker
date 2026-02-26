@@ -24,9 +24,64 @@ export interface ProposalOutput {
 /**
  * Generate a complete proposal from uploaded documents
  */
+/**
+ * Quick extraction — only pulls facts from documents, no strategy/creative generation.
+ * Used in process-proposal before the popup so it returns fast (~15s).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function extractFromBrief(clientBriefText: string, kickoffText?: string): Promise<any> {
+  const agentId = `extract-${Date.now()}`
+  console.log(`[${agentId}] 🔍 EXTRACT FROM BRIEF - START`)
+
+  const prompt = `חלץ מידע עסקי בסיסי מהמסמכים הבאים. אל תייצר אסטרטגיה או קריאייטיב — רק חלץ עובדות.
+
+## בריף לקוח:
+${clientBriefText}
+
+${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מסמך התנעה)'}
+
+החזר JSON עם המבנה הבא בלבד:
+{
+  "brand": { "name": "שם המותג", "officialName": null, "industry": "תעשייה", "subIndustry": null, "website": null, "tagline": null, "background": "תיאור קצר מה שרשום בבריף" },
+  "budget": { "amount": 0, "currency": "₪", "breakdown": null },
+  "campaignGoals": ["מטרה 1 כפי שנכתבה בבריף"],
+  "targetAudience": {
+    "primary": { "gender": "נשים/גברים/שניהם", "ageRange": "XX-XX", "interests": ["תחום"], "painPoints": ["כאב"], "lifestyle": "כפי שנכתב בבריף", "socioeconomic": null },
+    "secondary": null,
+    "behavior": "כפי שנכתב בבריף"
+  },
+  "keyInsight": null,
+  "insightSource": null,
+  "deliverables": [{ "type": "סוג", "quantity": null, "description": "כפי שנכתב" }],
+  "influencerPreferences": { "types": [], "specificNames": [], "criteria": [], "verticals": [] },
+  "timeline": { "startDate": null, "endDate": null, "duration": null, "milestones": [] },
+  "additionalNotes": [],
+  "_meta": { "confidence": "high", "warnings": [], "hasKickoff": ${!!kickoffText} }
+}`
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 2000 },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const extracted = parseGeminiJson<any>(response.text || '{}')
+    console.log(`[${agentId}] ✅ Extraction done. Brand: ${extracted?.brand?.name || 'N/A'}`)
+    return extracted
+  } catch (err) {
+    console.error(`[${agentId}] ❌ Extraction failed:`, err)
+    // Return minimal fallback so the flow doesn't break
+    return { brand: { name: '', industry: '' }, budget: { amount: 0, currency: '₪' }, campaignGoals: [], targetAudience: { primary: { gender: '', ageRange: '', interests: [], painPoints: [] } }, _meta: { confidence: 'low', warnings: ['Extraction failed'] } }
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function generateProposal(
   clientBriefText: string,
-  kickoffText?: string
+  kickoffText?: string,
+  brandResearch?: Record<string, unknown>,
+  influencerStrategy?: Record<string, unknown>
 ): Promise<ProposalOutput> {
   const agentId = `proposal-${Date.now()}`
   const startTime = Date.now()
@@ -43,8 +98,8 @@ export async function generateProposal(
     throw new Error('טקסט הבריף קצר מדי לניתוח. ודא שהמסמך נקרא בהצלחה.')
   }
 
-  const prompt = buildProposalPrompt(clientBriefText, kickoffText)
-  console.log(`[${agentId}] 📝 Prompt length: ${prompt.length} chars`)
+  const prompt = buildProposalPrompt(clientBriefText, kickoffText, brandResearch, influencerStrategy)
+  console.log(`[${agentId}] 📝 Prompt length: ${prompt.length} chars, hasResearch=${!!brandResearch}`)
 
   try {
     console.log(`[${agentId}] 🔄 Calling ${MODEL} with LOW thinking + JSON...`)
@@ -159,7 +214,25 @@ interface RawProposalResponse {
 // Prompt builder - HEAVILY OPTIMIZED FOR "WOW" PDF OUTPUT
 // ============================================================
 
-function buildProposalPrompt(clientBriefText: string, kickoffText?: string): string {
+function buildProposalPrompt(
+  clientBriefText: string,
+  kickoffText?: string,
+  brandResearch?: Record<string, unknown>,
+  influencerStrategy?: Record<string, unknown>
+): string {
+  const researchSection = brandResearch ? `
+## מחקר אסטרטגי שנאסף על המותג (השתמש בו כדי לכתוב תוכן חכם וספציפי!):
+- מיקום בשוק: ${(brandResearch.marketPosition as string) || 'לא ידוע'}
+- מתחרים עיקריים: ${JSON.stringify((brandResearch.competitors as unknown[])?.slice(0, 3) || [])}
+- יתרונות תחרותיים: ${JSON.stringify((brandResearch.competitiveAdvantages as unknown[]) || [])}
+- טרנדים בתעשייה: ${JSON.stringify((brandResearch.industryTrends as unknown[]) || [])}
+- קמפיינים תחרותיים: ${JSON.stringify((brandResearch.competitorCampaigns as unknown[])?.slice(0, 2) || [])}
+- פער תחרותי: ${(brandResearch.competitiveGap as string) || ''}
+- whyNow: ${(brandResearch.whyNowTrigger as string) || ''}
+- קהל יעד מהמחקר: ${JSON.stringify((brandResearch.targetDemographics as unknown) || {})}
+${influencerStrategy ? `- אסטרטגיית משפיענים: ${JSON.stringify(influencerStrategy).slice(0, 500)}` : ''}
+` : ''
+
   return `אתה מנהל קריאייטיב ואסטרטג ראשי בסוכנות פרימיום לשיווק משפיענים.
 המטרה שלך היא לבנות הצעת מחיר שתגרום ללקוח להגיד "וואו!". התוצר שלך ייוצא בסופו של דבר לעיצוב PDF יוקרתי.
 
@@ -168,6 +241,7 @@ ${clientBriefText}
 
 ${kickoffText ? `## מסמך 2: מסמך התנעה פנימי (Kickoff Notes)
 ${kickoffText}` : '(לא סופק מסמך התנעה)'}
+${researchSection}
 
 ## חוקי כתיבה קריטיים לעיצוב ה-PDF (חובה!):
 1. **קופי של סוכנות בוטיק:** השתמש בשפה סוחפת, פאנצ'ית ויוקרתית. אל תכתוב כמו רובוט.
