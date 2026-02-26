@@ -49,9 +49,6 @@ export default function CreateProposalPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [brandInfo, setBrandInfo] = useState<ExtractedBriefData | null>(null)
   const [brandFacts, setBrandFacts] = useState<string[]>([])
-  const [showResearchModal, setShowResearchModal] = useState(false)
-  const [pendingDocId, setPendingDocId] = useState<string | null>(null)
-  const [buildingProposal, setBuildingProposal] = useState(false)
 
   // Auto scroll logs for that "Terminal" effect
   useEffect(() => {
@@ -201,9 +198,10 @@ export default function CreateProposalPage() {
       if (!processRes.ok) throw new Error(processData.error || 'שגיאה בעיבוד המסמכים')
 
       const extracted: ExtractedBriefData = processData.extracted
+      const stepData = processData.stepData
       setBrandInfo(extracted)
 
-      addLog('success', `מסמכים נותחו בהצלחה (${processElapsed}s) - רמת ביטחון: ${extracted._meta?.confidence?.toUpperCase() || 'N/A'}`)
+      addLog('success', `בניית ליבת ההצעה הושלמה (${processElapsed}s) - רמת ביטחון: ${extracted._meta?.confidence?.toUpperCase() || 'N/A'}`)
 
       if (extracted.brand?.name) {
         addLog('success', `מותג אומת וזוהה: ${extracted.brand.name}${extracted.brand.industry ? ` | תעשייה: ${extracted.brand.industry}` : ''}`)
@@ -213,6 +211,12 @@ export default function CreateProposalPage() {
 
       if (extracted.budget?.amount && extracted.budget.amount > 0) {
         addLog('detail', `תקציב שאותר: ${extracted.budget.currency}${extracted.budget.amount.toLocaleString()}`)
+      }
+      if (stepData?.key_insight?.keyInsight) {
+        addLog('detail', `תובנה מרכזית פוצחה: ${stepData.key_insight.keyInsight.slice(0, 60)}...`)
+      }
+      if (stepData?.creative?.activityTitle) {
+        addLog('detail', `קונספט קריאייטיבי: "${stepData.creative.activityTitle}"`)
       }
       if (extracted._meta?.warnings?.length) {
         extracted._meta.warnings.forEach((w: string) => addLog('warning', w))
@@ -225,7 +229,7 @@ export default function CreateProposalPage() {
 
       // === STEP 3: Create Document ===
       setStage('creating')
-      addLog('info', 'שומר מסמך ומכין לשלב הבא...')
+      addLog('info', 'מרכיב ואורז את הצעת המחיר למסמך אינטראקטיבי...')
 
       const docRes = await fetch('/api/documents', {
         method: 'POST',
@@ -238,12 +242,11 @@ export default function CreateProposalPage() {
           data: {
             brandName: extracted.brand?.name || '',
             _extractedData: extracted,
-            // Store raw texts so build-proposal can use them later
+            _stepData: stepData,
             _briefText: briefText,
             _kickoffText: kickoffText || null,
-            _stepData: null, // filled by /api/build-proposal after popup choice
             _pipelineStatus: {
-              textGeneration: 'pending',
+              textGeneration: 'complete',
               research: 'pending',
               visualAssets: 'pending',
               slideGeneration: 'pending',
@@ -274,14 +277,13 @@ export default function CreateProposalPage() {
       if (!docRes.ok) throw new Error(docData.error || 'Failed to create document')
 
       const docId = docData.id || docData.document?.id
-      addLog('success', `המסמך מוכן! מעביר לעורך הפרימיום (ID: ${docId?.slice(0, 8)}...)`)
+      addLog('success', `המסמך מוכן! מעביר למחקר (ID: ${docId?.slice(0, 8)}...)`)
 
       setStage('done')
-      setPendingDocId(docId)
 
       setTimeout(() => {
-        setShowResearchModal(true)
-      }, 1200)
+        router.push(`/research/${docId}`)
+      }, 1500)
     } catch (err) {
       console.error('[Create Proposal] Error:', err)
       setStage('error')
@@ -837,86 +839,6 @@ export default function CreateProposalPage() {
         }
       `}} />
 
-      {/* Research Choice Modal */}
-      {showResearchModal && pendingDocId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-          {/* Card */}
-          <div className="relative bg-[#0f172a] border border-white/20 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
-            {/* Icon */}
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#f2cc0d]/20 to-[#f2cc0d]/5 border border-[#f2cc0d]/30 flex items-center justify-center mx-auto mb-6">
-              <svg className="w-8 h-8 text-[#f2cc0d]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-              </svg>
-            </div>
-
-            <h2 className="text-2xl font-extrabold text-white text-center mb-3">
-              מחקר אסטרטגי ומשפיענים?
-            </h2>
-            <p className="text-[#94a3b8] text-sm text-center leading-relaxed mb-2">
-              סוכני ה-AI שלנו יחקרו לעומק את המותג, יאתרו מתחרים, טרנדים בשוק ומשפיענים רלוונטיים — ויזינו את ההצעה בתובנות ספציפיות.
-            </p>
-            <p className="text-[#f2cc0d]/80 text-xs text-center font-semibold mb-7">
-              ⏱ המחקר לוקח כ-10 דקות
-            </p>
-
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => router.push(`/research/${pendingDocId}`)}
-                disabled={buildingProposal}
-                className="w-full bg-[#f2cc0d] text-[#0f172a] font-extrabold text-base py-4 rounded-2xl hover:bg-[#e0bc00] transition-all active:scale-95 shadow-[0_4px_20px_rgba(242,204,13,0.3)] flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                </svg>
-                כן, בצע מחקר מעמיק
-              </button>
-
-              <button
-                disabled={buildingProposal}
-                onClick={async () => {
-                  setBuildingProposal(true)
-                  try {
-                    // Build proposal from docs only (no research)
-                    const res = await fetch('/api/build-proposal', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ documentId: pendingDocId }),
-                    })
-                    const data = await res.json()
-                    if (res.ok && data.stepData) {
-                      // Patch document with generated step data
-                      await fetch(`/api/documents/${pendingDocId}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          _stepData: data.stepData,
-                          _extractedData: data.extracted,
-                          _pipelineStatus: { textGeneration: 'complete', research: 'skipped', visualAssets: 'pending', slideGeneration: 'pending' },
-                        }),
-                      })
-                    }
-                  } catch (err) {
-                    console.error('Build proposal (no research) failed:', err)
-                  } finally {
-                    router.push(`/wizard/${pendingDocId}`)
-                  }
-                }}
-                className="w-full bg-white/10 text-white font-semibold text-base py-4 rounded-2xl hover:bg-white/15 transition-all active:scale-95 border border-white/10 flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {buildingProposal ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    בונה הצעה...
-                  </>
-                ) : 'לא תודה, עבור ישירות לעריכה'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
