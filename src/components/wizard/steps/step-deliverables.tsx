@@ -26,12 +26,12 @@ const DELIVERABLE_TYPE_OPTIONS = [
 ]
 
 const DELIVERABLE_META: Record<string, { icon: string; color: string }> = {
-  'פעימת סטוריז': { icon: '📱', color: 'border-l-accent' },
-  'רילז': { icon: '🎬', color: 'border-l-accent/70' },
-  'טיקטוק': { icon: '🎵', color: 'border-l-brand-primary' },
-  'פוסט פיד': { icon: '📷', color: 'border-l-brand-primary/70' },
-  'שיתוף פעולה': { icon: '🤝', color: 'border-l-brand-gold' },
-  'לייב': { icon: '🔴', color: 'border-l-accent' },
+  'פעימת סטוריז': { icon: '📱', color: 'border-l-brand-primary' },
+  'רילז': { icon: '🎬', color: 'border-l-brand-primary/70' },
+  'טיקטוק': { icon: '🎵', color: 'border-l-brand-gold' },
+  'פוסט פיד': { icon: '📷', color: 'border-l-brand-primary/50' },
+  'שיתוף פעולה': { icon: '🤝', color: 'border-l-brand-gold/70' },
+  'לייב': { icon: '🔴', color: 'border-l-brand-gold' },
   'אחר': { icon: '📦', color: 'border-l-brand-mist' },
 }
 
@@ -255,7 +255,7 @@ export default function StepDeliverables({
         </label>
 
         <div
-          className="rounded-2xl border-2 border-dashed border-wizard-border p-8 text-center cursor-pointer hover:border-accent/40 hover:bg-brand-pearl/50 transition-all duration-200"
+          className="rounded-2xl border-2 border-dashed border-wizard-border p-8 text-center cursor-pointer hover:border-brand-primary/30 hover:bg-brand-pearl/50 transition-all duration-200"
           onClick={() => fileInputRef.current?.click()}
         >
           <input

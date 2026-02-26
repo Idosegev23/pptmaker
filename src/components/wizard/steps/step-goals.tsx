@@ -193,7 +193,7 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
             מטרות הקמפיין
           </label>
           {goals.length > 0 && (
-            <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-heebo font-bold text-accent">
+            <span className="rounded-full bg-brand-gold/10 px-3 py-1 text-xs font-heebo font-bold text-brand-primary">
               נבחרו {goals.length} מטרות
             </span>
           )}
@@ -215,15 +215,15 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
                 className={cn(
                   'relative flex items-start gap-3 rounded-2xl border p-4 text-right transition-all duration-200',
                   selected
-                    ? 'border-accent bg-accent/5 shadow-wizard-sm'
-                    : 'border-wizard-border bg-white hover:border-accent/30 hover:shadow-wizard-sm'
+                    ? 'border-brand-primary bg-brand-primary/5 shadow-wizard-sm'
+                    : 'border-wizard-border bg-white hover:border-brand-primary/30 hover:shadow-wizard-sm'
                 )}
               >
                 {/* Checkbox icon */}
                 <div className={cn(
                   'mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-all duration-200',
                   selected
-                    ? 'border-accent bg-accent'
+                    ? 'border-brand-primary bg-brand-primary'
                     : 'border-wizard-border'
                 )}>
                   {selected && (
@@ -235,7 +235,7 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
                 <div className="min-w-0">
                   <p className={cn(
                     'text-sm font-heebo font-bold',
-                    selected ? 'text-accent' : 'text-wizard-text-primary'
+                    selected ? 'text-brand-primary' : 'text-wizard-text-primary'
                   )}>
                     {goal.title}
                   </p>
@@ -260,13 +260,13 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
                   className={cn(
                     'relative flex items-start gap-3 rounded-2xl border p-4 text-right transition-all duration-200',
                     selected
-                      ? 'border-accent bg-accent/5 shadow-wizard-sm'
-                      : 'border-wizard-border bg-white hover:border-accent/30 hover:shadow-wizard-sm'
+                      ? 'border-brand-primary bg-brand-primary/5 shadow-wizard-sm'
+                      : 'border-wizard-border bg-white hover:border-brand-primary/30 hover:shadow-wizard-sm'
                   )}
                 >
                   <div className={cn(
                     'mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-all duration-200',
-                    selected ? 'border-accent bg-accent' : 'border-wizard-border'
+                    selected ? 'border-brand-primary bg-brand-primary' : 'border-wizard-border'
                   )}>
                     {selected && (
                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -275,7 +275,7 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={cn('text-sm font-heebo font-bold', selected ? 'text-accent' : 'text-wizard-text-primary')}>
+                    <p className={cn('text-sm font-heebo font-bold', selected ? 'text-brand-primary' : 'text-wizard-text-primary')}>
                       {typeof goal === 'string' ? goal : (goal as {title?: string})?.title || ''}
                     </p>
                     <p className="text-xs text-wizard-text-tertiary mt-0.5">מטרה מותאמת אישית</p>
@@ -292,7 +292,7 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
             })}
 
           {/* Add custom goal CTA card */}
-          <div className="flex items-center gap-2 rounded-2xl border-2 border-dashed border-wizard-border p-4 hover:border-accent/30 transition-colors">
+          <div className="flex items-center gap-2 rounded-2xl border-2 border-dashed border-wizard-border p-4 hover:border-brand-primary/30 transition-colors">
             <Input
               placeholder="הוסיפו מטרה מותאמת..."
               value={newCustomGoal}
@@ -310,7 +310,7 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
               size="sm"
               onClick={addCustomGoal}
               disabled={!newCustomGoal.trim()}
-              className="shrink-0 text-accent font-bold"
+              className="shrink-0 text-brand-primary font-bold"
             >
               +
             </Button>
@@ -348,7 +348,7 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
                   />
                   {loadingGoals.has(goal.title) && (
                     <div className="absolute top-3 left-3">
-                      <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
                     </div>
                   )}
                 </div>

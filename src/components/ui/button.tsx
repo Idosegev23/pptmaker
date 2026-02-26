@@ -14,11 +14,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const variants = {
       primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-wizard-md hover:shadow-wizard-lg hover:-translate-y-[1px]',
       secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-      accent: 'bg-accent text-accent-foreground hover:bg-accent/90 shadow-accent-glow hover:shadow-gold-glow hover:-translate-y-[1px]',
+      accent: 'bg-brand-primary text-white hover:bg-brand-primary/90 shadow-[0_4px_20px_rgba(15,23,42,0.25)] hover:shadow-[0_4px_24px_rgba(242,204,13,0.3)] hover:-translate-y-[1px]',
       ghost: 'text-wizard-text-secondary hover:bg-brand-pearl hover:text-foreground',
       outline: 'border border-wizard-border text-foreground hover:bg-brand-pearl hover:border-primary/20',
       destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-      premium: 'text-white font-bold shadow-accent-glow hover:shadow-gold-glow hover:-translate-y-[1px]',
+      premium: 'text-white font-bold shadow-[0_4px_20px_rgba(15,23,42,0.25),0_2px_8px_rgba(242,204,13,0.2)] hover:shadow-[0_4px_24px_rgba(242,204,13,0.35),0_2px_10px_rgba(15,23,42,0.2)] hover:-translate-y-[1px]',
     }
 
     const sizes = {
@@ -32,7 +32,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         className={cn(
           'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200',
-          'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent/10',
+          'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-primary/10',
           'disabled:pointer-events-none disabled:opacity-50',
           variants[variant],
           sizes[size],
@@ -40,7 +40,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         ref={ref}
         disabled={disabled || isLoading}
-        style={variant === 'premium' ? { background: 'linear-gradient(135deg, rgb(233,69,96) 0%, rgb(201,162,39) 100%)' } : undefined}
+        style={variant === 'premium' ? { background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #f2cc0d 100%)' } : undefined}
         {...props}
       >
         {isLoading && (

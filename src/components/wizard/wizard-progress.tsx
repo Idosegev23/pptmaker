@@ -78,7 +78,7 @@ export default function WizardProgress({
   }
 
   return (
-    <div dir="rtl" className="border-b border-wizard-border bg-white px-4 py-5 md:px-8">
+    <div dir="rtl" className="border-b border-white/10 bg-gradient-to-l from-[#0f172a] via-[#1e1b4b] to-[#020617] px-4 py-5 md:px-8">
       <div
         ref={scrollRef}
         className="mx-auto flex max-w-3xl items-start justify-between overflow-x-auto scrollbar-hide snap-x snap-mandatory gap-0 pb-6"
@@ -99,29 +99,27 @@ export default function WizardProgress({
                   onClick={() => handleStepClick(step.id)}
                   disabled={!clickable}
                   className={cn(
-                    'relative flex h-8 w-8 items-center justify-center rounded-full text-xs font-rubik font-bold',
-                    'transition-all duration-300',
+                    'relative flex h-8 w-8 items-center justify-center rounded-xl text-xs font-rubik font-bold',
+                    'transition-all duration-500',
                     // Active
-                    isActive && 'ring-2 ring-accent ring-offset-2 ring-offset-white text-accent bg-accent/5',
+                    isActive && 'bg-[#f2cc0d] text-[#0f172a] shadow-[0_0_15px_rgba(242,204,13,0.4)] scale-110',
                     // Completed
-                    !isActive && status === 'completed' && 'bg-brand-primary text-white cursor-pointer hover:shadow-wizard-md',
+                    !isActive && status === 'completed' && 'bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/30 cursor-pointer hover:bg-[#10b981]/30',
                     // Skipped
-                    !isActive && status === 'skipped' && 'border-2 border-dashed border-wizard-text-tertiary bg-transparent text-wizard-text-tertiary cursor-pointer',
+                    !isActive && status === 'skipped' && 'border-2 border-dashed border-white/20 bg-transparent text-white/40 cursor-pointer',
                     // Pending
-                    status === 'pending' && 'bg-brand-mist text-wizard-text-tertiary cursor-not-allowed',
+                    status === 'pending' && 'bg-white/5 text-white/25 border border-white/5 cursor-not-allowed',
                   )}
                   title={step.label}
                   aria-label={`${step.label} - ${getStatusLabel(status)}`}
                   aria-current={isActive ? 'step' : undefined}
                 >
                   {status === 'completed' && !isActive ? (
-                    <CheckIcon className="text-white" />
+                    <CheckIcon className="text-[#10b981]" />
+                  ) : isActive ? (
+                    <span>{step.order}</span>
                   ) : (
                     <span>{step.order}</span>
-                  )}
-                  {/* Active ping */}
-                  {isActive && (
-                    <span className="absolute -inset-1 rounded-full animate-ping bg-accent/10 pointer-events-none" />
                   )}
                 </button>
 
@@ -129,7 +127,9 @@ export default function WizardProgress({
                 <span
                   className={cn(
                     'absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-heebo',
-                    isActive ? 'font-bold text-accent' : 'font-medium text-wizard-text-tertiary'
+                    isActive ? 'font-bold text-[#f2cc0d]' :
+                    status === 'completed' ? 'font-medium text-[#10b981]' :
+                    'font-medium text-white/40'
                   )}
                 >
                   {step.labelShort}
@@ -140,13 +140,13 @@ export default function WizardProgress({
               {index < WIZARD_STEPS.length - 1 && (
                 <div className="relative mx-1 mt-4 h-[2px] w-6 md:w-10 shrink-0">
                   {/* Background track */}
-                  <div className="absolute inset-0 rounded-full bg-brand-mist" />
+                  <div className="absolute inset-0 rounded-full bg-white/10" />
                   {/* Fill */}
                   <div
                     className={cn(
                       'absolute inset-y-0 right-0 rounded-full transition-all duration-500',
                       lineCompleted
-                        ? 'w-full bg-gradient-to-l from-accent to-brand-primary'
+                        ? 'w-full bg-gradient-to-l from-[#10b981] to-[#047857]'
                         : 'w-0'
                     )}
                   />

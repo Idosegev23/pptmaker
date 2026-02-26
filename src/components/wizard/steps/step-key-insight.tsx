@@ -105,7 +105,7 @@ export default function StepKeyInsight({
               variant="outline"
               size="sm"
               onClick={applyExtracted}
-              className="mt-2 border-accent/30 text-accent hover:bg-accent/5"
+              className="mt-2 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
             >
               החל תובנה מחולצת
             </Button>
@@ -138,11 +138,11 @@ export default function StepKeyInsight({
             size="sm"
             onClick={handleRefineWithAI}
             disabled={isRefining}
-            className="gap-1.5 border-accent/30 text-accent hover:bg-accent/5"
+            className="gap-1.5 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
           >
             {isRefining ? (
               <>
-                <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <div className="w-3 h-3 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
                 מחדד עם AI...
               </>
             ) : (

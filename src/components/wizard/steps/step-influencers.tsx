@@ -288,13 +288,13 @@ export default function StepInfluencers({
                       {inf.categories.map((cat, catIndex) => (
                         <span
                           key={catIndex}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-accent/10 text-sm text-accent"
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-brand-gold/10 text-sm text-brand-primary"
                         >
                           {cat}
                           <button
                             type="button"
                             onClick={() => removeCategory(index, catIndex)}
-                            className="text-accent/60 hover:text-destructive"
+                            className="text-brand-primary/60 hover:text-destructive"
                           >
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
@@ -499,7 +499,7 @@ export default function StepInfluencers({
                       type="checkbox"
                       checked={inf.isVerified ?? false}
                       onChange={(e) => updateInfluencer(index, { isVerified: e.target.checked })}
-                      className="h-4 w-4 rounded border-wizard-border accent-accent"
+                      className="h-4 w-4 rounded border-wizard-border accent-brand-primary"
                     />
                     <span className="text-sm text-wizard-text-primary">חשבון מאומת</span>
                   </label>

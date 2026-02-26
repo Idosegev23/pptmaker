@@ -29,7 +29,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           className={cn(
             'flex h-12 w-full rounded-xl border bg-white px-4 py-2.5 appearance-none',
             'text-sm text-foreground',
-            'focus-visible:outline-none focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent/8',
+            'focus-visible:outline-none focus-visible:border-brand-primary focus-visible:ring-[3px] focus-visible:ring-brand-primary/8',
             'hover:border-primary/20',
             'disabled:cursor-not-allowed disabled:opacity-40 disabled:bg-brand-pearl',
             'transition-all duration-200',

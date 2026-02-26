@@ -192,11 +192,11 @@ export default function StepTargetAudience({
                 size="sm"
                 onClick={handleGenerateInsights}
                 disabled={isGeneratingInsights || (!targetGender && !targetAgeRange)}
-                className="gap-1.5 border-accent/30 text-accent hover:bg-accent/5"
+                className="gap-1.5 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
               >
                 {isGeneratingInsights ? (
                   <>
-                    <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    <div className="w-3 h-3 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
                     מחפש תובנות...
                   </>
                 ) : (
@@ -231,7 +231,7 @@ export default function StepTargetAudience({
                 <div key={index} className="rounded-2xl border border-wizard-border bg-white shadow-wizard-sm p-3 space-y-1.5 relative group">
                   <p className="text-sm font-medium text-wizard-text-primary pr-6">{parsed.text}</p>
                   {parsed.dataPoint && (
-                    <p className="text-xs text-accent font-semibold">{parsed.dataPoint}</p>
+                    <p className="text-xs text-brand-gold font-semibold">{parsed.dataPoint}</p>
                   )}
                   <p className="text-xs text-wizard-text-tertiary">
                     {parsed.sourceUrl ? (
@@ -282,7 +282,7 @@ export default function StepTargetAudience({
         <button
           type="button"
           onClick={toggleSecondary}
-          className="flex items-center gap-2 text-sm font-heebo font-semibold text-wizard-text-primary hover:text-accent transition-colors"
+          className="flex items-center gap-2 text-sm font-heebo font-semibold text-wizard-text-primary hover:text-brand-primary transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

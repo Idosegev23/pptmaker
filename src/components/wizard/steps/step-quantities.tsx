@@ -237,9 +237,9 @@ export default function StepQuantities({
               </div>
             )}
 
-            <div className="flex items-center justify-between border-t border-accent/10 pt-3">
+            <div className="flex items-center justify-between border-t border-brand-primary/10 pt-3">
               <span className="font-heebo font-bold text-wizard-text-primary">סה&quot;כ תוצרים:</span>
-              <span className="text-2xl font-heebo font-extrabold text-accent">
+              <span className="text-2xl font-heebo font-extrabold text-brand-primary">
                 {calculatedTotal}
               </span>
             </div>

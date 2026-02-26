@@ -78,15 +78,15 @@ export default function WizardHeader({
           <span
             className={cn(
               'inline-block h-1.5 w-1.5 rounded-full transition-all duration-300',
-              isSaving && 'animate-pulse bg-accent w-3',
-              !isSaving && isDirty && 'bg-accent/60',
-              !isSaving && !isDirty && 'bg-brand-primary'
+              isSaving && 'animate-pulse bg-[#f2cc0d] w-3',
+              !isSaving && isDirty && 'bg-[#f2cc0d]/60',
+              !isSaving && !isDirty && 'bg-[#10b981]'
             )}
           />
           <span className={cn(
             'text-[11px] font-medium transition-colors',
-            isSaving && 'text-accent',
-            !isSaving && isDirty && 'text-accent/70',
+            isSaving && 'text-[#f2cc0d]',
+            !isSaving && isDirty && 'text-[#f2cc0d]/70',
             !isSaving && !isDirty && 'text-wizard-text-tertiary'
           )}>
             {getSaveStatusText()}

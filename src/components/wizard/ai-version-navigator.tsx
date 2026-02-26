@@ -16,8 +16,8 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 const SOURCE_COLORS: Record<string, string> = {
-  ai: 'bg-accent/10 text-accent',
-  research: 'bg-emerald-100 text-emerald-700',
+  ai: 'bg-brand-gold/10 text-brand-primary',
+  research: 'bg-[#10b981]/10 text-[#10b981]',
   manual: 'bg-brand-pearl text-wizard-text-secondary',
 }
 

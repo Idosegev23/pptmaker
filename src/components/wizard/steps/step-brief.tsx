@@ -124,7 +124,7 @@ export default function StepBrief({ data, extractedData, onChange, errors }: Ste
             variant="outline"
             size="sm"
             onClick={applyExtracted}
-            className="mt-3 border-accent/30 text-accent hover:bg-accent/5"
+            className="mt-3 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
           >
             החל מידע מחולץ
           </Button>
@@ -254,7 +254,7 @@ export default function StepBrief({ data, extractedData, onChange, errors }: Ste
           <ul className="space-y-1">
             {clientSpecificRequests.map((req, i) => (
               <li key={i} className="text-[13px] text-wizard-text-secondary flex items-start gap-2">
-                <span className="text-accent mt-0.5">•</span>
+                <span className="text-brand-primary mt-0.5">•</span>
                 <span>{req}</span>
               </li>
             ))}

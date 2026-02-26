@@ -189,11 +189,11 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
                 size="sm"
                 onClick={handleRefineAllPillars}
                 disabled={isRefiningPillars}
-                className="gap-1.5 border-accent/30 text-accent hover:bg-accent/5"
+                className="gap-1.5 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
               >
                 {isRefiningPillars ? (
                   <>
-                    <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    <div className="w-3 h-3 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
                     <span>מחדד...</span>
                   </>
                 ) : (
@@ -243,10 +243,10 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
                   size="sm"
                   onClick={() => handleRefineSinglePillar(index)}
                   disabled={refiningPillarIndex === index || !pillar.title}
-                  className="gap-1 text-accent hover:bg-accent/5 text-xs px-2 h-7"
+                  className="gap-1 text-brand-primary hover:bg-brand-primary/5 text-xs px-2 h-7"
                 >
                   {refiningPillarIndex === index ? (
-                    <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    <div className="w-3 h-3 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
@@ -292,11 +292,11 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
             size="sm"
             onClick={handleGenerateFlow}
             disabled={isGeneratingFlow || !strategyHeadline}
-            className="gap-1.5 border-accent/30 text-accent hover:bg-accent/5"
+            className="gap-1.5 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
           >
             {isGeneratingFlow ? (
               <>
-                <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <div className="w-3 h-3 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
                 <span>מייצר Flow...</span>
               </>
             ) : (

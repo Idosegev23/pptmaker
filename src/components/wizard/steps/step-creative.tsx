@@ -122,7 +122,7 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
             {suggestedReferences.map((ref, i) => (
               <div key={i} className="rounded-2xl border border-wizard-border bg-brand-pearl/50 p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="rounded-md bg-accent/10 px-2 py-0.5 text-[10px] font-rubik font-medium text-accent">
+                  <span className="rounded-md bg-brand-gold/10 px-2 py-0.5 text-[10px] font-rubik font-medium text-brand-primary">
                     {ref.type}
                   </span>
                 </div>
@@ -243,7 +243,7 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
         </label>
 
         <div
-          className="rounded-2xl border-2 border-dashed border-wizard-border p-8 text-center cursor-pointer hover:border-accent/40 hover:bg-brand-pearl/50 transition-all duration-200"
+          className="rounded-2xl border-2 border-dashed border-wizard-border p-8 text-center cursor-pointer hover:border-brand-primary/30 hover:bg-brand-pearl/50 transition-all duration-200"
           onClick={() => fileInputRef.current?.click()}
         >
           <input
