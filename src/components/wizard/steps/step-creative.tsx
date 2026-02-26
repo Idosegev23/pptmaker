@@ -21,6 +21,7 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
   const activityApproach = data.activityApproach ?? []
   const activityDifferentiator = data.activityDifferentiator ?? ''
   const referenceImages = data.referenceImages ?? []
+  const suggestedReferences = data.suggestedReferences ?? []
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -110,15 +111,32 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
   )
 
   return (
-    <div dir="rtl" className="space-y-6">
-      {/* Optional banner */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardContent className="py-3 px-4">
-          <p className="text-sm text-blue-700">
-            שלב זה אופציונלי - ניתן לדלג ולחזור מאוחר יותר
-          </p>
-        </CardContent>
-      </Card>
+    <div dir="rtl" className="space-y-10">
+      {/* Suggested references from research */}
+      {suggestedReferences.length > 0 && (
+        <div className="space-y-3">
+          <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
+            הצעות רפרנס מהמחקר
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {suggestedReferences.map((ref, i) => (
+              <div key={i} className="rounded-2xl border border-accent/20 bg-brand-gold-light/30 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="rounded-md bg-accent/10 px-2 py-0.5 text-[10px] font-rubik font-medium text-accent">
+                    {ref.type}
+                  </span>
+                </div>
+                <p className="text-[13px] text-wizard-text-primary font-heebo leading-relaxed">
+                  {ref.description}
+                </p>
+                <p className="text-[11px] text-wizard-text-tertiary mt-1.5">
+                  {ref.rationale}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Activity Title */}
       <Input
@@ -152,11 +170,12 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
       {/* Activity Approach */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
             גישות וכיוונים
           </label>
-          <Button variant="ghost" size="sm" onClick={addApproach}>
-            + הוסף גישה
+          <Button variant="ghost" size="sm" onClick={addApproach} className="gap-1.5">
+            <span className="text-base leading-none">+</span>
+            <span>הוסף גישה</span>
           </Button>
         </div>
 
@@ -165,8 +184,8 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
         )}
 
         {activityApproach.length === 0 && (
-          <div className="rounded-lg border-2 border-dashed border-input p-4 text-center">
-            <p className="text-sm text-muted-foreground">
+          <div className="rounded-2xl border-2 border-dashed border-wizard-border p-6 text-center">
+            <p className="text-sm text-wizard-text-tertiary">
               הוסיפו גישות וכיוונים קריאייטיביים לפעילות
             </p>
           </div>
@@ -175,17 +194,17 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
         {activityApproach.map((approach, index) => (
           <div
             key={index}
-            className="rounded-lg border border-input bg-muted/20 p-4 space-y-3"
+            className="rounded-2xl border border-wizard-border bg-white shadow-wizard-sm p-5 space-y-3"
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">
+              <span className="text-xs font-rubik font-medium text-wizard-text-tertiary">
                 גישה {index + 1}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => removeApproach(index)}
-                className="text-destructive hover:bg-destructive/10"
+                className="text-wizard-text-tertiary hover:text-destructive hover:bg-destructive/10 text-xs"
               >
                 הסר
               </Button>
@@ -219,12 +238,12 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
 
       {/* Reference Images */}
       <div className="space-y-4">
-        <label className="block text-sm font-medium text-foreground">
+        <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
           תמונות רפרנס
         </label>
 
         <div
-          className="rounded-lg border-2 border-dashed border-input p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+          className="rounded-2xl border-2 border-dashed border-wizard-border p-8 text-center cursor-pointer hover:border-accent/40 hover:bg-brand-pearl/50 transition-all duration-200"
           onClick={() => fileInputRef.current?.click()}
         >
           <input

@@ -4,7 +4,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'accent' | 'ghost' | 'outline' | 'destructive'
+  variant?: 'primary' | 'secondary' | 'accent' | 'ghost' | 'outline' | 'destructive' | 'premium'
   size?: 'sm' | 'md' | 'lg' | 'icon'
   isLoading?: boolean
 }
@@ -12,12 +12,13 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', isLoading, children, disabled, ...props }, ref) => {
     const variants = {
-      primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-md hover:shadow-lg',
+      primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-wizard-md hover:shadow-wizard-lg hover:-translate-y-[1px]',
       secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-      accent: 'bg-accent text-accent-foreground hover:bg-accent/90 shadow-md hover:shadow-lg',
-      ghost: 'hover:bg-muted',
-      outline: 'border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground',
+      accent: 'bg-accent text-accent-foreground hover:bg-accent/90 shadow-accent-glow hover:shadow-gold-glow hover:-translate-y-[1px]',
+      ghost: 'text-wizard-text-secondary hover:bg-brand-pearl hover:text-foreground',
+      outline: 'border border-wizard-border text-foreground hover:bg-brand-pearl hover:border-primary/20',
       destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+      premium: 'text-white font-bold shadow-accent-glow hover:shadow-gold-glow hover:-translate-y-[1px]',
     }
 
     const sizes = {
@@ -30,8 +31,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         className={cn(
-          'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200',
+          'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent/10',
           'disabled:pointer-events-none disabled:opacity-50',
           variants[variant],
           sizes[size],
@@ -39,6 +40,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         ref={ref}
         disabled={disabled || isLoading}
+        style={variant === 'premium' ? { background: 'linear-gradient(135deg, rgb(233,69,96) 0%, rgb(201,162,39) 100%)' } : undefined}
         {...props}
       >
         {isLoading && (

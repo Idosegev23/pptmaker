@@ -8,14 +8,18 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     description: 'רקע על המותג והבריף שהתקבל',
     required: true,
     order: 1,
+    helpText: 'כאן מופיע המידע שחולץ מהבריף שהעלתם. בדקו שהפרטים נכונים ותקנו אם צריך — זה הבסיס לכל מה שיבוא אחרי.',
+    whyItMatters: 'המידע הזה מזין את כל השלבים הבאים. ככל שהוא מדויק יותר, ההצעה שתיווצר תהיה חדה יותר.',
   },
   {
     id: 'goals',
-    label: 'מטרות',
+    label: 'מטרות ויעדים',
     labelShort: 'מטרות',
-    description: 'מטרות הקמפיין',
+    description: 'מטרות הקמפיין ויעדים מדידים',
     required: true,
     order: 2,
+    helpText: 'בחרו מטרות מהרשימה או הוסיפו מטרות מותאמות. ה-AI יכתוב תיאור לכל מטרה — תוכלו לערוך אותו.',
+    whyItMatters: 'המטרות מגדירות את ה-"למה" של הקמפיין. הן ישפיעו על האסטרטגיה, התוכן והמדדים.',
   },
   {
     id: 'target_audience',
@@ -24,6 +28,8 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     description: 'קהלי היעד של הקמפיין',
     required: true,
     order: 3,
+    helpText: 'הגדירו את קהל היעד בצורה ספציפית — לא "נשים 25-34" אלא מי האדם הזה באמת. ה-AI יחפש תובנות מחקריות.',
+    whyItMatters: 'פרופיל קהל חד מוביל לתובנה חדה, שמובילה לקריאייטיב שפוגע בול.',
   },
   {
     id: 'key_insight',
@@ -32,6 +38,8 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     description: 'תובנה מרכזית מבוססת מחקר',
     required: true,
     order: 4,
+    helpText: 'התובנה היא ה-"אסימון שנופל" — הממצא שמקשר בין הקהל לבין מה שהמותג מציע. ה-AI ינסה לחדד אותה עם מחקר.',
+    whyItMatters: 'תובנה חזקה היא ההבדל בין הצעה גנרית להצעה שגורמת ללקוח להגיד "וואו, אתם מבינים אותי".',
   },
   {
     id: 'strategy',
@@ -40,6 +48,8 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     description: 'הגישה האסטרטגית והפעולות',
     required: true,
     order: 5,
+    helpText: 'הגדירו את הכותרת האסטרטגית ועמודי התווך. תוכלו לבקש מה-AI לחדד כל עמוד תווך בנפרד או את כולם ביחד.',
+    whyItMatters: 'האסטרטגיה מתרגמת את התובנה לתוכנית פעולה — היא מראה ללקוח שיש שיטה, לא רק רעיון.',
   },
   {
     id: 'creative',
@@ -48,6 +58,8 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     description: 'כיוון קריאייטיבי ורפרנסים',
     required: false,
     order: 6,
+    helpText: 'תנו שם לקמפיין, הגדירו את הקונספט ואת ה-Vibe. אפשר גם להעלות תמונות רפרנס.',
+    whyItMatters: 'הקריאייטיב הופך אסטרטגיה יבשה לרעיון שאפשר לדמיין. הלקוח רוצה לראות חזון, לא רק תוכנית.',
   },
   {
     id: 'deliverables',
@@ -56,6 +68,8 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     description: 'מסגרת התוצרים והתכנים',
     required: true,
     order: 7,
+    helpText: 'הגדירו את סוגי התכנים — רילז, סטוריז, טיקטוק וכו\'. לכל תוצר ציינו כמות, תיאור ומטרה.',
+    whyItMatters: 'זה מה שהלקוח "קונה" בפועל. הבהירות כאן מונעת אי-הבנות אחרי חתימת העסקה.',
   },
   {
     id: 'quantities',
@@ -64,6 +78,8 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     description: 'סיכום כמויות תוצרים ומשפיענים',
     required: true,
     order: 8,
+    helpText: 'ציינו כמה משפיענים ומה משך הקמפיין. הכמויות יחושבו אוטומטית לפי מה שהגדרתם בתוצרים.',
+    whyItMatters: 'הנוסחה הברורה מראה ללקוח בדיוק מה הוא מקבל — שקיפות שבונה אמון.',
   },
   {
     id: 'media_targets',
@@ -72,6 +88,8 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     description: 'תקציב, צפיות, מעורבות ו-CPE',
     required: true,
     order: 9,
+    helpText: 'הזינו תקציב ויעדי ביצועים. המדדים עוזרים ללקוח להבין את ה-ROI הצפוי.',
+    whyItMatters: 'מדדים ריאליים מוכיחים מקצועיות. הלקוח רוצה לדעת שאתם יודעים לחשב, לא רק לחלום.',
   },
   {
     id: 'influencers',
@@ -80,6 +98,8 @@ export const WIZARD_STEPS: WizardStepMeta[] = [
     description: 'פרופילי משפיענים מומלצים',
     required: true,
     order: 10,
+    helpText: 'הוסיפו פרופילי משפיענים מומלצים. ה-AI הציע כמה על בסיס המחקר — תוכלו לערוך או להוסיף.',
+    whyItMatters: 'הליהוק הנכון הוא חצי מהקמפיין. הלקוח רוצה לראות פרצופים, לא רק מספרים.',
   },
 ]
 

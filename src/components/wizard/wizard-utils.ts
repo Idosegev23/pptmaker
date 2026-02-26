@@ -35,6 +35,8 @@ export function extractedDataToStepData(
       brandBrief: extracted.brand.background || '',
       brandPainPoints: extracted.targetAudience?.primary?.painPoints || [],
       brandObjective: extracted.campaignGoals?.[0] || '',
+      successMetrics: extracted.successMetrics || [],
+      clientSpecificRequests: extracted.clientSpecificRequests || [],
     }
   }
 
@@ -133,6 +135,9 @@ export function wizardDataToProposalData(
   if (stepData.goals) {
     data.goalsDetailed = stepData.goals.goals
     data.goals = stepData.goals.goals.map((g) => g.title)
+    if (stepData.goals.targets?.length) {
+      data.measurableTargets = stepData.goals.targets
+    }
   }
 
   // Target audience
@@ -397,6 +402,22 @@ export function enrichStepData(
             steps: opportunities.map(opp => ({ label: 'הזדמנות תחרותית', description: opp })),
           },
         }
+      }
+    }
+
+    // ── Creative: enrich with suggested references from research ──
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const visualReferences = (brandResearch as any).visualReferences as Array<{
+      type?: string; description?: string; rationale?: string
+    }> | undefined
+    if (visualReferences?.length && result.creative) {
+      result.creative = {
+        ...result.creative,
+        suggestedReferences: visualReferences.map(ref => ({
+          type: ref.type || 'רפרנס',
+          description: ref.description || '',
+          rationale: ref.rationale || '',
+        })),
       }
     }
 

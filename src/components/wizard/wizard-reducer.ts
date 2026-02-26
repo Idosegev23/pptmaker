@@ -10,6 +10,7 @@ export function getInitialWizardState(): WizardState {
     extractedData: {},
     isDirty: false,
     lastSavedAt: null,
+    aiVersionHistory: {},
   }
 }
 
@@ -141,6 +142,52 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case 'MARK_DIRTY': {
       return {
         ...state,
+        isDirty: true,
+      }
+    }
+
+    case 'PUSH_AI_VERSION': {
+      const history = state.aiVersionHistory || {}
+      const existing = history[action.key] || { versions: [], currentIndex: -1 }
+      // Truncate forward versions if navigated back
+      const trimmed = existing.versions.slice(0, existing.currentIndex + 1)
+      const newVersions = [
+        ...trimmed,
+        { data: action.data, timestamp: new Date().toISOString(), source: action.source },
+      ].slice(-10) // Cap at 10 versions
+      return {
+        ...state,
+        aiVersionHistory: {
+          ...history,
+          [action.key]: { versions: newVersions, currentIndex: newVersions.length - 1 },
+        },
+      }
+    }
+
+    case 'NAVIGATE_AI_VERSION': {
+      const hist = state.aiVersionHistory?.[action.key]
+      if (!hist || hist.versions.length === 0) return state
+      const newIndex = action.direction === 'prev'
+        ? Math.max(0, hist.currentIndex - 1)
+        : Math.min(hist.versions.length - 1, hist.currentIndex + 1)
+      if (newIndex === hist.currentIndex) return state
+
+      const versionData = hist.versions[newIndex].data
+      // Determine which step this key belongs to and write back
+      const stepId = action.key.split('.')[0] as WizardStepId
+      return {
+        ...state,
+        aiVersionHistory: {
+          ...state.aiVersionHistory,
+          [action.key]: { ...hist, currentIndex: newIndex },
+        },
+        stepData: {
+          ...state.stepData,
+          [stepId]: {
+            ...(state.stepData[stepId] || {}),
+            ...versionData,
+          },
+        },
         isDirty: true,
       }
     }

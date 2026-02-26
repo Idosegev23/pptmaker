@@ -4,7 +4,8 @@ import React, { useCallback, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
-import type { StrategyStepData } from '@/types/wizard'
+import type { StrategyStepData, AiVersionEntry } from '@/types/wizard'
+import AiVersionNavigator from '../ai-version-navigator'
 
 interface StepStrategyProps {
   data: Partial<StrategyStepData>
@@ -12,14 +13,19 @@ interface StepStrategyProps {
   onChange: (data: Partial<StrategyStepData>) => void
   errors: Record<string, string> | null
   briefContext?: string
+  aiVersionHistory?: Record<string, { versions: AiVersionEntry[]; currentIndex: number }>
+  onPushVersion?: (key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') => void
+  onNavigateVersion?: (key: string, direction: 'prev' | 'next') => void
 }
 
-export default function StepStrategy({ data, extractedData, onChange, errors, briefContext }: StepStrategyProps) {
+export default function StepStrategy({ data, extractedData, onChange, errors, briefContext, aiVersionHistory, onPushVersion, onNavigateVersion }: StepStrategyProps) {
   const strategyHeadline = data.strategyHeadline ?? ''
   const strategyDescription = data.strategyDescription ?? ''
   const strategyPillars = data.strategyPillars ?? []
   const strategyFlow = data.strategyFlow ?? { steps: [] }
   const [isGeneratingFlow, setIsGeneratingFlow] = useState(false)
+  const [isRefiningPillars, setIsRefiningPillars] = useState(false)
+  const [refiningPillarIndex, setRefiningPillarIndex] = useState<number | null>(null)
 
   const handleGenerateFlow = useCallback(async () => {
     setIsGeneratingFlow(true)
@@ -38,12 +44,71 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
         const result = await res.json()
         if (result.steps?.length) {
           onChange({ ...data, strategyFlow: { steps: result.steps } })
+          onPushVersion?.('strategy.flow', { strategyFlow: { steps: result.steps } }, 'ai')
         }
       }
     } catch {
       // Silent fail
     } finally {
       setIsGeneratingFlow(false)
+    }
+  }, [strategyHeadline, strategyPillars, briefContext, data, onChange, onPushVersion])
+
+  const handleRefineAllPillars = useCallback(async () => {
+    if (strategyPillars.length === 0) return
+    setIsRefiningPillars(true)
+    try {
+      const res = await fetch('/api/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'refine_strategy_pillars',
+          strategyHeadline,
+          pillars: JSON.stringify(strategyPillars),
+          briefContext: briefContext || '',
+        }),
+      })
+      if (res.ok) {
+        const result = await res.json()
+        if (result.pillars?.length) {
+          onChange({ ...data, strategyPillars: result.pillars })
+          onPushVersion?.('strategy.pillars', { strategyPillars: result.pillars }, 'ai')
+        }
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setIsRefiningPillars(false)
+    }
+  }, [strategyHeadline, strategyPillars, briefContext, data, onChange, onPushVersion])
+
+  const handleRefineSinglePillar = useCallback(async (index: number) => {
+    const pillar = strategyPillars[index]
+    if (!pillar) return
+    setRefiningPillarIndex(index)
+    try {
+      const res = await fetch('/api/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'refine_strategy_pillars',
+          strategyHeadline,
+          pillars: JSON.stringify([pillar]),
+          briefContext: briefContext || '',
+        }),
+      })
+      if (res.ok) {
+        const result = await res.json()
+        if (result.pillars?.[0]) {
+          const updated = [...strategyPillars]
+          updated[index] = result.pillars[0]
+          onChange({ ...data, strategyPillars: updated })
+        }
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setRefiningPillarIndex(null)
     }
   }, [strategyHeadline, strategyPillars, briefContext, data, onChange])
 
@@ -72,7 +137,7 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
   )
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir="rtl" className="space-y-10">
       {/* Strategy Headline */}
       <div className="space-y-2">
         <Input
@@ -82,9 +147,9 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
           onChange={(e) => onChange({ ...data, strategyHeadline: e.target.value })}
           error={errors?.strategyHeadline}
         />
-        <div className="rounded-lg bg-muted/50 p-3">
-          <p className="text-xs text-muted-foreground mb-1 font-medium">דוגמאות:</p>
-          <ul className="text-xs text-muted-foreground space-y-0.5 list-disc list-inside">
+        <div className="rounded-xl bg-brand-pearl/60 p-3">
+          <p className="text-xs text-wizard-text-tertiary mb-1 font-heebo font-medium">דוגמאות:</p>
+          <ul className="text-xs text-wizard-text-tertiary space-y-0.5 list-disc list-inside">
             <li>נייצר מהלך מודעות רחב שיפעל ב-2 שלבים</li>
             <li>נרים קמפיין שיגע בכמה עולמות תוכן</li>
             <li>ניצור נוכחות דיגיטלית שמובילה מחשיפה להמרה</li>
@@ -105,12 +170,47 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
       {/* Strategy Pillars */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-foreground">
-            עמודי תווך אסטרטגיים
-          </label>
-          <Button variant="ghost" size="sm" onClick={addPillar}>
-            + הוסף עמוד תווך
-          </Button>
+          <div className="flex items-center gap-3">
+            <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
+              עמודי תווך אסטרטגיים
+            </label>
+            {aiVersionHistory?.['strategy.pillars'] && onNavigateVersion && (
+              <AiVersionNavigator
+                versions={aiVersionHistory['strategy.pillars'].versions}
+                currentIndex={aiVersionHistory['strategy.pillars'].currentIndex}
+                onNavigate={(dir) => onNavigateVersion('strategy.pillars', dir)}
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {strategyPillars.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefineAllPillars}
+                disabled={isRefiningPillars}
+                className="gap-1.5 border-accent/30 text-accent hover:bg-accent/5"
+              >
+                {isRefiningPillars ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    <span>מחדד...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                    <span>חדד את כולם</span>
+                  </>
+                )}
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={addPillar} className="gap-1.5">
+              <span className="text-base leading-none">+</span>
+              <span>הוסף עמוד תווך</span>
+            </Button>
+          </div>
         </div>
 
         {errors?.strategyPillars && (
@@ -118,12 +218,12 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
         )}
 
         {strategyPillars.length === 0 && (
-          <div className="rounded-lg border-2 border-dashed border-input p-6 text-center">
-            <p className="text-sm text-muted-foreground mb-2">
+          <div className="rounded-2xl border-2 border-dashed border-wizard-border p-8 text-center">
+            <p className="text-sm text-wizard-text-tertiary mb-2">
               לא הוספו עמודי תווך עדיין
             </p>
-            <p className="text-xs text-muted-foreground">
-              עמודי תווך הם הנדבכים המרכזיים של האסטרטגיה - כל אחד מהם נושא חלק ממהלך הפעילות
+            <p className="text-xs text-wizard-text-tertiary">
+              עמודי תווך הם הנדבכים המרכזיים של האסטרטגיה — כל אחד מהם נושא חלק ממהלך הפעילות
             </p>
           </div>
         )}
@@ -131,20 +231,38 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
         {strategyPillars.map((pillar, index) => (
           <div
             key={index}
-            className="rounded-lg border border-input bg-muted/20 p-4 space-y-3"
+            className="rounded-2xl border border-wizard-border bg-white shadow-wizard-sm p-5 space-y-3"
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-muted-foreground">
+              <span className="text-xs font-rubik font-medium text-wizard-text-tertiary tracking-wide">
                 עמוד תווך {index + 1}
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => removePillar(index)}
-                className="text-destructive hover:bg-destructive/10"
-              >
-                הסר
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRefineSinglePillar(index)}
+                  disabled={refiningPillarIndex === index || !pillar.title}
+                  className="gap-1 text-accent hover:bg-accent/5 text-xs px-2 h-7"
+                >
+                  {refiningPillarIndex === index ? (
+                    <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                  )}
+                  <span>שפר</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removePillar(index)}
+                  className="text-wizard-text-tertiary hover:text-destructive hover:bg-destructive/10 text-xs px-2 h-7"
+                >
+                  הסר
+                </Button>
+              </div>
             </div>
 
             <Input
@@ -154,7 +272,7 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
             />
 
             <Textarea
-              placeholder="תיאור עמוד התווך - מה כולל, איך מתבצע, מה המטרה..."
+              placeholder="תיאור עמוד התווך — מה כולל, איך מתבצע, מה המטרה..."
               value={pillar.description}
               onChange={(e) => updatePillar(index, 'description', e.target.value)}
               className="min-h-[80px]"
@@ -166,7 +284,7 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
       {/* Strategy Flow Visualization */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
             תהליך עבודה (Flow)
           </label>
           <Button
@@ -174,15 +292,20 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
             size="sm"
             onClick={handleGenerateFlow}
             disabled={isGeneratingFlow || !strategyHeadline}
-            className="text-primary border-primary/30 hover:bg-primary/5"
+            className="gap-1.5 border-accent/30 text-accent hover:bg-accent/5"
           >
             {isGeneratingFlow ? (
               <>
-                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin ml-1.5" />
-                מייצר Flow...
+                <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <span>מייצר Flow...</span>
               </>
             ) : (
-              'ייצר Flow עם AI'
+              <>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+                <span>ייצר Flow עם AI</span>
+              </>
             )}
           </Button>
         </div>
@@ -191,13 +314,13 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
           <div className="flex items-center gap-2 overflow-x-auto pb-2 px-1">
             {strategyFlow.steps.map((step, index) => (
               <React.Fragment key={index}>
-                <div className="flex-shrink-0 w-40 rounded-xl border border-primary/20 bg-primary/5 p-3 text-center">
+                <div className="flex-shrink-0 w-40 rounded-2xl border border-wizard-border bg-white shadow-wizard-sm p-3 text-center">
                   <div className="text-2xl mb-1">{step.icon || '🔹'}</div>
-                  <p className="text-sm font-bold text-foreground">{step.label}</p>
-                  <p className="text-xs text-muted-foreground mt-1 leading-tight">{step.description}</p>
+                  <p className="text-sm font-heebo font-bold text-wizard-text-primary">{step.label}</p>
+                  <p className="text-xs text-wizard-text-tertiary mt-1 leading-tight">{step.description}</p>
                 </div>
                 {index < strategyFlow.steps.length - 1 && (
-                  <svg className="w-5 h-5 text-primary/30 flex-shrink-0 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-5 h-5 text-wizard-text-tertiary/30 flex-shrink-0 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 )}
@@ -205,7 +328,7 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-wizard-text-tertiary">
             לחצו &quot;ייצר Flow עם AI&quot; כדי ליצור תהליך עבודה ויזואלי מהאסטרטגיה
           </p>
         )}

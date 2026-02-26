@@ -84,36 +84,34 @@ export default function WizardNavigation({
       dir="rtl"
       className={cn(
         'fixed bottom-0 left-0 right-0 z-50',
-        'border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60',
-        'px-4 py-3 sm:px-6'
+        'border-t border-wizard-border bg-white/95 backdrop-blur-xl shadow-nav-up',
+        'px-6 py-4'
       )}
     >
-      <div className="mx-auto flex max-w-4xl items-center justify-between">
+      <div className="mx-auto flex max-w-3xl items-center justify-between">
         {/* Right side (RTL): Back button */}
         <div className="flex items-center">
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={onBack}
             disabled={isFirstStep}
-            className="gap-1.5"
+            className="gap-2 rounded-xl border-wizard-border px-4 py-2.5 text-wizard-text-secondary hover:text-wizard-text-primary hover:bg-brand-pearl"
           >
             <ArrowRightIcon />
             <span>הקודם</span>
           </Button>
         </div>
 
-        {/* Center: Skip button (only if step is not required) */}
+        {/* Center: Skip link (only if step is not required) */}
         <div className="flex items-center">
           {!isRequired && !isLastStep && (
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={onSkip}
-              className="text-muted-foreground hover:text-foreground"
+              className="text-sm font-medium text-wizard-text-tertiary hover:text-wizard-text-secondary transition-colors duration-200 underline-offset-4 hover:underline"
             >
               דלג על שלב זה
-            </Button>
+            </button>
           )}
         </div>
 
@@ -121,11 +119,13 @@ export default function WizardNavigation({
         <div className="flex items-center">
           {isLastStep ? (
             <Button
-              variant="accent"
+              variant="premium"
               size="md"
               onClick={onGenerate}
-              className="gap-1.5 shadow-lg"
+              className="relative gap-2 rounded-xl px-8 py-3 font-heebo text-base font-bold overflow-hidden"
             >
+              {/* Shimmer overlay */}
+              <span className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
               <SparklesIcon />
               <span>צור הצעה</span>
             </Button>
@@ -134,7 +134,7 @@ export default function WizardNavigation({
               variant="primary"
               size="sm"
               onClick={onContinue}
-              className="gap-1.5"
+              className="gap-2 rounded-xl px-6 py-2.5 font-heebo font-bold shadow-wizard-md hover:shadow-wizard-lg"
             >
               <span>המשך</span>
               <ArrowLeftIcon />

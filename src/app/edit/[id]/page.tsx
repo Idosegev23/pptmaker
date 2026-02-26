@@ -13,6 +13,7 @@ import PropertiesPanel from '@/components/presentation/PropertiesPanel'
 import ImageSourceModal from '@/components/presentation/ImageSourceModal'
 import EditorToolbar from '@/components/presentation/EditorToolbar'
 import GoogleDriveSaveButton from '@/components/google-drive-save-button'
+import FeedbackDialog from '@/components/feedback-dialog'
 
 // ─── Empty presentation (placeholder while loading) ────────
 const EMPTY_PRESENTATION: Presentation = {
@@ -41,6 +42,7 @@ export default function PresentationEditorPage() {
   const [brandName, setBrandName] = useState('')
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [showProperties, setShowProperties] = useState(true)
+  const [showFeedback, setShowFeedback] = useState(false)
   const [imageModalElementId, setImageModalElementId] = useState<string | null>(null)
   const [imageModalTab, setImageModalTab] = useState<'upload' | 'url' | 'ai'>('upload')
   const [imageModalMode, setImageModalMode] = useState<'replace' | 'add'>('replace')
@@ -517,6 +519,14 @@ export default function PresentationEditorPage() {
                 label="שמור ב-Drive"
                 className="px-4 py-1.5 text-xs font-medium rounded-lg"
               />
+
+              <button
+                onClick={() => setShowFeedback(true)}
+                className="px-3 py-1.5 text-xs font-medium text-amber-400 bg-amber-500/10 rounded-lg hover:bg-amber-500/20 transition-colors"
+                title="דרגו את ההצעה"
+              >
+                דרגו
+              </button>
             </div>
           </div>
         </div>
@@ -660,6 +670,12 @@ export default function PresentationEditorPage() {
         documentId={documentId}
         slideLabel={editor.selectedSlide?.label}
         initialTab={imageModalTab}
+      />
+
+      <FeedbackDialog
+        documentId={documentId}
+        isOpen={showFeedback}
+        onClose={() => setShowFeedback(false)}
       />
     </div>
   )

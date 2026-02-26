@@ -18,7 +18,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-sm font-medium mb-2 text-foreground"
+            className="block text-[13px] font-heebo font-semibold mb-2.5 text-wizard-text-secondary tracking-[0.01em]"
           >
             {label}
           </label>
@@ -27,12 +27,13 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           type={type}
           id={inputId}
           className={cn(
-            'flex h-11 w-full rounded-lg border bg-background px-4 py-2',
-            'text-sm placeholder:text-muted-foreground',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            'transition-colors duration-200',
-            error ? 'border-destructive focus-visible:ring-destructive' : 'border-input',
+            'flex h-12 w-full rounded-xl border bg-white px-4 py-2.5',
+            'text-sm text-foreground placeholder:text-wizard-text-tertiary placeholder:font-light',
+            'focus-visible:outline-none focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent/8',
+            'hover:border-primary/20',
+            'disabled:cursor-not-allowed disabled:opacity-40 disabled:bg-brand-pearl',
+            'transition-all duration-200',
+            error ? 'border-destructive ring-[3px] ring-destructive/8' : 'border-wizard-border',
             className
           )}
           ref={ref}

@@ -25,6 +25,20 @@ const DELIVERABLE_TYPE_OPTIONS = [
   { value: 'אחר', label: 'אחר' },
 ]
 
+const DELIVERABLE_META: Record<string, { icon: string; color: string }> = {
+  'פעימת סטוריז': { icon: '📱', color: 'border-l-violet-400' },
+  'רילז': { icon: '🎬', color: 'border-l-rose-400' },
+  'טיקטוק': { icon: '🎵', color: 'border-l-cyan-400' },
+  'פוסט פיד': { icon: '📷', color: 'border-l-blue-400' },
+  'שיתוף פעולה': { icon: '🤝', color: 'border-l-amber-400' },
+  'לייב': { icon: '🔴', color: 'border-l-red-400' },
+  'אחר': { icon: '📦', color: 'border-l-gray-400' },
+}
+
+function getDeliverableMeta(type: string) {
+  return DELIVERABLE_META[type] || { icon: '📦', color: 'border-l-gray-400' }
+}
+
 export default function StepDeliverables({
   data,
   extractedData,
@@ -125,15 +139,16 @@ export default function StepDeliverables({
   )
 
   return (
-    <div dir="rtl" className="space-y-6">
-      {/* Deliverables table */}
+    <div dir="rtl" className="space-y-10">
+      {/* Deliverables list */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
             תוצרים
           </label>
-          <Button variant="ghost" size="sm" onClick={addDeliverable}>
-            + הוסף תוצר
+          <Button variant="ghost" size="sm" onClick={addDeliverable} className="gap-1.5">
+            <span className="text-base leading-none">+</span>
+            <span>הוסף תוצר</span>
           </Button>
         </div>
 
@@ -142,8 +157,8 @@ export default function StepDeliverables({
         )}
 
         {deliverables.length === 0 && (
-          <div className="rounded-lg border-2 border-dashed border-input p-6 text-center">
-            <p className="text-sm text-muted-foreground mb-2">
+          <div className="rounded-2xl border-2 border-dashed border-wizard-border p-8 text-center">
+            <p className="text-sm text-wizard-text-tertiary mb-3">
               לא הוספו תוצרים עדיין
             </p>
             <Button variant="secondary" size="sm" onClick={addDeliverable}>
@@ -152,99 +167,95 @@ export default function StepDeliverables({
           </div>
         )}
 
-        {/* Table header for md+ screens */}
-        {deliverables.length > 0 && (
-          <div className="hidden md:grid md:grid-cols-[180px_80px_1fr_1fr_40px] gap-2 px-2 text-xs font-medium text-muted-foreground">
-            <span>סוג</span>
-            <span>כמות</span>
-            <span>תיאור</span>
-            <span>מטרה</span>
-            <span></span>
-          </div>
-        )}
+        {deliverables.map((deliverable, index) => {
+          const isKnownType = DELIVERABLE_TYPE_OPTIONS.some((o) => o.value === deliverable.type && o.value !== '')
+          const meta = getDeliverableMeta(isKnownType ? deliverable.type : 'אחר')
 
-        {deliverables.map((deliverable, index) => (
-          <div
-            key={index}
-            className="rounded-lg border border-input bg-muted/20 p-4 md:p-2 space-y-3 md:space-y-0 md:grid md:grid-cols-[180px_80px_1fr_1fr_40px] md:gap-2 md:items-start"
-          >
-            {/* Type - Mobile label */}
-            <div className="md:hidden text-xs font-medium text-muted-foreground mb-1">סוג</div>
-            <Select
-              options={DELIVERABLE_TYPE_OPTIONS}
-              value={
-                DELIVERABLE_TYPE_OPTIONS.some((o) => o.value === deliverable.type)
-                  ? deliverable.type
-                  : 'אחר'
-              }
-              onChange={(e) => updateDeliverable(index, 'type', e.target.value)}
-            />
-
-            {/* Quantity - Mobile label */}
-            <div className="md:hidden text-xs font-medium text-muted-foreground mb-1 mt-2">כמות</div>
-            <Input
-              type="number"
-              min={1}
-              value={deliverable.quantity}
-              onChange={(e) =>
-                updateDeliverable(index, 'quantity', parseInt(e.target.value) || 1)
-              }
-            />
-
-            {/* Description - Mobile label */}
-            <div className="md:hidden text-xs font-medium text-muted-foreground mb-1 mt-2">תיאור</div>
-            <Textarea
-              placeholder="תיאור התוצר..."
-              value={deliverable.description}
-              onChange={(e) => updateDeliverable(index, 'description', e.target.value)}
-              className="min-h-[60px] md:min-h-[42px]"
-            />
-
-            {/* Purpose - Mobile label */}
-            <div className="md:hidden text-xs font-medium text-muted-foreground mb-1 mt-2">מטרה</div>
-            <Input
-              placeholder="מטרת התוצר"
-              value={deliverable.purpose}
-              onChange={(e) => updateDeliverable(index, 'purpose', e.target.value)}
-            />
-
-            {/* Remove button */}
-            <div className="flex md:justify-center mt-2 md:mt-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeDeliverable(index)}
-                className="text-destructive hover:bg-destructive/10"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+          return (
+            <div
+              key={index}
+              className={`rounded-2xl border border-wizard-border bg-white shadow-wizard-sm p-5 border-l-4 ${meta.color} space-y-4`}
+            >
+              {/* Header row: icon + type + quantity + remove */}
+              <div className="flex items-center gap-3">
+                <span className="text-xl flex-shrink-0" role="img">{meta.icon}</span>
+                <div className="flex-1 min-w-0">
+                  {isKnownType ? (
+                    <Select
+                      options={DELIVERABLE_TYPE_OPTIONS}
+                      value={deliverable.type}
+                      onChange={(e) => updateDeliverable(index, 'type', e.target.value)}
+                    />
+                  ) : (
+                    <Input
+                      placeholder="שם סוג התוצר..."
+                      value={deliverable.type}
+                      onChange={(e) => updateDeliverable(index, 'type', e.target.value)}
+                    />
+                  )}
+                </div>
+                <div className="w-20 flex-shrink-0">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={deliverable.quantity}
+                    onChange={(e) =>
+                      updateDeliverable(index, 'quantity', parseInt(e.target.value) || 1)
+                    }
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeDeliverable(index)}
+                  className="text-wizard-text-tertiary hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
                 >
-                  <path d="M3 6h18" />
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                </svg>
-              </Button>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  </svg>
+                </Button>
+              </div>
+
+              {/* Description + Purpose */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Textarea
+                  placeholder="תיאור התוצר..."
+                  value={deliverable.description}
+                  onChange={(e) => updateDeliverable(index, 'description', e.target.value)}
+                  className="min-h-[60px]"
+                />
+                <Input
+                  placeholder="מטרת התוצר"
+                  value={deliverable.purpose}
+                  onChange={(e) => updateDeliverable(index, 'purpose', e.target.value)}
+                />
+              </div>
+
+              {/* Switch to custom type if known type selected */}
+              {isKnownType && (
+                <button
+                  type="button"
+                  onClick={() => updateDeliverable(index, 'type', '')}
+                  className="text-[11px] text-wizard-text-tertiary hover:text-wizard-text-secondary transition-colors"
+                >
+                  סוג מותאם אישית?
+                </button>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Reference images */}
       <div className="space-y-4">
-        <label className="block text-sm font-medium text-foreground">
+        <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
           תמונות רפרנס לתוצרים
         </label>
 
         <div
-          className="rounded-lg border-2 border-dashed border-input p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+          className="rounded-2xl border-2 border-dashed border-wizard-border p-8 text-center cursor-pointer hover:border-accent/40 hover:bg-brand-pearl/50 transition-all duration-200"
           onClick={() => fileInputRef.current?.click()}
         >
           <input

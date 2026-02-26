@@ -22,6 +22,8 @@ export interface WizardStepMeta {
   description: string
   required: boolean
   order: number
+  helpText?: string
+  whyItMatters?: string
 }
 
 // Step data types
@@ -31,11 +33,14 @@ export interface BriefStepData {
   brandBrief: string
   brandPainPoints: string[]
   brandObjective: string
+  successMetrics?: string[]
+  clientSpecificRequests?: string[]
 }
 
 export interface GoalsStepData {
   goals: { title: string; description: string }[]
   customGoals: string[]
+  targets?: { metric: string; value: string; timeline: string }[]
 }
 
 export interface TargetAudienceStepData {
@@ -73,6 +78,7 @@ export interface CreativeStepData {
   activityApproach: { title: string; description: string }[]
   activityDifferentiator?: string
   referenceImages: { url: string; caption?: string }[]
+  suggestedReferences?: { type: string; description: string; rationale: string }[]
 }
 
 export interface DeliverablesStepData {
@@ -191,6 +197,13 @@ export interface WizardStepDataMap {
   influencers: InfluencersStepData
 }
 
+// AI version history entry
+export interface AiVersionEntry {
+  data: Record<string, unknown>
+  timestamp: string
+  source: 'ai' | 'research' | 'manual'
+}
+
 // Full wizard state (persisted to document.data._wizardState)
 export interface WizardState {
   documentId: string | null
@@ -200,6 +213,7 @@ export interface WizardState {
   extractedData: Partial<WizardStepDataMap>
   isDirty: boolean
   lastSavedAt: string | null
+  aiVersionHistory?: Record<string, { versions: AiVersionEntry[]; currentIndex: number }>
 }
 
 // Wizard reducer action types
@@ -215,6 +229,8 @@ export type WizardAction =
   | { type: 'SET_DOCUMENT_ID'; id: string }
   | { type: 'SET_EXTRACTED_DATA'; data: Partial<WizardStepDataMap> }
   | { type: 'MARK_DIRTY' }
+  | { type: 'PUSH_AI_VERSION'; key: string; data: Record<string, unknown>; source: 'ai' | 'research' | 'manual' }
+  | { type: 'NAVIGATE_AI_VERSION'; key: string; direction: 'prev' | 'next' }
 
 // Pipeline status for deferred processing (research + visuals run after wizard opens)
 export interface PipelineStatus {

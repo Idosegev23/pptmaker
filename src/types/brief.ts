@@ -63,6 +63,10 @@ export interface ExtractedBriefData {
 
   additionalNotes?: string[]
 
+  successMetrics?: string[]
+  clientSpecificRequests?: string[]
+  competitorMentions?: string[]
+
   _meta: {
     confidence: 'high' | 'medium' | 'low'
     clientBriefProcessed: boolean

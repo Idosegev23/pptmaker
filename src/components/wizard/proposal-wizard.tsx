@@ -429,14 +429,24 @@ export default function ProposalWizard({
     return (
       <div
         dir="rtl"
-        className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background"
+        className="flex min-h-screen flex-col items-center justify-center gap-8 bg-wizard-bg"
       >
-        <Spinner size="lg" className="text-primary" />
+        {/* Multi-ring premium loading animation */}
+        <div className="relative w-20 h-20">
+          <div className="absolute inset-0 rounded-full border-2 border-brand-mist animate-ping opacity-20" />
+          <div className="absolute inset-2 rounded-full border-2 border-accent/30 animate-spin-slow" />
+          <div className="absolute inset-4 rounded-full bg-gradient-to-br from-accent/20 to-brand-gold/20 animate-pulse-soft" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <svg className="w-8 h-8 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+            </svg>
+          </div>
+        </div>
         <div className="text-center">
-          <h2 className="text-xl font-bold text-foreground">
+          <h2 className="text-2xl font-heebo font-extrabold text-wizard-text-primary">
             יוצר את ההצעה...
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-3 text-base text-wizard-text-secondary max-w-md">
             ממיר את הנתונים למסמך הצעה מקצועי
           </p>
         </div>
@@ -445,7 +455,10 @@ export default function ProposalWizard({
   }
 
   return (
-    <div dir="rtl" className="flex min-h-screen flex-col bg-background">
+    <div dir="rtl" className="flex min-h-screen flex-col bg-wizard-bg">
+      {/* Premium accent line */}
+      <div className="h-[2px] w-full bg-gradient-to-l from-accent via-brand-gold to-accent/40" />
+
       {/* Header */}
       <WizardHeader
         brandName={brandName}
@@ -465,36 +478,52 @@ export default function ProposalWizard({
       {/* Step content area */}
       <main className="flex-1 overflow-y-auto pb-24">
         {/* Step header */}
-        <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-6">
-          <div className="mb-6">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>שלב {currentStepMeta.order}</span>
-              <span>/</span>
-              <span>{WIZARD_STEPS.length}</span>
+        <div className="mx-auto max-w-3xl px-6 pt-10 md:px-12 lg:px-16">
+          <div className="mb-12">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="font-rubik text-xs font-medium tracking-wider text-wizard-text-tertiary">
+                שלב {currentStepMeta.order} / {WIZARD_STEPS.length}
+              </span>
               {!currentStepMeta.required && (
-                <span className="mr-2 rounded-full bg-muted px-2 py-0.5 text-[10px]">
+                <span className="rounded-full bg-brand-mist/60 px-2.5 py-0.5 text-[10px] font-rubik font-semibold uppercase tracking-wider text-wizard-text-tertiary">
                   אופציונלי
                 </span>
               )}
+              <span className="mr-auto text-[11px] font-rubik text-wizard-text-tertiary">
+                הושלמו {WIZARD_STEPS.filter(s => state.stepStatuses[s.id] === 'completed').length} מתוך {WIZARD_STEPS.length} שלבים
+              </span>
             </div>
-            <h2 className="mt-1 text-2xl font-bold text-foreground">
+            <h2 className="text-[32px] font-heebo font-extrabold leading-tight tracking-tight text-wizard-text-primary">
               {currentStepMeta.label}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-2 text-base text-wizard-text-secondary">
               {currentStepMeta.description}
             </p>
+            {currentStepMeta.helpText && (
+              <div className="mt-4 rounded-xl border border-accent/15 bg-brand-gold-light/40 px-4 py-3">
+                <p className="text-[13px] text-wizard-text-secondary leading-relaxed">
+                  {currentStepMeta.helpText}
+                </p>
+                {currentStepMeta.whyItMatters && (
+                  <p className="mt-1.5 text-[12px] text-wizard-text-tertiary leading-relaxed">
+                    <span className="font-heebo font-semibold">למה זה חשוב?</span>{' '}
+                    {currentStepMeta.whyItMatters}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Step component with transition */}
-        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+        <div className="mx-auto max-w-3xl px-6 md:px-12 lg:px-16">
           <div
             className={cn(
-              'transition-all duration-200 ease-in-out',
-              isTransitioning && transitionDir === 'forward' && 'translate-x-4 opacity-0',
-              isTransitioning && transitionDir === 'backward' && '-translate-x-4 opacity-0',
-              !isTransitioning && 'translate-x-0 opacity-100'
+              'transition-all duration-300',
+              isTransitioning && 'opacity-0 translate-y-4 scale-[0.99] blur-[4px]',
+              !isTransitioning && 'opacity-100 translate-y-0 scale-100 blur-0'
             )}
+            style={{ transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)' }}
           >
             {StepComponent && (
               <StepComponent
@@ -503,6 +532,14 @@ export default function ProposalWizard({
                 onChange={handleStepDataChange}
                 errors={stepErrors}
                 briefContext={`${state.stepData.brief?.brandName || ''}: ${state.stepData.brief?.brandBrief || ''}`}
+                successMetrics={state.stepData.brief?.successMetrics}
+                aiVersionHistory={state.aiVersionHistory}
+                onPushVersion={(key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') =>
+                  dispatch({ type: 'PUSH_AI_VERSION', key, data, source })
+                }
+                onNavigateVersion={(key: string, direction: 'prev' | 'next') =>
+                  dispatch({ type: 'NAVIGATE_AI_VERSION', key, direction })
+                }
               />
             )}
           </div>

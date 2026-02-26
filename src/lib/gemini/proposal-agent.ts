@@ -38,6 +38,7 @@ export async function extractFromBrief(clientBriefText: string, kickoffText?: st
   console.log(`[${agentId}] 🔍 EXTRACT FROM BRIEF - START`)
 
   const prompt = `חלץ מידע עסקי בסיסי מהמסמכים הבאים. אל תייצר אסטרטגיה או קריאייטיב — רק חלץ עובדות.
+נאמנות לבריף: כל מטרה, מדד הצלחה, דרישה ספציפית ואזכור מתחרים שהלקוח הזכיר חייבים להופיע — ציטוט מדויק מהבריף.
 
 ## בריף לקוח:
 ${clientBriefText}
@@ -60,6 +61,9 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
   "influencerPreferences": { "types": [], "specificNames": [], "criteria": [], "verticals": [] },
   "timeline": { "startDate": null, "endDate": null, "duration": null, "milestones": [] },
   "additionalNotes": [],
+  "successMetrics": ["מדד הצלחה 1 — ציטוט מדויק מהבריף", "KPI שהלקוח ציין"],
+  "clientSpecificRequests": ["דרישה ספציפית שהלקוח ביקש", "הגבלה או דגש מיוחד"],
+  "competitorMentions": ["מתחרה שהוזכר בבריף"],
   "_meta": { "confidence": "high", "warnings": [], "hasKickoff": ${!!kickoffText} }
 }`
 
@@ -175,9 +179,12 @@ interface RawProposalResponse {
     influencerPreferences?: { types?: string[]; specificNames?: string[]; criteria?: string[]; verticals?: string[] }
     timeline?: { startDate?: string; endDate?: string; duration?: string; milestones?: string[] }
     additionalNotes?: string[]
+    successMetrics?: string[]
+    clientSpecificRequests?: string[]
+    competitorMentions?: string[]
   }
   stepData: {
-    brief: { brandName: string; brandBrief: string; brandPainPoints: string[]; brandObjective: string }
+    brief: { brandName: string; brandBrief: string; brandPainPoints: string[]; brandObjective: string; successMetrics?: string[]; clientSpecificRequests?: string[] }
     goals: { goals: { title: string; description: string }[]; customGoals: string[] }
     target_audience: { targetGender: string; targetAgeRange: string; targetDescription: string; targetBehavior: string; targetInsights: string[]; targetSecondary?: { gender: string; ageRange: string; description: string } }
     key_insight: { keyInsight: string; insightSource: string; insightData?: string }
@@ -259,6 +266,7 @@ ${researchSection}
 3. **יציאה מהקופסא בקריאייטיב:** אל תציע "משפיענים יצטלמו עם המוצר". תציע מהלכים משבשי שגרה, תרחישים מעניינים, קונספטים עם פוטנציאל ויראלי ואסתטיקה ויזואלית חזקה.
 4. **תובנה קטלנית:** ה-Key Insight חייב להיות 'אסימון שנופל' ללקוח. מתח בין התנהגות קהל היעד לבין מה שהמותג מציע.
 5. **סתירות:** מסמך ההתנעה תמיד גובר על הבריף.
+6. **ללא נקודתיים בכותרות:** אסור להשתמש בתו ':' בכותרות, שמות מטרות, שמות עמודי תווך, או כל שדה כותרת. במקום "מודעות: הגברת נוכחות" כתוב "מודעות — הגברת נוכחות" או "מודעות והגברת נוכחות".
 
 ## פורמט הפלט (JSON):
 {
@@ -307,14 +315,19 @@ ${researchSection}
       "duration": "משך או null",
       "milestones": []
     },
-    "additionalNotes": ["הערה חשובה"]
+    "additionalNotes": ["הערה חשובה"],
+    "successMetrics": ["מדד הצלחה 1 שהלקוח ציין", "מדד 2 — ציטוט מדויק מהבריף"],
+    "clientSpecificRequests": ["דרישה ספציפית שהלקוח ביקש", "הגבלה או דגש מיוחד"],
+    "competitorMentions": ["מתחרה 1 שהוזכר בבריף", "מתחרה 2"]
   },
   "stepData": {
     "brief": {
       "brandName": "שם המותג",
       "brandBrief": "פסקה סוחפת על זהות המותג, כתובה כמו תקציר מנהלים יוקרתי למצגת. קצר, חד, ואלגנטי.",
       "brandPainPoints": ["האתגר השיווקי האמיתי 1", "החסם התפיסתי של הצרכן 2"],
-      "brandObjective": "משפט מחץ אחד שמגדיר את יעד העל של הקמפיין."
+      "brandObjective": "משפט מחץ אחד שמגדיר את יעד העל של הקמפיין.",
+      "successMetrics": ["מדד הצלחה 1 — ציטוט מדויק", "מדד 2"],
+      "clientSpecificRequests": ["דרישה ספציפית"]
     },
     "goals": {
       "goals": [
@@ -326,9 +339,9 @@ ${researchSection}
     "target_audience": {
       "targetGender": "המגדר המדויק",
       "targetAgeRange": "טווח גילי",
-      "targetDescription": "פרופיל פסיכולוגי מרתק של הקהל - מי הם, מה מרגש אותם, מה הסטייל שלהם.",
-      "targetBehavior": "איך הם צורכים תוכן וקונים (למשל: 'גוללים בטיקטוק לפני השינה, קונים מהמלצות אותנטיות בלבד').",
-      "targetInsights": ["תובנה 1 על הקהל", "תובנה 2"],
+      "targetDescription": "תאר את הבן אדם, לא את הסגמנט. למשל: 'אישה בת 28 שגוללת את הפיד בזמן שהקפה מתקרר, מחפשת השראה לא מותג, קונה רק ממי שהיא מרגישה שמכירה אישית'. ספציפי, חי, אמיתי.",
+      "targetBehavior": "איך הם באמת מתנהגים — לא 'צורכים תוכן דיגיטלי' אלא 'גוללים טיקטוק 40 דקות לפני השינה, שומרים פוסטים שנראים כמו מהחיים ולא כמו פרסומת'.",
+      "targetInsights": ["תובנה התנהגותית ספציפית 1 עם משמעות לקמפיין", "תובנה 2"],
       "targetSecondary": null
     },
     "key_insight": {
@@ -401,6 +414,50 @@ ${researchSection}
 }
 
 // ============================================================
+// Post-processors
+// ============================================================
+
+/** Replace colons in title fields with em-dash. Handles Hebrew and English. */
+function stripColonsFromTitles(stepData: Partial<WizardStepDataMap>): void {
+  const fix = (s: string | undefined | null): string =>
+    s ? s.replace(/\s*:\s*/g, ' — ').replace(/^—\s*/, '') : s || ''
+
+  // Goals
+  if (stepData.goals?.goals) {
+    for (const g of stepData.goals.goals) {
+      g.title = fix(g.title)
+    }
+  }
+  if (stepData.goals?.customGoals) {
+    for (const g of stepData.goals.customGoals) {
+      if (typeof g === 'object' && g && 'title' in g) {
+        (g as { title: string }).title = fix((g as { title: string }).title)
+      }
+    }
+  }
+
+  // Strategy
+  if (stepData.strategy) {
+    stepData.strategy.strategyHeadline = fix(stepData.strategy.strategyHeadline)
+    if (stepData.strategy.strategyPillars) {
+      for (const p of stepData.strategy.strategyPillars) {
+        p.title = fix(p.title)
+      }
+    }
+  }
+
+  // Creative
+  if (stepData.creative) {
+    stepData.creative.activityTitle = fix(stepData.creative.activityTitle)
+    if (stepData.creative.activityApproach) {
+      for (const a of stepData.creative.activityApproach) {
+        a.title = fix(a.title)
+      }
+    }
+  }
+}
+
+// ============================================================
 // Response normalization
 // ============================================================
 
@@ -446,6 +503,9 @@ function normalizeResponse(
     influencerPreferences: raw.extracted?.influencerPreferences || {},
     timeline: raw.extracted?.timeline || {},
     additionalNotes: raw.extracted?.additionalNotes || [],
+    successMetrics: raw.extracted?.successMetrics || [],
+    clientSpecificRequests: raw.extracted?.clientSpecificRequests || [],
+    competitorMentions: raw.extracted?.competitorMentions || [],
     _meta: {
       confidence: raw.extracted?.brand?.name ? 'high' : 'medium',
       clientBriefProcessed: true,
@@ -467,6 +527,8 @@ function normalizeResponse(
       brandBrief: sd.brief?.brandBrief || extracted.brand.background || '',
       brandPainPoints: sd.brief?.brandPainPoints || [],
       brandObjective: sd.brief?.brandObjective || extracted.campaignGoals?.[0] || '',
+      successMetrics: sd.brief?.successMetrics || extracted.successMetrics || [],
+      clientSpecificRequests: sd.brief?.clientSpecificRequests || extracted.clientSpecificRequests || [],
     },
     goals: {
       goals: sd.goals?.goals?.length ? sd.goals.goals : (extracted.campaignGoals || []).map(g => ({ title: g, description: '' })),
@@ -547,6 +609,9 @@ function normalizeResponse(
       influencerCriteria: sd.influencers?.influencerCriteria || [],
     },
   }
+
+  // Post-process: strip colons from all title fields
+  stripColonsFromTitles(stepData)
 
   return { extracted, stepData }
 }

@@ -5,7 +5,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { KeyInsightStepData } from '@/types/wizard'
+import type { KeyInsightStepData, AiVersionEntry } from '@/types/wizard'
+import AiVersionNavigator from '../ai-version-navigator'
 
 interface StepKeyInsightProps {
   data: Partial<KeyInsightStepData>
@@ -13,6 +14,9 @@ interface StepKeyInsightProps {
   onChange: (data: Partial<KeyInsightStepData>) => void
   errors: Record<string, string> | null
   briefContext?: string
+  aiVersionHistory?: Record<string, { versions: AiVersionEntry[]; currentIndex: number }>
+  onPushVersion?: (key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') => void
+  onNavigateVersion?: (key: string, direction: 'prev' | 'next') => void
 }
 
 export default function StepKeyInsight({
@@ -21,6 +25,9 @@ export default function StepKeyInsight({
   onChange,
   errors,
   briefContext,
+  aiVersionHistory,
+  onPushVersion,
+  onNavigateVersion,
 }: StepKeyInsightProps) {
   const keyInsight = data.keyInsight ?? ''
   const insightSource = data.insightSource ?? ''
@@ -43,15 +50,16 @@ export default function StepKeyInsight({
       if (res.ok) {
         const result = await res.json()
         if (result.keyInsight) {
-          onChange({
-            ...data,
+          const newData = {
             keyInsight: result.keyInsight,
             insightSource: result.insightSource || insightSource,
             insightData: result.supportingResearch?.map(
               (r: { statistic: string; source: string; year?: string }) =>
                 `${r.statistic} (${r.source}${r.year ? `, ${r.year}` : ''})`
             ).join('\n') || insightData,
-          })
+          }
+          onChange({ ...data, ...newData })
+          onPushVersion?.('key_insight.insight', newData, 'ai')
         }
       }
     } catch {
@@ -117,7 +125,16 @@ export default function StepKeyInsight({
       {/* Key Insight */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-foreground">התובנה המרכזית</label>
+          <div className="flex items-center gap-3">
+            <label className="block text-sm font-medium text-foreground">התובנה המרכזית</label>
+            {aiVersionHistory?.['key_insight.insight'] && onNavigateVersion && (
+              <AiVersionNavigator
+                versions={aiVersionHistory['key_insight.insight'].versions}
+                currentIndex={aiVersionHistory['key_insight.insight'].currentIndex}
+                onNavigate={(dir) => onNavigateVersion('key_insight.insight', dir)}
+              />
+            )}
+          </div>
           <Button
             variant="outline"
             size="sm"

@@ -10,9 +10,11 @@ const FAST_MODEL = 'gemini-3-flash-preview'
 
 type AiAssistAction =
   | 'generate_goal_description'
+  | 'generate_goal_descriptions_batch'
   | 'generate_audience_insights'
   | 'refine_insight'
   | 'generate_strategy_flow'
+  | 'refine_strategy_pillars'
   | 'suggest_content_formats'
   | 'find_brand_logo'
 
@@ -34,6 +36,9 @@ export async function POST(request: NextRequest) {
       case 'generate_goal_description':
         prompt = buildGoalDescriptionPrompt(params)
         break
+      case 'generate_goal_descriptions_batch':
+        prompt = buildGoalDescriptionsBatchPrompt(params)
+        break
       case 'generate_audience_insights':
         prompt = buildAudienceInsightsPrompt(params)
         break
@@ -42,6 +47,9 @@ export async function POST(request: NextRequest) {
         break
       case 'generate_strategy_flow':
         prompt = buildStrategyFlowPrompt(params)
+        break
+      case 'refine_strategy_pillars':
+        prompt = buildRefineStrategyPillarsPrompt(params)
         break
       case 'suggest_content_formats':
         prompt = buildContentFormatsPrompt(params)
@@ -88,12 +96,32 @@ function buildGoalDescriptionPrompt(params: Record<string, unknown>): string {
   const briefContext = params.briefContext as string || ''
 
   return `אתה אסטרטג שיווק ישראלי מנוסה. כתוב תיאור קצר (2-3 משפטים) למטרה הבאה בהקשר של בריף הקמפיין.
+חשוב: אל תשתמש בנקודתיים (:) בכותרות או בשמות מטרות.
 
 מטרה: ${goalTitle}
 הקשר הבריף: ${briefContext}
 
 החזר JSON:
 { "description": "תיאור המטרה ב-2-3 משפטים שמסביר מה רוצים להשיג ואיך" }`
+}
+
+function buildGoalDescriptionsBatchPrompt(params: Record<string, unknown>): string {
+  const goalTitles = params.goalTitles as string[] || []
+  const briefContext = params.briefContext as string || ''
+
+  return `אתה אסטרטג שיווק ישראלי מנוסה. כתוב תיאורים קצרים (2-3 משפטים) לכל אחת מהמטרות הבאות בהקשר של בריף הקמפיין.
+חשוב: אל תשתמש בנקודתיים (:) בכותרות או בשמות מטרות.
+
+מטרות: ${goalTitles.join(', ')}
+הקשר הבריף: ${briefContext}
+
+החזר JSON:
+{
+  "descriptions": {
+    "${goalTitles[0] || 'מטרה'}": "תיאור ב-2-3 משפטים",
+    ...
+  }
+}`
 }
 
 function buildAudienceInsightsPrompt(params: Record<string, unknown>): string {
@@ -103,20 +131,29 @@ function buildAudienceInsightsPrompt(params: Record<string, unknown>): string {
   const brandName = params.brandName as string || ''
   const industry = params.industry as string || ''
 
-  return `אתה חוקר שוק מקצועי. חפש תובנות אמיתיות ומבוססות מחקר על קהל היעד הבא.
+  return `אתה מנהל אסטרטגיה בכיר בסוכנות פרסום ישראלית מובילה. אתה מציג ללקוח פרופיל קהל יעד שגורם לו להגיד "אתם באמת מכירים את הלקוחות שלי".
+
+דבר על הבן אדם, לא על הסגמנט. אל תכתוב כמו ויקיפדיה — כתוב כמו מי שמבין אנשים.
 
 קהל יעד: ${gender}, גילאי ${ageRange}
 תיאור: ${description}
 מותג: ${brandName} (${industry})
 
-חפש נתונים אמיתיים - מחקרים, סקרים, סטטיסטיקות מ-2024-2026.
-התמקד בהרגלי צריכה, התנהגות דיגיטלית, ערכים ומוטיבציות רלוונטיים לתעשייה.
+חפש נתונים אמיתיים מ-2024-2026 — מחקרים, סקרים, סטטיסטיקות.
+
+כל תובנה חייבת להיות:
+1. ספציפית להתנהגות אמיתית (לא "אוהבים תוכן איכותי" — זה לא אומר כלום)
+2. עם משמעות פרקטית לקמפיין (מה עושים עם התובנה הזו?)
+3. מנוסחת כסיפור קצר על אדם אמיתי, לא כפסקת מחקר
+
+אל תשתמש בנקודתיים (:) בכותרות או בפתיחות של תובנות.
 
 החזר JSON:
 {
   "insights": [
     {
-      "text": "תובנה מפורטת ב-1-2 משפטים",
+      "text": "תובנה שמנוסחת כמו אנקדוטה מדויקת — 1-2 משפטים על התנהגות אמיתית",
+      "actionable": "מה זה אומר לקמפיין שלנו — משפט אחד ישיר",
       "source": "שם המחקר/סקר/מקור",
       "sourceUrl": "URL אם זמין",
       "dataPoint": "נתון מספרי בולט (לדוגמה: 72% מהנשים 25-34...)",
@@ -134,6 +171,7 @@ function buildRefineInsightPrompt(params: Record<string, unknown>): string {
   const audienceContext = params.audienceContext as string || ''
 
   return `אתה פלנר אסטרטגי בכיר בסוכנות פרסום ישראלית.
+חשוב: אל תשתמש בנקודתיים (:) בכותרות או בפתיחת משפטים.
 
 המשימה: לחדד את התובנה המרכזית (Key Insight) כך שתהיה:
 1. חדה ומפתיעה
@@ -167,6 +205,7 @@ function buildStrategyFlowPrompt(params: Record<string, unknown>): string {
   const briefContext = params.briefContext as string || ''
 
   return `אתה אסטרטג קמפיינים בכיר. צור תהליך עבודה (Strategy Flow) של 3-5 שלבים מעשיים.
+חשוב: אל תשתמש בנקודתיים (:) בשמות שלבים או כותרות. השתמש ב-" — " או ניסוח אחר.
 
 כותרת אסטרטגיה: ${headline}
 עמודי תווך: ${pillars}
@@ -187,6 +226,7 @@ function buildContentFormatsPrompt(params: Record<string, unknown>): string {
   const creative = params.creative as string || ''
 
   return `אתה מנהל קריאייטיב בסוכנות דיגיטל. המלץ על חלוקת פורמטים של תוכן.
+חשוב: אל תשתמש בנקודתיים (:) בשמות פורמטים או תיאורים. השתמש ב-" — " או ניסוח אחר.
 
 הקשר הבריף: ${briefContext}
 כיוון קריאייטיבי: ${creative}
@@ -206,6 +246,29 @@ function buildContentFormatsPrompt(params: Record<string, unknown>): string {
 }
 
 בחר 2-4 פורמטים רלוונטיים. האחוזים חייבים לסכום ל-100.`
+}
+
+function buildRefineStrategyPillarsPrompt(params: Record<string, unknown>): string {
+  const pillars = params.pillars as string || ''
+  const strategyHeadline = params.strategyHeadline as string || ''
+  const briefContext = params.briefContext as string || ''
+
+  return `אתה פלנר אסטרטגי בכיר בסוכנות פרימיום לשיווק משפיענים.
+חדד את עמודי התווך הבאים כך שיהיו:
+1. כותרות קליטות ופאנצ'יות יותר (בלי נקודתיים!)
+2. תיאורים ספציפיים עם פעולות קונקרטיות (לא תיאורים גנריים)
+3. כל עמוד תווך צריך להסביר בדיוק מה עושים ולמה זה עובד
+
+כותרת אסטרטגיה: ${strategyHeadline}
+עמודי תווך נוכחיים: ${pillars}
+הקשר הבריף: ${briefContext}
+
+החזר JSON:
+{
+  "pillars": [
+    { "title": "כותרת חדשה קליטה", "description": "2-3 משפטים ספציפיים עם פעולות קונקרטיות" }
+  ]
+}`
 }
 
 function buildFindLogoPrompt(params: Record<string, unknown>): string {

@@ -12,6 +12,8 @@ interface StepMediaTargetsProps {
   extractedData: Partial<MediaTargetsStepData>
   onChange: (data: Partial<MediaTargetsStepData>) => void
   errors: Record<string, string> | null
+  briefContext?: string
+  successMetrics?: string[]
 }
 
 const CURRENCY_OPTIONS = [
@@ -25,6 +27,7 @@ export default function StepMediaTargets({
   extractedData,
   onChange,
   errors,
+  successMetrics,
 }: StepMediaTargetsProps) {
   const budget = data.budget ?? 0
   const currency = data.currency ?? '₪'
@@ -55,7 +58,24 @@ export default function StepMediaTargets({
   }, [budget, potentialEngagement, currency, calculatedCpe])
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir="rtl" className="space-y-10">
+      {/* Success metrics from brief */}
+      {successMetrics && successMetrics.length > 0 && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <h3 className="text-[13px] font-heebo font-bold text-emerald-700 mb-2">
+            מדדי הצלחה מהבריף
+          </h3>
+          <ul className="space-y-1">
+            {successMetrics.map((metric, i) => (
+              <li key={i} className="text-[13px] text-emerald-600 flex items-start gap-2">
+                <span className="mt-0.5">✓</span>
+                <span>{metric}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Budget and Currency */}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-4">
         <Input
@@ -110,9 +130,9 @@ export default function StepMediaTargets({
       </div>
 
       {/* CPE */}
-      <Card className="border-primary/20 bg-primary/5">
+      <Card className="border-accent/20 bg-brand-gold-light/30">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">CPE - עלות למעורבות</CardTitle>
+          <CardTitle className="text-base font-heebo">CPE — עלות למעורבות</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">

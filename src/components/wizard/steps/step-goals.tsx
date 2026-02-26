@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useRef, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
@@ -16,66 +16,107 @@ interface StepGoalsProps {
 }
 
 const PREDEFINED_GOALS = [
-  'מודעות',
-  'חינוך שוק',
-  'נוכחות דיגיטלית',
-  'נחשקות ו-FOMO',
-  'הנעה למכר',
-  'השקת מוצר',
-  'חיזוק נאמנות',
+  { title: 'מודעות', subtitle: 'חשיפה רחבה למותג' },
+  { title: 'חינוך שוק', subtitle: 'הבנת הערך של המוצר' },
+  { title: 'נוכחות דיגיטלית', subtitle: 'נראות ברשתות החברתיות' },
+  { title: 'נחשקות ו-FOMO', subtitle: 'יצירת ביקוש ותחושת דחיפות' },
+  { title: 'הנעה למכר', subtitle: 'המרה ישירה לקנייה' },
+  { title: 'השקת מוצר', subtitle: 'בנייה לחשיפה ראשונה' },
+  { title: 'חיזוק נאמנות', subtitle: 'העמקת קשר עם לקוחות קיימים' },
 ]
 
 export default function StepGoals({ data, extractedData, onChange, errors, briefContext }: StepGoalsProps) {
   const goals = data.goals ?? []
   const customGoals = data.customGoals ?? []
+  const targets = data.targets ?? []
   const [newCustomGoal, setNewCustomGoal] = useState('')
   const [loadingGoals, setLoadingGoals] = useState<Set<string>>(new Set())
+
+  // Batch generation: collect newly-added goals and generate in bulk
+  const pendingBatchRef = useRef<string[]>([])
+  const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isGoalSelected = useCallback(
     (title: string) => goals.some((g) => g.title === title),
     [goals]
   )
 
-  // Fire AI to auto-generate description for a goal
-  const generateGoalDescription = useCallback(
-    async (goalTitle: string, currentGoals: { title: string; description: string }[]) => {
-      setLoadingGoals(prev => new Set(prev).add(goalTitle))
-      try {
-        const res = await fetch('/api/ai-assist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'generate_goal_description',
-            goalTitle,
-            briefContext: briefContext || '',
-          }),
-        })
-        if (res.ok) {
-          const result = await res.json()
-          if (result.description) {
-            // Update goal description only if user hasn't typed anything yet
-            onChange({
-              ...data,
-              goals: currentGoals.map(g =>
-                g.title === goalTitle && !g.description
-                  ? { ...g, description: result.description }
-                  : g
-              ),
-            })
-          }
+  // Batch description generation
+  const flushBatchGeneration = useCallback(async (titles: string[], currentGoals: { title: string; description: string }[]) => {
+    if (titles.length === 0) return
+    const needDescription = titles.filter(t => {
+      const goal = currentGoals.find(g => g.title === t)
+      return goal && !goal.description
+    })
+    if (needDescription.length === 0) return
+
+    setLoadingGoals(prev => {
+      const next = new Set(prev)
+      for (const t of needDescription) next.add(t)
+      return next
+    })
+
+    try {
+      const res = await fetch('/api/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: needDescription.length === 1 ? 'generate_goal_description' : 'generate_goal_descriptions_batch',
+          ...(needDescription.length === 1
+            ? { goalTitle: needDescription[0], briefContext: briefContext || '' }
+            : { goalTitles: needDescription, briefContext: briefContext || '' }),
+        }),
+      })
+      if (res.ok) {
+        const result = await res.json()
+        if (needDescription.length === 1 && result.description) {
+          onChange({
+            ...data,
+            goals: currentGoals.map(g =>
+              g.title === needDescription[0] && !g.description
+                ? { ...g, description: result.description }
+                : g
+            ),
+          })
+        } else if (result.descriptions) {
+          onChange({
+            ...data,
+            goals: currentGoals.map(g => {
+              if (!g.description && result.descriptions[g.title]) {
+                return { ...g, description: result.descriptions[g.title] }
+              }
+              return g
+            }),
+          })
         }
-      } catch {
-        // Silent fail - user can type manually
-      } finally {
-        setLoadingGoals(prev => {
-          const next = new Set(prev)
-          next.delete(goalTitle)
-          return next
-        })
       }
-    },
-    [briefContext, data, onChange]
-  )
+    } catch {
+      // Silent fail
+    } finally {
+      setLoadingGoals(prev => {
+        const next = new Set(prev)
+        for (const t of needDescription) next.delete(t)
+        return next
+      })
+    }
+  }, [briefContext, data, onChange])
+
+  const scheduleBatchGeneration = useCallback((title: string, currentGoals: { title: string; description: string }[]) => {
+    pendingBatchRef.current.push(title)
+    if (batchTimerRef.current) clearTimeout(batchTimerRef.current)
+    batchTimerRef.current = setTimeout(() => {
+      const titles = [...pendingBatchRef.current]
+      pendingBatchRef.current = []
+      flushBatchGeneration(titles, currentGoals)
+    }, 500)
+  }, [flushBatchGeneration])
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (batchTimerRef.current) clearTimeout(batchTimerRef.current)
+    }
+  }, [])
 
   const toggleGoal = useCallback(
     (title: string) => {
@@ -90,11 +131,10 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
           ...data,
           goals: newGoals,
         })
-        // Auto-generate description in background
-        generateGoalDescription(title, newGoals)
+        scheduleBatchGeneration(title, newGoals)
       }
     },
-    [data, onChange, goals, isGoalSelected, generateGoalDescription]
+    [data, onChange, goals, isGoalSelected, scheduleBatchGeneration]
   )
 
   const updateGoalDescription = useCallback(
@@ -115,9 +155,8 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
       goals: newGoals,
     })
     setNewCustomGoal('')
-    // Auto-generate description for custom goal too
-    generateGoalDescription(trimmed, newGoals)
-  }, [data, onChange, customGoals, goals, newCustomGoal, generateGoalDescription])
+    scheduleBatchGeneration(trimmed, newGoals)
+  }, [data, onChange, customGoals, goals, newCustomGoal, scheduleBatchGeneration])
 
   const removeCustomGoal = useCallback(
     (goalText: string) => {
@@ -130,125 +169,172 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
     [data, onChange, customGoals, goals]
   )
 
-  // All goal titles (predefined + custom)
-  const allGoalTitles = [...PREDEFINED_GOALS, ...customGoals.filter((cg) => !PREDEFINED_GOALS.includes(cg))]
+  // Targets management
+  const addTarget = useCallback(() => {
+    onChange({ ...data, targets: [...targets, { metric: '', value: '', timeline: '' }] })
+  }, [data, onChange, targets])
+
+  const removeTarget = useCallback((index: number) => {
+    onChange({ ...data, targets: targets.filter((_, i) => i !== index) })
+  }, [data, onChange, targets])
+
+  const updateTarget = useCallback((index: number, field: 'metric' | 'value' | 'timeline', value: string) => {
+    const updated = [...targets]
+    updated[index] = { ...updated[index], [field]: value }
+    onChange({ ...data, targets: updated })
+  }, [data, onChange, targets])
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir="rtl" className="space-y-10">
+      {/* Goal selection header */}
       <div>
-        <label className="block text-sm font-medium text-foreground mb-3">
-          מטרות הקמפיין
-        </label>
-        <p className="text-sm text-muted-foreground mb-4">
-          בחרו את המטרות הרלוונטיות לקמפיין. ניתן לבחור מספר מטרות ולהוסיף תיאור לכל אחת.
-        </p>
+        <div className="flex items-center justify-between mb-3">
+          <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
+            מטרות הקמפיין
+          </label>
+          {goals.length > 0 && (
+            <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-heebo font-bold text-accent">
+              נבחרו {goals.length} מטרות
+            </span>
+          )}
+        </div>
 
         {errors?.goals && (
           <p className="text-xs text-destructive mb-3">{errors.goals}</p>
         )}
 
-        {/* Goal chips */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        {/* Card-style goal buttons (2 columns) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
           {PREDEFINED_GOALS.map((goal) => {
-            const selected = isGoalSelected(goal)
+            const selected = isGoalSelected(goal.title)
             return (
               <button
-                key={goal}
+                key={goal.title}
                 type="button"
-                onClick={() => toggleGoal(goal)}
+                onClick={() => toggleGoal(goal.title)}
                 className={cn(
-                  'px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border',
+                  'relative flex items-start gap-3 rounded-2xl border p-4 text-right transition-all duration-200',
                   selected
-                    ? 'bg-primary text-primary-foreground border-primary shadow-md'
-                    : 'bg-background text-foreground border-input hover:border-primary/50 hover:bg-muted'
+                    ? 'border-accent bg-accent/5 shadow-wizard-sm'
+                    : 'border-wizard-border bg-white hover:border-accent/30 hover:shadow-wizard-sm'
                 )}
               >
-                {selected && (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="inline-block ml-1 -mt-0.5"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                )}
-                {goal}
+                {/* Checkbox icon */}
+                <div className={cn(
+                  'mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-all duration-200',
+                  selected
+                    ? 'border-accent bg-accent'
+                    : 'border-wizard-border'
+                )}>
+                  {selected && (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className={cn(
+                    'text-sm font-heebo font-bold',
+                    selected ? 'text-accent' : 'text-wizard-text-primary'
+                  )}>
+                    {goal.title}
+                  </p>
+                  <p className="text-xs text-wizard-text-tertiary mt-0.5">
+                    {goal.subtitle}
+                  </p>
+                </div>
               </button>
             )
           })}
 
-          {/* Custom goal chips */}
+          {/* Custom goal chips within the grid */}
           {customGoals
-            .filter((cg) => !PREDEFINED_GOALS.includes(cg))
+            .filter((cg) => !PREDEFINED_GOALS.some(pg => pg.title === cg))
             .map((goal) => {
               const selected = isGoalSelected(goal)
               return (
-                <div key={goal} className="relative group">
-                  <button
-                    type="button"
-                    onClick={() => toggleGoal(goal)}
-                    className={cn(
-                      'px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border',
-                      selected
-                        ? 'bg-accent text-accent-foreground border-accent shadow-md'
-                        : 'bg-background text-foreground border-input hover:border-accent/50 hover:bg-muted'
-                    )}
-                  >
+                <button
+                  key={goal}
+                  type="button"
+                  onClick={() => toggleGoal(goal)}
+                  className={cn(
+                    'relative flex items-start gap-3 rounded-2xl border p-4 text-right transition-all duration-200',
+                    selected
+                      ? 'border-accent bg-accent/5 shadow-wizard-sm'
+                      : 'border-wizard-border bg-white hover:border-accent/30 hover:shadow-wizard-sm'
+                  )}
+                >
+                  <div className={cn(
+                    'mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-all duration-200',
+                    selected ? 'border-accent bg-accent' : 'border-wizard-border'
+                  )}>
                     {selected && (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="inline-block ml-1 -mt-0.5"
-                      >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     )}
-                    {typeof goal === 'string' ? goal : (goal as {title?: string})?.title || ''}
-                  </button>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={cn('text-sm font-heebo font-bold', selected ? 'text-accent' : 'text-wizard-text-primary')}>
+                      {typeof goal === 'string' ? goal : (goal as {title?: string})?.title || ''}
+                    </p>
+                    <p className="text-xs text-wizard-text-tertiary mt-0.5">מטרה מותאמת אישית</p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => removeCustomGoal(goal)}
-                    className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); removeCustomGoal(goal) }}
+                    className="absolute top-2 left-2 w-5 h-5 rounded-full text-wizard-text-tertiary hover:text-destructive hover:bg-destructive/10 flex items-center justify-center text-xs transition-colors"
                   >
-                    x
+                    ×
                   </button>
-                </div>
+                </button>
               )
             })}
+
+          {/* Add custom goal CTA card */}
+          <div className="flex items-center gap-2 rounded-2xl border-2 border-dashed border-wizard-border p-4 hover:border-accent/30 transition-colors">
+            <Input
+              placeholder="הוסיפו מטרה מותאמת..."
+              value={newCustomGoal}
+              onChange={(e) => setNewCustomGoal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addCustomGoal()
+                }
+              }}
+              className="border-0 shadow-none p-0 h-auto focus-visible:ring-0"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={addCustomGoal}
+              disabled={!newCustomGoal.trim()}
+              className="shrink-0 text-accent font-bold"
+            >
+              +
+            </Button>
+          </div>
         </div>
 
         {/* Selected goals with description textareas */}
         {goals.length > 0 && (
           <div className="space-y-4">
-            <label className="block text-sm font-medium text-foreground">
+            <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
               פירוט מטרות נבחרות
             </label>
             {goals.map((goal) => (
               <div
                 key={goal.title}
-                className="rounded-lg border border-input bg-muted/30 p-4 space-y-2"
+                className="rounded-2xl border border-wizard-border bg-white shadow-wizard-sm p-5 space-y-3"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">{goal.title}</span>
+                  <span className="font-heebo font-bold text-sm text-wizard-text-primary">{goal.title}</span>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => toggleGoal(goal.title)}
-                    className="text-muted-foreground hover:text-destructive text-xs"
+                    className="text-wizard-text-tertiary hover:text-destructive text-xs"
                   >
                     הסר
                   </Button>
@@ -262,7 +348,7 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
                   />
                   {loadingGoals.has(goal.title) && (
                     <div className="absolute top-3 left-3">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                     </div>
                   )}
                 </div>
@@ -272,30 +358,66 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
         )}
       </div>
 
-      {/* Add custom goal */}
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-foreground">הוספת מטרה מותאמת אישית</label>
-        <div className="flex gap-2">
-          <Input
-            placeholder="שם המטרה..."
-            value={newCustomGoal}
-            onChange={(e) => setNewCustomGoal(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                addCustomGoal()
-              }
-            }}
-          />
-          <Button
-            variant="secondary"
-            onClick={addCustomGoal}
-            disabled={!newCustomGoal.trim()}
-            className="shrink-0"
-          >
-            הוסף
+      {/* Measurable Targets section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
+            יעדים מדידים
+          </label>
+          <Button variant="ghost" size="sm" onClick={addTarget} className="gap-1.5">
+            <span className="text-base leading-none">+</span>
+            <span>הוסף יעד</span>
           </Button>
         </div>
+
+        {targets.length === 0 && (
+          <div className="rounded-2xl border-2 border-dashed border-wizard-border p-6 text-center">
+            <p className="text-sm text-wizard-text-tertiary mb-1">
+              לא הוגדרו יעדים מדידים
+            </p>
+            <p className="text-xs text-wizard-text-tertiary">
+              יעדים מדידים עוזרים להראות ללקוח מה בדיוק הוא מקבל — למשל &quot;10K עוקבים חדשים תוך 3 חודשים&quot;
+            </p>
+          </div>
+        )}
+
+        {targets.map((target, index) => (
+          <div
+            key={index}
+            className="rounded-2xl border border-wizard-border bg-white shadow-wizard-sm p-4"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-rubik font-medium text-wizard-text-tertiary">
+                יעד {index + 1}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeTarget(index)}
+                className="text-wizard-text-tertiary hover:text-destructive text-xs px-2 h-7"
+              >
+                הסר
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Input
+                placeholder="מדד (למשל: עוקבים חדשים)"
+                value={target.metric}
+                onChange={(e) => updateTarget(index, 'metric', e.target.value)}
+              />
+              <Input
+                placeholder="ערך (למשל: 10,000)"
+                value={target.value}
+                onChange={(e) => updateTarget(index, 'value', e.target.value)}
+              />
+              <Input
+                placeholder="ציר זמן (למשל: 3 חודשים)"
+                value={target.timeline}
+                onChange={(e) => updateTarget(index, 'timeline', e.target.value)}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

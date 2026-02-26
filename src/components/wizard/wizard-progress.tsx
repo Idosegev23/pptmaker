@@ -14,7 +14,7 @@ interface WizardProgressProps {
 function CheckIcon({ className }: { className?: string }) {
   return (
     <svg
-      className={cn('h-3 w-3', className)}
+      className={cn('h-3.5 w-3.5', className)}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -41,7 +41,6 @@ export default function WizardProgress({
       const containerRect = container.getBoundingClientRect()
       const activeRect = activeEl.getBoundingClientRect()
 
-      // Check if active element is outside visible area
       if (
         activeRect.right > containerRect.right ||
         activeRect.left < containerRect.left
@@ -71,89 +70,88 @@ export default function WizardProgress({
     }
   }
 
+  // Check if the step AFTER index is completed (for connecting line fill)
+  function isLineCompleted(index: number): boolean {
+    if (index >= WIZARD_STEPS.length - 1) return false
+    const currentStepStatus = getStepStatus(WIZARD_STEPS[index].id)
+    return currentStepStatus === 'completed' || currentStepStatus === 'skipped'
+  }
+
   return (
-    <div dir="rtl" className="border-b border-border bg-muted/30 px-4 py-3">
+    <div dir="rtl" className="border-b border-wizard-border bg-white px-4 py-5 md:px-8">
       <div
         ref={scrollRef}
-        className="flex items-center gap-2 overflow-x-auto scrollbar-none"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        className="mx-auto flex max-w-3xl items-start justify-between overflow-x-auto scrollbar-hide snap-x snap-mandatory gap-0 pb-6"
       >
         {WIZARD_STEPS.map((step, index) => {
           const status = getStepStatus(step.id)
           const clickable = isClickable(status)
           const isActive = step.id === currentStep
+          const lineCompleted = isLineCompleted(index)
 
           return (
-            <div key={step.id} className="flex items-center gap-1.5 shrink-0">
-              {/* Connector line (not before the first step) */}
-              {index > 0 && (
-                <div
+            <div key={step.id} className="flex items-start snap-center shrink-0">
+              {/* Step node */}
+              <div className="relative flex flex-col items-center">
+                <button
+                  ref={isActive ? activeRef : undefined}
+                  type="button"
+                  onClick={() => handleStepClick(step.id)}
+                  disabled={!clickable}
                   className={cn(
-                    'h-px w-4 transition-colors',
-                    status === 'completed' || status === 'active'
-                      ? 'bg-primary/50'
-                      : 'bg-border'
+                    'relative flex h-8 w-8 items-center justify-center rounded-full text-xs font-rubik font-bold',
+                    'transition-all duration-300',
+                    // Active
+                    isActive && 'ring-2 ring-accent ring-offset-2 ring-offset-white text-accent bg-accent/5',
+                    // Completed
+                    !isActive && status === 'completed' && 'bg-brand-primary text-white cursor-pointer hover:shadow-wizard-md',
+                    // Skipped
+                    !isActive && status === 'skipped' && 'border-2 border-dashed border-wizard-text-tertiary bg-transparent text-wizard-text-tertiary cursor-pointer',
+                    // Pending
+                    status === 'pending' && 'bg-brand-mist text-wizard-text-tertiary cursor-not-allowed',
                   )}
-                />
-              )}
+                  title={step.label}
+                  aria-label={`${step.label} - ${getStatusLabel(status)}`}
+                  aria-current={isActive ? 'step' : undefined}
+                >
+                  {status === 'completed' && !isActive ? (
+                    <CheckIcon className="text-white" />
+                  ) : (
+                    <span>{step.order}</span>
+                  )}
+                  {/* Active ping */}
+                  {isActive && (
+                    <span className="absolute -inset-1 rounded-full animate-ping bg-accent/10 pointer-events-none" />
+                  )}
+                </button>
 
-              {/* Step pill */}
-              <button
-                ref={isActive ? activeRef : undefined}
-                type="button"
-                onClick={() => handleStepClick(step.id)}
-                disabled={!clickable}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-                  // Active (current step)
-                  isActive &&
-                    'bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20',
-                  // Completed
-                  !isActive &&
-                    status === 'completed' &&
-                    'bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer dark:bg-green-900/30 dark:text-green-400',
-                  // Skipped
-                  !isActive &&
-                    status === 'skipped' &&
-                    'border-2 border-dashed border-muted-foreground/40 text-muted-foreground hover:border-muted-foreground/60 cursor-pointer bg-transparent',
-                  // Pending
-                  status === 'pending' &&
-                    'bg-muted text-muted-foreground/50 cursor-not-allowed'
-                )}
-                title={step.label}
-                aria-label={`${step.label} - ${getStatusLabel(status)}`}
-                aria-current={isActive ? 'step' : undefined}
-              >
-                {/* Step number or check icon */}
-                {status === 'completed' && !isActive ? (
-                  <CheckIcon
+                {/* Label below circle */}
+                <span
+                  className={cn(
+                    'absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-heebo',
+                    isActive ? 'font-bold text-accent' : 'font-medium text-wizard-text-tertiary'
+                  )}
+                >
+                  {step.labelShort}
+                </span>
+              </div>
+
+              {/* Connecting line between steps */}
+              {index < WIZARD_STEPS.length - 1 && (
+                <div className="relative mx-1 mt-4 h-[2px] w-6 md:w-10 shrink-0">
+                  {/* Background track */}
+                  <div className="absolute inset-0 rounded-full bg-brand-mist" />
+                  {/* Fill */}
+                  <div
                     className={cn(
-                      'text-green-600 dark:text-green-400'
+                      'absolute inset-y-0 right-0 rounded-full transition-all duration-500',
+                      lineCompleted
+                        ? 'w-full bg-gradient-to-l from-accent to-brand-primary'
+                        : 'w-0'
                     )}
                   />
-                ) : (
-                  <span
-                    className={cn(
-                      'flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold leading-none',
-                      isActive && 'bg-primary-foreground/20 text-primary-foreground',
-                      !isActive &&
-                        status === 'completed' &&
-                        'bg-green-200 text-green-700 dark:bg-green-800 dark:text-green-300',
-                      !isActive &&
-                        status === 'skipped' &&
-                        'bg-muted-foreground/10 text-muted-foreground',
-                      status === 'pending' &&
-                        'bg-muted-foreground/10 text-muted-foreground/40'
-                    )}
-                  >
-                    {step.order}
-                  </span>
-                )}
-
-                {/* Step label */}
-                <span className="whitespace-nowrap">{step.labelShort}</span>
-              </button>
+                </div>
+              )}
             </div>
           )
         })}

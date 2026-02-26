@@ -18,7 +18,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={textareaId}
-            className="block text-sm font-medium mb-2 text-foreground"
+            className="block text-[13px] font-heebo font-semibold mb-2.5 text-wizard-text-secondary tracking-[0.01em]"
           >
             {label}
           </label>
@@ -26,12 +26,13 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         <textarea
           id={textareaId}
           className={cn(
-            'flex min-h-[100px] w-full rounded-lg border bg-background px-4 py-3',
-            'text-sm placeholder:text-muted-foreground resize-none',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            'transition-colors duration-200',
-            error ? 'border-destructive focus-visible:ring-destructive' : 'border-input',
+            'flex min-h-[120px] w-full rounded-xl border bg-white px-4 py-3',
+            'text-sm leading-relaxed text-foreground placeholder:text-wizard-text-tertiary placeholder:font-light resize-none',
+            'focus-visible:outline-none focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent/8',
+            'hover:border-primary/20',
+            'disabled:cursor-not-allowed disabled:opacity-40 disabled:bg-brand-pearl',
+            'transition-all duration-200',
+            error ? 'border-destructive ring-[3px] ring-destructive/8' : 'border-wizard-border',
             className
           )}
           ref={ref}
