@@ -53,11 +53,12 @@ export async function POST(request: NextRequest) {
     }
     
     // Mode: Full discovery - AI research + scrape recommended profiles
-    if (mode === 'discover' && brandResearch && budget && goals) {
+    // Note: budget can be 0 (falsy) — check explicitly for brandResearch only
+    if (mode === 'discover' && brandResearch) {
       console.log('[API Influencers] Full discovery mode (AI research + profile scraping)')
 
       // Step 1: Get AI recommendations
-      const strategy = await researchInfluencers(brandResearch, budget, goals)
+      const strategy = await researchInfluencers(brandResearch, budget ?? 0, goals ?? [])
       console.log(`[API Influencers] AI recommended ${strategy.recommendations?.length || 0} influencers`)
 
       // Step 2: Scrape profiles from AI recommendations
