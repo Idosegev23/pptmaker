@@ -633,38 +633,71 @@ export default function ResearchPage() {
                         <div className="grid grid-cols-1 gap-1 mb-2">
                           {AGENT_LABELS.map((label, i) => {
                             const s = agentStatuses[i] || 'pending'
+                            const pct = s === 'done' || s === 'failed' ? 100 : s === 'running' ? Math.min(elapsed / 600 * 100, 95) : 0
                             return (
-                              <div key={i} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5">
-                                <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
-                                  s === 'done' ? 'bg-[#10b981]' :
-                                  s === 'failed' ? 'bg-red-500' :
-                                  s === 'running' ? 'bg-blue-500' : 'bg-white/10'
-                                }`}>
-                                  {s === 'done' && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                                  {s === 'failed' && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
-                                  {s === 'running' && <div className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin" />}
+                              <div key={i} className="px-2 py-1.5 rounded-lg bg-white/5">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                                    s === 'done' ? 'bg-[#10b981]' :
+                                    s === 'failed' ? 'bg-red-500' :
+                                    s === 'running' ? 'bg-blue-500' : 'bg-white/10'
+                                  }`}>
+                                    {s === 'done' && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                    {s === 'failed' && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
+                                    {s === 'running' && <div className="w-2 h-2 border border-white border-t-transparent rounded-full animate-spin" />}
+                                  </div>
+                                  <span className={`text-xs font-medium ${
+                                    s === 'done' ? 'text-[#10b981]' :
+                                    s === 'failed' ? 'text-red-400' :
+                                    s === 'running' ? 'text-white/80' : 'text-white/30'
+                                  }`}>{label}</span>
+                                  {s === 'running' && (
+                                    <span className="text-[10px] text-white/30 mr-auto tabular-nums">
+                                      {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
+                                    </span>
+                                  )}
                                 </div>
-                                <span className={`text-xs font-medium ${
-                                  s === 'done' ? 'text-[#10b981]' :
-                                  s === 'failed' ? 'text-red-400' :
-                                  s === 'running' ? 'text-white/80' : 'text-white/30'
-                                }`}>{label}</span>
+                                <div className="h-0.5 bg-white/5 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-1000"
+                                    style={{
+                                      width: `${pct}%`,
+                                      backgroundColor: s === 'done' ? '#10b981' : s === 'failed' ? '#ef4444' : '#3b82f6',
+                                    }}
+                                  />
+                                </div>
                               </div>
                             )
                           })}
                           {/* Synthesis row */}
-                          <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-white/5 mt-1 border-t border-white/5 pt-2">
-                            <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
-                              brandDone ? 'bg-[#10b981]' :
-                              synthesizing ? 'bg-[#f2cc0d]' : 'bg-white/10'
-                            }`}>
-                              {brandDone && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                              {synthesizing && <div className="w-2 h-2 border border-[#0f172a] border-t-transparent rounded-full animate-spin" />}
+                          <div className="px-2 py-1.5 rounded-lg bg-white/5 mt-1 border-t border-white/5">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                                brandDone ? 'bg-[#10b981]' :
+                                synthesizing ? 'bg-[#f2cc0d]' : 'bg-white/10'
+                              }`}>
+                                {brandDone && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                {synthesizing && <div className="w-2 h-2 border border-[#0f172a] border-t-transparent rounded-full animate-spin" />}
+                              </div>
+                              <span className={`text-xs font-semibold ${
+                                brandDone ? 'text-[#10b981]' :
+                                synthesizing ? 'text-[#f2cc0d]' : 'text-white/30'
+                              }`}>סינתזה ועיבוד סופי</span>
+                              {synthesizing && (
+                                <span className="text-[10px] text-white/30 mr-auto tabular-nums">
+                                  {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
+                                </span>
+                              )}
                             </div>
-                            <span className={`text-xs font-semibold ${
-                              brandDone ? 'text-[#10b981]' :
-                              synthesizing ? 'text-[#f2cc0d]' : 'text-white/30'
-                            }`}>סינתזה ועיבוד סופי</span>
+                            <div className="h-0.5 bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-1000"
+                                style={{
+                                  width: brandDone ? '100%' : synthesizing ? `${Math.min(elapsed / 600 * 100, 95)}%` : '0%',
+                                  backgroundColor: brandDone ? '#10b981' : '#f2cc0d',
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
                       )}
@@ -682,17 +715,22 @@ export default function ResearchPage() {
                             <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           </div>
                         )}
-                        <div>
+                        <div className="flex-1">
                           <div className="font-semibold text-sm text-white">מחקר משפיענים</div>
                           <div className="text-xs text-[#94a3b8]">
                             {influencerDone ? 'הושלם!' : INFLUENCER_STAGES[Math.floor(elapsed / 8) % INFLUENCER_STAGES.length]}
                           </div>
                         </div>
+                        {!influencerDone && (
+                          <span className="text-[10px] text-white/30 tabular-nums">
+                            {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
+                          </span>
+                        )}
                       </div>
                       <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-l from-purple-500 to-purple-400 rounded-full transition-all duration-1000"
-                          style={{ width: influencerDone ? '100%' : `${Math.min(20 + (elapsed % 60) * 1.1, 85)}%` }}
+                          style={{ width: influencerDone ? '100%' : `${Math.min(elapsed / 600 * 100, 95)}%` }}
                         />
                       </div>
                     </div>
