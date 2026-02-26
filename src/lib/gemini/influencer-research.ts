@@ -12,8 +12,8 @@ const ai = new GoogleGenAI({
   httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
 })
 
-// Use Gemini 3.1 Pro for high-reasoning influencer research and market analysis
 const MODEL = 'gemini-3.1-pro-preview'
+const FLASH_MODEL = 'gemini-3-flash-preview' // Fallback when Pro is overloaded
 
 export interface InfluencerRecommendation {
   name: string
@@ -189,9 +189,9 @@ export async function researchInfluencers(
 **חובה להחזיר JSON בלבד! וודא שמות משפיענים אמיתיים מהשוק הישראלי.**
 `
 
-  const callGemini = async () => {
+  const callGemini = async (model: string) => {
     const response = await ai.models.generateContent({
-      model: MODEL,
+      model,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -202,20 +202,23 @@ export async function researchInfluencers(
     return response.text || ''
   }
 
-  // Retry once on transient failures (fetch timeout / 499)
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  // Attempt 1: Pro model, Attempt 2: Flash fallback (handles Pro overload / rate limits)
+  const models = [MODEL, FLASH_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
     try {
-      const text = await callGemini()
-      console.log('[Influencer Research] Response received, parsing JSON...')
+      const text = await callGemini(model)
+      console.log(`[Influencer Research] Response received (${model}), parsing JSON...`)
       const strategy = parseGeminiJson<InfluencerStrategy>(text)
       console.log(`[Influencer Research] Complete. Found ${strategy.recommendations?.length || 0} real recommendations.`)
+      if (attempt > 0) console.log(`[Influencer Research] ✅ Succeeded with fallback model (${model})`)
       return strategy
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
-      console.error(`[Influencer Research] Attempt ${attempt}/2 failed: ${msg}`)
-      if (attempt < 2) {
-        console.log('[Influencer Research] Retrying in 3s...')
-        await new Promise(r => setTimeout(r, 3000))
+      console.error(`[Influencer Research] Attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
+      if (attempt < models.length - 1) {
+        console.log('[Influencer Research] ⚡ Falling back to Flash...')
+        await new Promise(r => setTimeout(r, 2000))
       }
     }
   }

@@ -11,8 +11,8 @@ const ai = new GoogleGenAI({
   httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
 })
 
-// Only gemini-3.1-pro-preview — never use other model families
 const AGENT_MODEL = 'gemini-3.1-pro-preview'
+const FLASH_MODEL = 'gemini-3-flash-preview' // Fallback when Pro is overloaded
 const SYNTHESIS_MODEL = 'gemini-3.1-pro-preview'
 
 export interface BrandResearch {
@@ -242,9 +242,9 @@ ${angleDescription}
 - אם לא מצאת מידע — כתוב "לא נמצא מידע ברשת".
 </output_format>`
 
-  const callAgent = async () => {
+  const callAgent = async (model: string) => {
     const response = await ai.models.generateContent({
-      model: AGENT_MODEL,
+      model,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -255,22 +255,25 @@ ${angleDescription}
     return response.text || `לא נאסף מידע עבור: ${angleName}`
   }
 
-  // Retry once on transient failures (fetch timeout / 499)
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  // Attempt 1: Pro model, Attempt 2: Flash fallback (handles Pro overload / rate limits)
+  const models = [AGENT_MODEL, FLASH_MODEL]
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
     try {
-      const data = await callAgent()
+      const data = await callAgent(model)
+      if (attempt > 0) console.log(`[Research Agent] ✅ ${angleName} succeeded with fallback model (${model})`)
       return { angle: angleName, data }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
-      console.error(`[Research Agent] Attempt ${attempt}/2 failed for ${angleName}: ${msg}`)
-      if (attempt < 2) {
-        console.log(`[Research Agent] Retrying ${angleName} in 3s...`)
-        await new Promise(r => setTimeout(r, 3000))
+      console.error(`[Research Agent] Attempt ${attempt + 1}/${models.length} failed for ${angleName} (${model}): ${msg}`)
+      if (attempt < models.length - 1) {
+        console.log(`[Research Agent] ⚡ Falling back to Flash for ${angleName}...`)
+        await new Promise(r => setTimeout(r, 2000))
       }
     }
   }
 
-  return { angle: angleName, data: `שגיאה באיסוף מידע לאחר 2 ניסיונות.` }
+  return { angle: angleName, data: `שגיאה באיסוף מידע לאחר ${models.length} ניסיונות (Pro + Flash).` }
 }
 
 /**
@@ -391,28 +394,41 @@ ${websiteContext}
 \`\`\`
 `
 
-  try {
-    const response = await ai.models.generateContent({
-      model: SYNTHESIS_MODEL,
-      contents: synthesisPrompt,
-      config: {
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-        maxOutputTokens: 8000,
+  // Try Pro first, fallback to Flash if overloaded
+  const synthModels = [SYNTHESIS_MODEL, FLASH_MODEL]
+  for (let attempt = 0; attempt < synthModels.length; attempt++) {
+    const model = synthModels[attempt]
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: synthesisPrompt,
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          maxOutputTokens: 8000,
+        }
+      })
+
+      const text = response.text || ''
+      console.log(`[Gemini Deep Research] Parsing synthesis JSON (model: ${model})...`)
+
+      const research = parseGeminiJson<BrandResearch>(text)
+      console.log(`[Gemini Deep Research] Complete. Confidence: ${research.confidence}`)
+      console.log(`[Gemini Deep Research] Found ${research.competitors?.length || 0} competitors, ${research.sources?.length || 0} sources`)
+      if (attempt > 0) console.log(`[Gemini Deep Research] ✅ Synthesis succeeded with fallback model (${model})`)
+
+      return research
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[Gemini Deep Research] Synthesis attempt ${attempt + 1}/${synthModels.length} failed (${model}): ${msg}`)
+      if (attempt < synthModels.length - 1) {
+        console.log(`[Gemini Deep Research] ⚡ Falling back to Flash for synthesis...`)
+        await new Promise(r => setTimeout(r, 2000))
       }
-    })
-
-    const text = response.text || ''
-    console.log('[Gemini Deep Research] Parsing final generated JSON...')
-
-    const research = parseGeminiJson<BrandResearch>(text)
-    console.log(`[Gemini Deep Research] Complete. Confidence: ${research.confidence}`)
-    console.log(`[Gemini Deep Research] Found ${research.competitors?.length || 0} competitors, ${research.sources?.length || 0} sources`)
-
-    return research
-  } catch (error) {
-    console.error('[Gemini Deep Research] Error during synthesis:', error)
-    return getMinimalResearch(brandName, websiteData)
+    }
   }
+
+  console.error('[Gemini Deep Research] All synthesis attempts failed, using minimal fallback')
+  return getMinimalResearch(brandName, websiteData)
 }
 
 /**
