@@ -38,8 +38,7 @@ import {
   PIPELINE_DEFAULTS,
 } from '@/lib/config/defaults'
 
-const PRO_MODEL_DEFAULT = 'gemini-3.1-pro-preview'
-const FLASH_MODEL_DEFAULT = 'gemini-3-flash-preview'
+// Model defaults removed — now sourced from MODEL_DEFAULTS in defaults.ts
 
 /** Extract detailed error info including nested cause chain (Node fetch errors hide details in .cause) */
 function detailedError(error: unknown): string {
@@ -64,9 +63,17 @@ function detailedError(error: unknown): string {
   return parts.join(' → ')
 }
 
-async function getSlideDesignerModels(): Promise<string[]> {
-  const primary = await getConfig('ai_models', 'slide_designer.primary_model', PRO_MODEL_DEFAULT)
-  const fallback = await getConfig('ai_models', 'slide_designer.fallback_model', FLASH_MODEL_DEFAULT)
+/** Models for Design System (foundation) — Pro first for quality */
+async function getDesignSystemModels(): Promise<string[]> {
+  const primary = await getConfig('ai_models', 'slide_designer.primary_model', MODEL_DEFAULTS['slide_designer.primary_model'].value as string)
+  const fallback = await getConfig('ai_models', 'slide_designer.fallback_model', MODEL_DEFAULTS['slide_designer.fallback_model'].value as string)
+  return [primary, fallback]
+}
+
+/** Models for Batch slide generation — Flash first for speed + reliability */
+async function getBatchModels(): Promise<string[]> {
+  const primary = await getConfig('ai_models', 'slide_designer.batch_primary_model', MODEL_DEFAULTS['slide_designer.batch_primary_model'].value as string)
+  const fallback = await getConfig('ai_models', 'slide_designer.batch_fallback_model', MODEL_DEFAULTS['slide_designer.batch_fallback_model'].value as string)
   return [primary, fallback]
 }
 
@@ -599,7 +606,7 @@ async function generateDesignSystem(
   // Design system generation with per-call timeout
   const DS_TIMEOUT_MS = 150_000 // 2.5 minutes per attempt (total max ~5 min for 2 attempts)
   const sysInstruction = await getSystemInstruction()
-  const models = await getSlideDesignerModels()
+  const models = await getDesignSystemModels()
   const [dsThinkingLevel, dsMaxOutputTokens] = await Promise.all([getThinkingLevel(), getMaxOutputTokens()])
   const dsThinking = dsThinkingLevel === 'HIGH' ? ThinkingLevel.HIGH
     : dsThinkingLevel === 'MEDIUM' ? ThinkingLevel.MEDIUM
@@ -862,7 +869,7 @@ ${finalInstruction}
   const TOTAL_BUDGET_MS = 480_000 // hard cap — leave 120s buffer for Vercel
   const functionStartTime = Date.now()
   const batchSysInstruction = await getSystemInstruction()
-  const batchModels = await getSlideDesignerModels()
+  const batchModels = await getBatchModels()
 
   // Build attempt list: [model, thinkingLevel] pairs
   // Tier 1: primary model + configured thinking

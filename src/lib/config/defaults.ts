@@ -371,14 +371,26 @@ export const MODEL_DEFAULTS = {
   },
 
   'slide_designer.primary_model': {
-    value: 'gemini-3-flash-preview',
-    description: 'מודל ראשי — מעצב שקפים',
+    value: 'gemini-3.1-pro-preview',
+    description: 'מודל ראשי — Design System (foundation). Pro מומלץ לאיכות',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
   'slide_designer.fallback_model': {
+    value: 'gemini-3-flash-preview',
+    description: 'מודל גיבוי — Design System (foundation)',
+    value_type: 'text' as const,
+    group: 'מעצב שקפים',
+  },
+  'slide_designer.batch_primary_model': {
+    value: 'gemini-3-flash-preview',
+    description: 'מודל ראשי — יצירת שקפים (batches). Flash מומלץ למהירות ואמינות',
+    value_type: 'text' as const,
+    group: 'מעצב שקפים',
+  },
+  'slide_designer.batch_fallback_model': {
     value: 'gemini-3.1-pro-preview',
-    description: 'מודל גיבוי — מעצב שקפים',
+    description: 'מודל גיבוי — יצירת שקפים (batches)',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
