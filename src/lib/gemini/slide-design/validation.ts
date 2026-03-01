@@ -263,7 +263,7 @@ export function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDe
 
   if (allTitles.length < 3) return slides
 
-  const skipTypes = new Set(['cover', 'closing', 'bigIdea', 'insight', 'whyNow', 'competitive', 'strategy'])
+  const skipTypes = new Set(['cover', 'closing', 'bigIdea', 'insight'])
   const regularTitles = allTitles.filter(t => {
     const st = slides[t.slideIndex]?.slideType
     return !skipTypes.has(st)
@@ -272,13 +272,14 @@ export function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDe
   if (regularTitles.length > 0) {
     const medianY = regularTitles.map(t => t.y).sort((a, b) => a - b)[Math.floor(regularTitles.length / 2)]
     for (const t of regularTitles) {
-      if (Math.abs(t.y - medianY) > 200) t.element.y = medianY
+      if (Math.abs(t.y - medianY) > 100) t.element.y = medianY
     }
 
     const headingSizes = regularTitles.map(t => t.element.fontSize || 48)
     const medianSize = headingSizes.sort((a, b) => a - b)[Math.floor(headingSizes.length / 2)]
     for (const t of regularTitles) {
-      if (Math.abs(t.fontSize - medianSize) > 20) {
+      const diff = Math.abs(t.fontSize - medianSize)
+      if (diff > 6 && diff < 15) {
         t.element.fontSize = medianSize
       }
     }

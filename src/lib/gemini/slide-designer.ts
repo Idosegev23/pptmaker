@@ -64,6 +64,28 @@ const ai = new GoogleGenAI({
   httpOptions: { timeout: 540_000 },
 })
 
+// ─── Quality Constants (restored from v3 that produced good results) ──
+
+const IMAGE_SIZE_HINTS: Record<string, string> = {
+  cover: 'Full-bleed (1920×1080) or right-half (960×1080). Image is the hero.',
+  brief: 'Right 40% (768×800), vertically centered. Leave left for text.',
+  audience: 'Right 45% (864×900). People-focused, large and immersive.',
+  insight: 'Background overlay (1920×1080) with gradient on top, or right 50%.',
+  bigIdea: 'Right 60% (1152×1080) full height. The visual IS the idea.',
+  strategy: 'Accent image, 30% (576×600), positioned as visual anchor.',
+  approach: 'Small accent (480×480), positioned at rule-of-thirds intersection.',
+  closing: 'Background overlay (1920×1080) at low opacity, or centered accent.',
+}
+
+const TEMPERATURE_MAP: Record<string, 'cold' | 'neutral' | 'warm'> = {
+  cover: 'cold', brief: 'cold', goals: 'neutral', audience: 'neutral',
+  insight: 'warm', strategy: 'neutral', bigIdea: 'warm', approach: 'neutral',
+  deliverables: 'neutral', metrics: 'neutral', influencerStrategy: 'cold',
+  influencers: 'neutral', closing: 'warm',
+}
+
+const TENSION_SLIDES = new Set(['cover', 'insight', 'bigIdea', 'closing'])
+
 // ─── Helpers ────────────────────────────────────────────
 
 /** Extract detailed error info including nested cause chain */
@@ -297,6 +319,9 @@ async function generateSlidesBatchAST(
     const imageRoleHint = imageRoleHints[slide.slideType] || 'An image that reinforces the slide message.'
     const archetype = selectArchetype(slide.slideType, globalIndex)
     const curated = curatedSlides?.[i]
+    const colorTemp = TEMPERATURE_MAP[slide.slideType] || 'neutral'
+    const hasTension = TENSION_SLIDES.has(slide.slideType)
+    const imageSizeHint = IMAGE_SIZE_HINTS[slide.slideType] || 'At least 40% of slide area'
 
     let contentBlock: string
     if (curated) {
@@ -317,14 +342,18 @@ async function generateSlidesBatchAST(
     const cdPerSlide = cd?.oneRule ? `  <master_rule>${cd.oneRule}</master_rule>` : ''
     const imageRole = curated?.imageRole || ''
     const imageTag = slide.imageUrl
-      ? `  <image url="${slide.imageUrl}" role="${imageRoleHint}" visual_role="${imageRole}" />`
-      : '  <no_image>Use decorative shapes, watermarks, and dramatic typography instead.</no_image>'
+      ? `  <image url="${slide.imageUrl}" role="${imageRoleHint}" visual_role="${imageRole}" sizing="${imageSizeHint}" />`
+      : `  <no_image>Use decorative shapes, watermarks, and dramatic typography instead.</no_image>`
 
     return `
 <slide index="${globalIndex + 1}" total="${batchContext.totalSlides}" type="${slide.slideType}">
+  <color_temperature>${colorTemp}</color_temperature>
   <energy>${pacing.energy}</energy>
   <density>${pacing.density}</density>
+  <max_elements>${pacing.maxElements}</max_elements>
+  <min_whitespace>${pacing.minWhitespace}%</min_whitespace>
   <layout_inspiration>${archetype}</layout_inspiration>
+${hasTension ? '  <tension>TENSION POINT — חובה נקודת מתח ויזואלית אחת בשקף הזה!</tension>' : ''}
 ${imageTag}
 ${emotionNote}
 ${cdPerSlide}
@@ -434,7 +463,7 @@ async function generateSingleSlide(
   const [
     pacingMap, layoutArchetypes, imageRoleHints,
     designPrinciples, depthLayers, elementFormat, technicalRules, finalInstruction,
-    thinkingLevel, maxOutputTokens, temperature,
+    thinkingLevel, maxOutputTokens, modelTemperature,
   ] = await Promise.all([
     getPacingMap(), getLayoutArchetypes(), getImageRoleHints(),
     getDesignPrinciples(), getDepthLayers(), getElementFormat(), getTechnicalRules(), getFinalInstruction(),
@@ -501,6 +530,10 @@ async function generateSingleSlide(
   // Build content block
   const pacing = pacingMap[slide.slideType] || pacingMap.brief
   const imageRoleHint = imageRoleHints[slide.slideType] || 'An image that reinforces the slide message.'
+  const colorTemp = TEMPERATURE_MAP[slide.slideType] || 'neutral'
+  const hasTension = TENSION_SLIDES.has(slide.slideType)
+  const imageSizeHint = IMAGE_SIZE_HINTS[slide.slideType] || 'At least 40% of slide area'
+
   let contentBlock: string
   if (curated) {
     const parts: string[] = []
@@ -518,10 +551,10 @@ async function generateSingleSlide(
 
   const emotionNote = curated?.emotionalNote ? `\n<emotion>${curated.emotionalNote}</emotion>` : ''
   const imageTag = slide.imageUrl
-    ? `<image url="${slide.imageUrl}" role="${imageRoleHint}" />`
+    ? `<image url="${slide.imageUrl}" role="${imageRoleHint}" sizing="${imageSizeHint}" />`
     : '<no_image>Use decorative shapes, watermarks, and dramatic typography instead.</no_image>'
 
-  const prompt = buildSingleSlidePrompt(brandName, cd, colors, typo, effects, motif, designSystem, designPrinciples, depthLayers, elementFormat, technicalRules, finalInstruction, storyLines, previousSlidesBlock, slideIndex, context.totalSlides, slide.slideType, pacing, archetype, imageTag, emotionNote, contentBlock)
+  const prompt = buildSingleSlidePrompt(brandName, cd, colors, typo, effects, motif, designSystem, designPrinciples, depthLayers, elementFormat, technicalRules, finalInstruction, storyLines, previousSlidesBlock, slideIndex, context.totalSlides, slide.slideType, pacing, archetype, imageTag, emotionNote, contentBlock, colorTemp, hasTension)
 
   // Call Gemini with retry
   const CALL_TIMEOUT = 60_000
@@ -549,7 +582,7 @@ async function generateSingleSlide(
           responseMimeType: 'application/json',
           responseSchema: SLIDE_BATCH_SCHEMA,
           thinkingConfig: { thinkingLevel: thinking },
-          maxOutputTokens, temperature,
+          maxOutputTokens, temperature: modelTemperature,
           httpOptions: { timeout: CALL_TIMEOUT },
         },
       })
@@ -633,6 +666,13 @@ DEPTH LAYERS: ${depthLayers}
 ANTI-PATTERNS: Centered text in middle | 3 identical cards | All fonts same size | Simple linear gradient | Rotation on body text | Opacity < 0.7 on readable text
 </design_principles>
 
+<typography_rules>
+- Headlines (60px+): letterSpacing ${typo.letterSpacingTight}, lineHeight ${typo.lineHeightTight}, weight ${typo.weightPairs[0]?.[0] || 900}
+- Body/labels: letterSpacing ${typo.letterSpacingWide}, weight ${typo.weightPairs[0]?.[1] || 300}
+- Giant numbers: weight 900, letterSpacing -4, fontSize 80-140px
+- Watermark: role "decorative", fontSize 200-400, opacity 0.03-0.08, rotation -5° to -15°, textStroke: { width: 2, color: "#ffffff" }
+</typography_rules>
+
 <element_format>
 ${elementFormat}
 </element_format>
@@ -642,6 +682,7 @@ ${technicalRules}
 - Create depth through layered shapes with subtle offset shadows
 - For full-bleed images: image at zIndex 1, gradient overlay at zIndex 2, text at zIndex 8+
 - Key numbers: fontSize 80-140px, fontWeight 900, accent color
+- Images with URL: MUST include element type "image" with src=URL, size ≥40% of slide
 </technical_rules>
 
 <visualization_checklist>
@@ -650,6 +691,51 @@ BEFORE outputting each slide, mentally render it at 1920×1080:
 If ANY check fails → fix before outputting.
 </visualization_checklist>
 
+<reference_examples>
+These examples show the QUALITY LEVEL expected. Create COMPLETELY DIFFERENT designs — these are structure references only.
+
+Example 1 — Cover (Typographic Brutalism):
+\`\`\`json
+{
+  "id": "slide-1", "slideType": "cover", "label": "שער",
+  "background": { "type": "solid", "value": "${colors.background}" },
+  "elements": [
+    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 20% 30%, ${colors.primary}50 0%, transparent 50%), radial-gradient(circle at 80% 80%, ${colors.accent}50 0%, transparent 50%)", "opacity": 0.7 },
+    { "id": "watermark", "type": "text", "x": -150, "y": 180, "width": 2200, "height": 500, "zIndex": 2, "content": "BRAND", "fontSize": 380, "fontWeight": 900, "color": "transparent", "textAlign": "center", "lineHeight": 0.9, "letterSpacing": -8, "opacity": 0.12, "rotation": -8, "textStroke": { "width": 2, "color": "#ffffff" }, "role": "decorative" },
+    { "id": "line", "type": "shape", "x": 160, "y": 620, "width": 340, "height": 1, "zIndex": 2, "shapeType": "decorative", "fill": "${colors.text}30", "opacity": 1 },
+    { "id": "accent-circle", "type": "shape", "x": 1450, "y": -80, "width": 400, "height": 400, "zIndex": 2, "shapeType": "decorative", "fill": "${colors.accent}", "clipPath": "circle(50%)", "opacity": 0.12 },
+    { "id": "title", "type": "text", "x": 120, "y": 380, "width": 900, "height": 200, "zIndex": 10, "content": "שם המותג", "fontSize": ${typo.displaySize}, "fontWeight": 900, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.0, "letterSpacing": -4, "role": "title" },
+    { "id": "subtitle", "type": "text", "x": 120, "y": 610, "width": 600, "height": 50, "zIndex": 8, "content": "הצעת שיתוף פעולה", "fontSize": 22, "fontWeight": 300, "color": "${colors.text}70", "textAlign": "right", "letterSpacing": 6, "role": "subtitle" },
+    { "id": "date", "type": "text", "x": 120, "y": 680, "width": 300, "height": 30, "zIndex": 8, "content": "ינואר 2025", "fontSize": 16, "fontWeight": 300, "color": "${colors.text}40", "textAlign": "right", "letterSpacing": 3, "role": "caption" }
+  ]
+}
+\`\`\`
+
+Example 2 — Metrics (Bento Box + Data Art):
+\`\`\`json
+{
+  "id": "slide-10", "slideType": "metrics", "label": "מדדים",
+  "background": { "type": "solid", "value": "${colors.background}" },
+  "elements": [
+    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 50% 50%, ${colors.cardBg} 0%, ${colors.background} 70%)", "opacity": 1 },
+    { "id": "wm", "type": "text", "x": 800, "y": 600, "width": 1400, "height": 500, "zIndex": 1, "content": "DATA", "fontSize": 300, "fontWeight": 900, "color": "transparent", "textAlign": "center", "opacity": 0.04, "rotation": -12, "textStroke": { "width": 2, "color": "${colors.text}" }, "role": "decorative" },
+    { "id": "label", "type": "text", "x": 120, "y": 80, "width": 400, "height": 30, "zIndex": 8, "content": "יעדים ומדדים", "fontSize": 14, "fontWeight": 400, "color": "${colors.accent}", "textAlign": "right", "letterSpacing": 4, "role": "label" },
+    { "id": "title", "type": "text", "x": 120, "y": 120, "width": 800, "height": 80, "zIndex": 10, "content": "המספרים שמאחורי התוכנית", "fontSize": 56, "fontWeight": 800, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.1, "letterSpacing": -2, "role": "title" },
+    { "id": "c1-shadow", "type": "shape", "x": 135, "y": 275, "width": 520, "height": 320, "zIndex": 4, "shapeType": "decorative", "fill": "#000000", "borderRadius": 24, "opacity": 0.15 },
+    { "id": "c1", "type": "shape", "x": 120, "y": 260, "width": 520, "height": 320, "zIndex": 5, "shapeType": "decorative", "fill": "${colors.cardBg}", "borderRadius": 24, "opacity": 1, "border": "1px solid ${colors.text}10" },
+    { "id": "c1-num", "type": "text", "x": 160, "y": 290, "width": 440, "height": 120, "zIndex": 8, "content": "2.5M", "fontSize": 88, "fontWeight": 900, "color": "${colors.accent}", "textAlign": "right", "lineHeight": 1, "letterSpacing": -3, "role": "body" },
+    { "id": "c1-lbl", "type": "text", "x": 160, "y": 420, "width": 440, "height": 40, "zIndex": 8, "content": "חשיפות צפויות", "fontSize": 22, "fontWeight": 400, "color": "${colors.text}80", "textAlign": "right", "role": "body" },
+    { "id": "c2-shadow", "type": "shape", "x": 695, "y": 275, "width": 520, "height": 320, "zIndex": 4, "shapeType": "decorative", "fill": "#000000", "borderRadius": 24, "opacity": 0.15 },
+    { "id": "c2", "type": "shape", "x": 680, "y": 260, "width": 520, "height": 320, "zIndex": 5, "shapeType": "decorative", "fill": "${colors.cardBg}", "borderRadius": 24, "opacity": 1, "border": "1px solid ${colors.text}10" },
+    { "id": "c2-num", "type": "text", "x": 720, "y": 290, "width": 440, "height": 120, "zIndex": 8, "content": "12.4%", "fontSize": 88, "fontWeight": 900, "color": "${colors.highlight}", "textAlign": "right", "lineHeight": 1, "letterSpacing": -3, "role": "body" },
+    { "id": "c2-lbl", "type": "text", "x": 720, "y": 420, "width": 440, "height": 40, "zIndex": 8, "content": "אחוז מעורבות", "fontSize": 22, "fontWeight": 400, "color": "${colors.text}80", "textAlign": "right", "role": "body" }
+  ]
+}
+\`\`\`
+
+⚠️ Design slides that are DIFFERENT from these examples — use them only for quality/structure reference.
+</reference_examples>
+
 <previous_slides>
 ${batchContext.previousSlidesVisualSummary ? `Already designed:\n${batchContext.previousSlidesVisualSummary}` : 'First batch — no previous slides.'}
 </previous_slides>
@@ -657,13 +743,6 @@ ${batchContext.previousSlidesVisualSummary ? `Already designed:\n${batchContext.
 <slides_to_design>
 ${slidesDescription}
 </slides_to_design>
-
-<quality_reference>
-Structure reference (derive YOUR OWN coordinates from design principles):
-- Slide: { id, slideType, label, background: { type, value }, elements: [...] }
-- Decorative text: role "decorative", fontSize 200+, opacity 0.05-0.15, watermark texture
-- Always include at least one decorative element per slide
-</quality_reference>
 
 <final_instruction>
 ${finalInstruction}
@@ -680,14 +759,16 @@ function buildSingleSlidePrompt(
   slideIndex: number, totalSlides: number, slideType: string,
   pacing: PacingDirective, archetype: string, imageTag: string,
   emotionNote: string, contentBlock: string,
+  temperature?: string, hasTension?: boolean,
 ): string {
   return `<task>
 Design exactly 1 premium presentation slide for "${brandName}".
 Canvas: 1920×1080px | RTL Hebrew | Font: Heebo | textAlign: "right" always.
+This must look like a premium fashion magazine / editorial design — NOT PowerPoint!
 </task>
 
 <creative_brief>
-${cd ? `Visual Metaphor: ${cd.visualMetaphor}\nVisual Tension: ${cd.visualTension}\nMaster Rule: ${cd.oneRule}\nColor Story: ${cd.colorStory}\nTypography Voice: ${cd.typographyVoice}\nEmotional Arc: ${cd.emotionalArc}` : `Think like a Creative Director for "${brandName}".`}
+${cd ? `Visual Metaphor: ${cd.visualMetaphor}\nVisual Tension: ${cd.visualTension}\nMaster Rule (EVERY slide must obey): ${cd.oneRule}\nColor Story: ${cd.colorStory}\nTypography Voice: ${cd.typographyVoice}\nEmotional Arc: ${cd.emotionalArc}` : `Think like a Creative Director for "${brandName}".`}
 </creative_brief>
 
 <design_system>
@@ -713,9 +794,13 @@ ${previousSlidesBlock}
 </previous_slide_designs>
 
 <slide_to_design index="${slideIndex + 1}" total="${totalSlides}" type="${slideType}">
+<temperature>${temperature || 'neutral'}</temperature>
 <energy>${pacing.energy}</energy>
 <density>${pacing.density}</density>
+<max_elements>${pacing.maxElements}</max_elements>
+<min_whitespace>${pacing.minWhitespace}%</min_whitespace>
 <layout_inspiration>${archetype}</layout_inspiration>
+${hasTension ? '<tension>TENSION POINT — חובה נקודת מתח ויזואלית אחת בשקף הזה!</tension>' : ''}
 ${imageTag}${emotionNote}
 ${cd?.oneRule ? `<master_rule>${cd.oneRule}</master_rule>` : ''}
 <content>
@@ -729,6 +814,13 @@ DEPTH LAYERS: ${depthLayers}
 ANTI-PATTERNS: Centered text | 3 identical cards | All fonts same size | Simple gradient | Rotation on body text | Opacity < 0.7 on readable text
 </design_principles>
 
+<typography_rules>
+- Headlines (60px+): letterSpacing ${typo.letterSpacingTight}, lineHeight ${typo.lineHeightTight}, weight ${typo.weightPairs[0]?.[0] || 900}
+- Body/labels: letterSpacing ${typo.letterSpacingWide}, weight ${typo.weightPairs[0]?.[1] || 300}
+- Giant numbers: weight 900, letterSpacing -4, fontSize 80-140px
+- Watermark: role "decorative", fontSize 200-400, opacity 0.03-0.08, rotation -5° to -15°, textStroke: { width: 2, color: "#ffffff" }
+</typography_rules>
+
 <element_format>
 ${elementFormat}
 </element_format>
@@ -738,6 +830,7 @@ ${technicalRules}
 - Create depth through layered shapes with subtle offset shadows
 - For full-bleed images: image at zIndex 1, gradient overlay at zIndex 2, text at zIndex 8+
 - Key numbers: fontSize 80-140px, fontWeight 900, accent color
+- Images with URL: MUST include element type "image" with src=URL, size ≥40% of slide
 </technical_rules>
 
 <image_placement>
@@ -747,6 +840,24 @@ When an image URL is provided:
 - If full-bleed: add gradient overlay for text readability.
 NEVER use default positions. Every image placement must be a creative decision.
 </image_placement>
+
+<reference_examples>
+Quality/structure reference — create YOUR OWN design, different from these:
+
+Cover example (structure only):
+\`\`\`json
+{
+  "id": "slide-1", "slideType": "cover", "label": "שער",
+  "background": { "type": "solid", "value": "${colors.background}" },
+  "elements": [
+    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 20% 30%, ${colors.primary}50 0%, transparent 50%)", "opacity": 0.7 },
+    { "id": "watermark", "type": "text", "x": -150, "y": 180, "width": 2200, "height": 500, "zIndex": 2, "content": "BRAND", "fontSize": 380, "fontWeight": 900, "color": "transparent", "textAlign": "center", "lineHeight": 0.9, "letterSpacing": -8, "opacity": 0.12, "rotation": -8, "textStroke": { "width": 2, "color": "#ffffff" }, "role": "decorative" },
+    { "id": "title", "type": "text", "x": 120, "y": 380, "width": 900, "height": 200, "zIndex": 10, "content": "שם המותג", "fontSize": ${typo.displaySize}, "fontWeight": 900, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.0, "letterSpacing": -4, "role": "title" },
+    { "id": "subtitle", "type": "text", "x": 120, "y": 610, "width": 600, "height": 50, "zIndex": 8, "content": "הצעת שיתוף פעולה", "fontSize": 22, "fontWeight": 300, "color": "${colors.text}70", "textAlign": "right", "letterSpacing": 6, "role": "subtitle" }
+  ]
+}
+\`\`\`
+</reference_examples>
 
 <visualization_checklist>
 BEFORE outputting, mentally render at 1920×1080:

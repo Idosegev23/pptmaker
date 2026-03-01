@@ -100,12 +100,24 @@ If any issue is found, fix it before outputting the JSON.
   },
 
   'slide_designer.design_principles': {
-    value: `- Use asymmetric compositions — offset titles, uneven columns, dynamic diagonal flow
-- Create strong scale contrast between heading and body text (large titles, small labels)
-- Give every readable text element enough contrast against its background (opacity ≥ 0.7)
-- Keep clear breathing room around the main title
-- Vary card sizes when using multiple cards — make each one different
-- Use rich gradients (radial, multi-stop) rather than flat single-color fills`,
+    value: `COMPOSITION:
+- Rule of Thirds: focal points at (640,360), (1280,360), (640,720), (1280,720). Title on right ⅓ (RTL)
+- Scale Contrast: max font / min font ≥ 5:1 (peak slides: ≥ 10:1)
+- 80px+ clear space around main title
+- Diagonal flow: right-top → left-bottom, never static/centered
+- 3 main elements form a triangle around the focal point
+
+LAYOUT:
+- Asymmetric! Never PowerPoint. Every slide different from the previous one
+- Fake 3D shadows (shape at x+12, y+12, fill:#000, opacity 0.12-0.18)
+- Gradient overlays on images for text readability
+- Thin lines (1-2px) in accent color as elegant separators
+- Vary card sizes — make each one different
+- Use rich gradients (radial, multi-stop) rather than flat fills
+
+CONTRAST:
+- Every readable text must have opacity ≥ 0.7
+- Never place text directly on image without gradient overlay between them`,
     description: 'עקרונות עיצוב חיוביים — מה לעשות (נשלח ל-AI בכל batch)',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
@@ -420,7 +432,7 @@ export const MODEL_DEFAULTS = {
     group: 'מעצב שקפים',
   },
   'slide_designer.batch_thinking_level': {
-    value: 'MEDIUM',
+    value: 'HIGH',
     description: 'רמת חשיבה — יצירת שקפים (batches). MEDIUM = מהיר יותר, HIGH = איכות מקסימלית',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
