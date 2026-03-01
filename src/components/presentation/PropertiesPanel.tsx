@@ -304,8 +304,8 @@ function ShapeProperties({ element, onChange }: {
       <div>
         <MiniLabel>מילוי</MiniLabel>
         <div className="flex gap-1">
-          <input type="color" value={element.fill.startsWith('#') ? element.fill : '#333333'} onChange={(e) => onChange({ fill: e.target.value })} className="w-8 h-8 rounded border border-white/10 cursor-pointer bg-transparent" />
-          <input type="text" value={element.fill} onChange={(e) => onChange({ fill: e.target.value })} className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30 font-mono" dir="ltr" />
+          <input type="color" value={element.fill?.startsWith('#') ? element.fill : '#333333'} onChange={(e) => onChange({ fill: e.target.value })} className="w-8 h-8 rounded border border-white/10 cursor-pointer bg-transparent" />
+          <input type="text" value={element.fill || ''} onChange={(e) => onChange({ fill: e.target.value })} className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30 font-mono" dir="ltr" />
         </div>
       </div>
 

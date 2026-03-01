@@ -173,10 +173,11 @@ function ShapeElementView({ element }: { element: ShapeElement }) {
   }
 
   // Handle gradient or solid fill
-  if (element.fill.includes('gradient') || element.fill.includes('linear') || element.fill.includes('radial')) {
-    style.background = element.fill
+  const fill = element.fill || '#e2e8f0'
+  if (fill.includes('gradient') || fill.includes('linear') || fill.includes('radial')) {
+    style.background = fill
   } else {
-    style.backgroundColor = element.fill
+    style.backgroundColor = fill
   }
 
   return <div style={style} />
