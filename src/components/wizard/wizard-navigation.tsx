@@ -9,6 +9,7 @@ interface WizardNavigationProps {
   isFirstStep: boolean
   isLastStep: boolean
   isRequired: boolean
+  isGenerating?: boolean
   onBack: () => void
   onSkip: () => void
   onContinue: () => void
@@ -74,6 +75,7 @@ export default function WizardNavigation({
   isFirstStep,
   isLastStep,
   isRequired,
+  isGenerating,
   onBack,
   onSkip,
   onContinue,
@@ -124,12 +126,24 @@ export default function WizardNavigation({
               variant="premium"
               size="md"
               onClick={onGenerate}
-              className="relative gap-2 rounded-xl px-8 py-3 font-heebo text-base font-bold overflow-hidden"
+              disabled={isGenerating}
+              className="relative gap-2 rounded-xl px-8 py-3 font-heebo text-base font-bold overflow-hidden disabled:opacity-60"
             >
-              {/* Shimmer overlay */}
-              <span className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
-              <SparklesIcon />
-              <span>צור הצעה</span>
+              {isGenerating ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span>יוצר הצעה...</span>
+                </>
+              ) : (
+                <>
+                  <span className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
+                  <SparklesIcon />
+                  <span>צור הצעה</span>
+                </>
+              )}
             </Button>
           ) : (
             <Button

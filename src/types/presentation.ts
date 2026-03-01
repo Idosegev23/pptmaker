@@ -182,6 +182,40 @@ export function isShapeElement(el: SlideElement): el is ShapeElement {
 }
 
 // ============================================================
+// CURATED SLIDE CONTENT (Content Curator output)
+// ============================================================
+
+/**
+ * Pre-processed, presentation-ready content for a single slide.
+ * Created by the Content Curator AI before the Design step.
+ * The designer AI receives THIS instead of raw wizard JSON.
+ */
+export interface CuratedSlideContent {
+  slideType: string
+  /** Punchy headline — max 5 Hebrew words */
+  title: string
+  subtitle?: string
+  /** Concise body — max ~40 words */
+  bodyText?: string
+  /** 3-5 items, max 8 words each */
+  bulletPoints?: string[]
+  /** Large formatted stat: "500K+", "₪120K", "4.2%" */
+  keyNumber?: string
+  /** Label under the key number */
+  keyNumberLabel?: string
+  /** Structured cards — max 4 */
+  cards?: { title: string; body: string }[]
+  /** Closing tagline or CTA */
+  tagline?: string
+  /** Passed through from input */
+  imageUrl?: string
+  /** How the image should be used */
+  imageRole?: 'hero' | 'accent' | 'background' | 'portrait' | 'icon'
+  /** Emotional tone for this specific slide */
+  emotionalNote?: string
+}
+
+// ============================================================
 // CANVAS CONSTANTS
 // ============================================================
 

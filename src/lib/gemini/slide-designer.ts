@@ -23,8 +23,10 @@ import type {
   ImageElement,
   TextElement,
   SlideElement,
+  CuratedSlideContent,
 } from '@/types/presentation'
 import { isTextElement } from '@/types/presentation'
+import { curateSlideContent } from './content-curator'
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
@@ -232,6 +234,11 @@ interface BoundingBox { x: number; y: number; width: number; height: number }
 export interface PipelineFoundation {
   designSystem: PremiumDesignSystem
   batches: SlideContentInput[][]
+  curatedBatches?: CuratedSlideContent[][]
+  /** Flat list of all curated slides for full-story context */
+  allCurated: CuratedSlideContent[]
+  /** Flat list of all raw inputs (1 per slide) */
+  allSlides: SlideContentInput[]
   brandName: string
   clientLogo: string
   leadersLogo: string
@@ -240,8 +247,11 @@ export interface PipelineFoundation {
 
 export interface BatchResult {
   slides: Slide[]
+  /** @deprecated — kept for backwards compat but no longer used for context */
   visualSummary: string
   slideIndex: number
+  /** Full JSON of generated slides for sequential context passing */
+  generatedSlides?: Slide[]
 }
 
 // ─── All design constants loaded from admin config at runtime via getConfig() ──
@@ -720,6 +730,7 @@ async function generateSlidesBatchAST(
   batchIndex: number,
   brandName: string,
   batchContext: BatchContext,
+  curatedSlides?: CuratedSlideContent[],
 ): Promise<Slide[]> {
   const requestId = `sb-${batchIndex}-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Step 2: Batch ${batchIndex + 1} (${slides.length} slides)`)
@@ -747,116 +758,187 @@ async function generateSlidesBatchAST(
   // Creative Direction from Design System (if available)
   const cd = designSystem.creativeDirection
 
+  // ── Semantic archetype selection ──
+  const usedArchetypes = new Set<number>()
+
+  function selectArchetype(slideType: string, globalIdx: number): string {
+    const typeAffinities: Record<string, number[]> = {
+      cover: [0, 3, 6],      // Brutalist, Full-bleed, Magazine
+      insight: [0, 3, 7],    // Brutalist, Full-bleed, Data art
+      bigIdea: [0, 3, 6],    // Brutalist, Full-bleed, Magazine
+      brief: [1, 6, 3],      // Asymmetric, Magazine, Full-bleed
+      audience: [1, 3, 6],   // Asymmetric, Full-bleed, Magazine
+      strategy: [2, 5, 4],   // Z-index cards, Bento, Diagonal
+      approach: [2, 5, 1],   // Z-index cards, Bento, Asymmetric
+      goals: [5, 7, 2],      // Bento, Data art, Z-index cards
+      deliverables: [5, 2, 4], // Bento, Z-index cards, Diagonal
+      metrics: [7, 5, 4],    // Data art, Bento, Diagonal
+      competitive: [5, 4, 2], // Bento, Diagonal, Z-index cards
+      closing: [0, 3, 6],    // Brutalist, Full-bleed, Magazine
+      whyNow: [7, 0, 3],     // Data art, Brutalist, Full-bleed
+    }
+
+    const preferred = typeAffinities[slideType] || [globalIdx % layoutArchetypes.length]
+    for (const idx of preferred) {
+      if (!usedArchetypes.has(idx) && idx < layoutArchetypes.length) {
+        usedArchetypes.add(idx)
+        return layoutArchetypes[idx]
+      }
+    }
+    // All preferred used — pick any unused
+    for (let idx = 0; idx < layoutArchetypes.length; idx++) {
+      if (!usedArchetypes.has(idx)) {
+        usedArchetypes.add(idx)
+        return layoutArchetypes[idx]
+      }
+    }
+    // All used — reset and pick from preferred
+    usedArchetypes.clear()
+    const fallbackIdx = preferred[0] ?? (globalIdx % layoutArchetypes.length)
+    usedArchetypes.add(fallbackIdx)
+    return layoutArchetypes[fallbackIdx]
+  }
+
   // ── Build per-slide directives ──
   const slidesDescription = slides.map((slide, i) => {
     const globalIndex = batchContext.slideIndex + i
     const pacing = pacingMap[slide.slideType] || pacingMap.brief
-    const contentJson = JSON.stringify(slide.content, null, 2)
     const imageRoleHint = imageRoleHints[slide.slideType] || 'An image that reinforces the slide message.'
-    const archetype = layoutArchetypes[(globalIndex + batchIndex * 3) % layoutArchetypes.length]
+    const archetype = selectArchetype(slide.slideType, globalIndex)
+
+    // Use curated content if available, fall back to raw JSON
+    const curated = curatedSlides?.[i]
+    let contentBlock: string
+
+    if (curated) {
+      // Build clean, structured XML from curated content
+      const parts: string[] = []
+      if (curated.title) parts.push(`  <headline>${curated.title}</headline>`)
+      if (curated.subtitle) parts.push(`  <subtitle>${curated.subtitle}</subtitle>`)
+      if (curated.keyNumber) parts.push(`  <key_number value="${curated.keyNumber}" label="${curated.keyNumberLabel || ''}" />`)
+      if (curated.bodyText) parts.push(`  <body>${curated.bodyText}</body>`)
+      if (curated.bulletPoints?.length) {
+        parts.push(`  <bullets>\n${curated.bulletPoints.map(b => `    <item>${b}</item>`).join('\n')}\n  </bullets>`)
+      }
+      if (curated.cards?.length) {
+        parts.push(`  <cards>\n${curated.cards.map(c => `    <card title="${c.title}">${c.body}</card>`).join('\n')}\n  </cards>`)
+      }
+      if (curated.tagline) parts.push(`  <tagline>${curated.tagline}</tagline>`)
+      contentBlock = parts.join('\n')
+    } else {
+      contentBlock = `  <raw_json>\n${JSON.stringify(slide.content, null, 2)}\n  </raw_json>`
+    }
+
+    // Per-slide creative note from curator + creative direction
+    const emotionNote = curated?.emotionalNote
+      ? `  <emotion>${curated.emotionalNote}</emotion>` : ''
+    const cdPerSlide = cd?.oneRule
+      ? `  <master_rule>${cd.oneRule}</master_rule>` : ''
+
+    const imageRole = curated?.imageRole || ''
+    const imageTag = slide.imageUrl
+      ? `  <image url="${slide.imageUrl}" role="${imageRoleHint}" visual_role="${imageRole}" />`
+      : '  <no_image>Use decorative shapes, watermarks, and dramatic typography instead.</no_image>'
 
     return `
-<slide index="${globalIndex + 1}" total="${batchContext.totalSlides}" type="${slide.slideType}" title="${slide.title}">
+<slide index="${globalIndex + 1}" total="${batchContext.totalSlides}" type="${slide.slideType}">
   <energy>${pacing.energy}</energy>
+  <density>${pacing.density}</density>
   <layout_inspiration>${archetype}</layout_inspiration>
-  ${slide.imageUrl ? `<image url="${slide.imageUrl}" role="${imageRoleHint}" />` : '<no_image>Use decorative shapes, watermarks, and dramatic typography instead.</no_image>'}
+${imageTag}
+${emotionNote}
+${cdPerSlide}
   <content>
-${contentJson}
+${contentBlock}
   </content>
 </slide>`
   }).join('\n')
 
   const prompt = `<task>
-Design ${slides.length} premium presentation slides for the brand "${brandName}".
-All slide content must be in Hebrew. All text is RTL with textAlign "right".
+Design ${slides.length} premium presentation slides for "${brandName}".
+Canvas: 1920×1080px | RTL Hebrew | Font: Heebo | textAlign: "right" always.
+Each slide MUST have a unique layout — never repeat a composition.
 </task>
 
 <creative_brief>
-${cd ? `
-Visual Metaphor: ${cd.visualMetaphor}
+${cd ? `Visual Metaphor: ${cd.visualMetaphor}
 Visual Tension: ${cd.visualTension}
-Master Rule (every slide must follow): ${cd.oneRule}
+Master Rule (EVERY slide must obey): ${cd.oneRule}
 Color Story: ${cd.colorStory}
 Typography Voice: ${cd.typographyVoice}
-Emotional Arc: ${cd.emotionalArc}
-` : `Think like a Creative Director — what is the visual metaphor for "${brandName}"? What creates tension? What surprises?`}
+Emotional Arc: ${cd.emotionalArc}` : `Think like a Creative Director — what is the visual metaphor for "${brandName}"? What creates tension?`}
 </creative_brief>
 
 <design_system>
-Canvas: 1920×1080px | Direction: RTL (Hebrew) | Font: Heebo
-
 Colors: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
 Background: ${colors.background} | Text: ${colors.text} | Cards: ${colors.cardBg}
 Muted: ${colors.muted} | Highlight: ${colors.highlight}
-Aurora gradient: ${effects.auroraGradient}
+Aurora: ${effects.auroraGradient}
 
-Typography sizes: display ${typo.displaySize}px | heading ${typo.headingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
-Letter spacing: tight ${typo.letterSpacingTight} | wide ${typo.letterSpacingWide}
-Weight pairs: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
+Typography: display ${typo.displaySize}px | heading ${typo.headingSize}px | sub ${typo.subheadingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
+Spacing: tight ${typo.letterSpacingTight} | wide ${typo.letterSpacingWide} | Weights: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
 Line height: tight ${typo.lineHeightTight} | relaxed ${typo.lineHeightRelaxed}
 
-Card: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
-Decorative style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle}
-
-Brand motif: ${motif.type} (opacity: ${motif.opacity}, color: ${motif.color})
-${motif.implementation}
+Cards: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
+Style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle} | Motif: ${motif.type} @ ${motif.opacity} (${motif.implementation})
 </design_system>
 
 <design_principles>
 ${designPrinciples}
-${depthLayers}
+
+DEPTH LAYERS: ${depthLayers}
+
+ANTI-PATTERNS (never do these):
+- Centered text in the middle of the screen
+- 3 identical equal-width cards in a row
+- All fonts at the same size
+- Simple linear gradient as only background
+- Rotation on body text
+- Opacity < 0.7 on readable text
 </design_principles>
 
 <element_format>
 ${elementFormat}
 </element_format>
 
-<reference_examples>
-These examples show the QUALITY LEVEL expected. Create completely DIFFERENT designs — do not copy these layouts.
+<technical_rules>
+${technicalRules}
+- Create depth through layered shapes with subtle offset shadows (shape at x+10, y+10, lower zIndex, fill:#000, opacity:0.1-0.15)
+- For full-bleed images: place image at zIndex 1, add gradient overlay shape at zIndex 2, then text at zIndex 8+
+- For split layouts: image on one side (40-50% width), content on the other with breathing room
+- Key numbers: fontSize 80-140px, fontWeight 900, accent color. Label below: fontSize 16-20px, muted color, letterSpacing wide
+</technical_rules>
 
-Example 1 — Cover slide (Typographic Brutalism, no image):
-\`\`\`json
-{
-  "id": "slide-1", "slideType": "cover", "label": "שער",
-  "background": { "type": "solid", "value": "${colors.background}" },
-  "elements": [
-    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 20% 30%, ${colors.primary}50 0%, transparent 50%), radial-gradient(circle at 80% 80%, ${colors.accent}50 0%, transparent 50%)", "opacity": 0.7 },
-    { "id": "watermark", "type": "text", "x": -150, "y": 180, "width": 2200, "height": 500, "zIndex": 2, "content": "BRAND", "fontSize": 380, "fontWeight": 900, "color": "transparent", "textAlign": "center", "lineHeight": 0.9, "letterSpacing": -8, "opacity": 0.12, "rotation": -8, "textStroke": { "width": 2, "color": "#ffffff" }, "role": "decorative" },
-    { "id": "title", "type": "text", "x": 120, "y": 380, "width": 900, "height": 200, "zIndex": 10, "content": "שם המותג", "fontSize": ${typo.displaySize}, "fontWeight": 900, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.0, "letterSpacing": -4, "role": "title" },
-    { "id": "subtitle", "type": "text", "x": 120, "y": 610, "width": 600, "height": 50, "zIndex": 8, "content": "הצעת שיתוף פעולה", "fontSize": 22, "fontWeight": 300, "color": "${colors.text}70", "textAlign": "right", "letterSpacing": 6, "role": "subtitle" }
-  ]
-}
-\`\`\`
-
-Example 2 — Brief slide WITH image (Asymmetric Split):
-\`\`\`json
-{
-  "id": "slide-2", "slideType": "brief", "label": "למה התכנסנו?",
-  "background": { "type": "solid", "value": "${colors.background}" },
-  "elements": [
-    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "${colors.background}", "opacity": 1 },
-    { "id": "img", "type": "image", "x": 80, "y": 100, "width": 720, "height": 880, "zIndex": 5, "src": "THE_IMAGE_URL", "objectFit": "cover", "borderRadius": 20 },
-    { "id": "title", "type": "text", "x": 880, "y": 200, "width": 900, "height": 100, "zIndex": 10, "content": "למה התכנסנו?", "fontSize": 52, "fontWeight": 800, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.1, "letterSpacing": -2, "role": "title" },
-    { "id": "body", "type": "text", "x": 880, "y": 340, "width": 900, "height": 500, "zIndex": 8, "content": "תוכן הבריף כאן...", "fontSize": 20, "fontWeight": 300, "color": "${colors.text}90", "textAlign": "right", "lineHeight": 1.6, "role": "body" }
-  ]
-}
-\`\`\`
-</reference_examples>
+<visualization_checklist>
+BEFORE outputting each slide, mentally render it at 1920×1080:
+1. Can I read every text? Is contrast sufficient?
+2. Does any text overlap another text or sit on an image without a contrast layer?
+3. Is the composition asymmetric and interesting (not centered/boring)?
+4. Is there a clear visual hierarchy: ONE dominant element, supporting elements smaller?
+5. Does the key number (if any) feel like a hero — large, bold, impossible to miss?
+6. Is there enough white space? Does the slide breathe?
+7. Does this slide look DIFFERENT from the previous one?
+If ANY check fails → fix before outputting.
+</visualization_checklist>
 
 <previous_slides>
 ${batchContext.previousSlidesVisualSummary
-    ? `The following slides have already been designed. Each new slide must have a DIFFERENT layout, different dominant color usage, and different title placement.\n${batchContext.previousSlidesVisualSummary}`
-    : 'This is the first batch — no previous context.'}
+    ? `Already designed slides (create DIFFERENT layouts, different dominant color, different title position):\n${batchContext.previousSlidesVisualSummary}`
+    : 'First batch — no previous slides.'}
 </previous_slides>
 
-<slides_to_create>
+<slides_to_design>
 ${slidesDescription}
-</slides_to_create>
+</slides_to_design>
 
-<technical_rules>
-${technicalRules}
-- ${depthLayers}
-</technical_rules>
+<quality_reference>
+Structure reference (field names only — derive YOUR OWN coordinates and layout from design principles):
+- Slide: { id, slideType, label, background: { type: "solid"|"gradient"|"image", value }, elements: [...] }
+- Elements: shape (bg/decorative), text (title/body/caption/decorative), image
+- Decorative text: role "decorative", fontSize 200+, opacity 0.05-0.15, acts as watermark texture
+- Background shapes: radial-gradient with brand colors, mesh gradients for depth
+- Always include at least one decorative element per slide (watermark text, gradient shape, motif pattern)
+</quality_reference>
 
 <final_instruction>
 ${finalInstruction}
@@ -979,6 +1061,358 @@ ${finalInstruction}
     }
   }
   throw new Error('All slide generation attempts failed')
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SEQUENTIAL SINGLE-SLIDE GENERATION
+// ═══════════════════════════════════════════════════════════
+
+interface SingleSlideContext {
+  allCurated: CuratedSlideContent[]
+  previousSlides: Slide[]
+  totalSlides: number
+}
+
+/**
+ * Generate a single slide with full narrative context.
+ * The AI sees: (1) the full presentation story, (2) last 2 slides' JSON,
+ * (3) creative direction, (4) this slide's curated content.
+ */
+async function generateSingleSlide(
+  designSystem: PremiumDesignSystem,
+  slide: SlideContentInput,
+  curated: CuratedSlideContent | undefined,
+  slideIndex: number,
+  brandName: string,
+  context: SingleSlideContext,
+): Promise<Slide> {
+  const requestId = `ss-${slideIndex}-${Date.now()}`
+  console.log(`[SlideDesigner][${requestId}] Sequential slide ${slideIndex + 1}/${context.totalSlides} (${slide.slideType})`)
+
+  const [
+    pacingMap, layoutArchetypes, imageRoleHints,
+    designPrinciples, depthLayers, elementFormat, technicalRules, finalInstruction,
+    thinkingLevel, maxOutputTokens, temperature,
+  ] = await Promise.all([
+    getPacingMap(), getLayoutArchetypes(), getImageRoleHints(),
+    getDesignPrinciples(), getDepthLayers(), getElementFormat(), getTechnicalRules(), getFinalInstruction(),
+    getBatchThinkingLevel(), getMaxOutputTokens(), getTemperature(),
+  ])
+
+  const resolvedThinking = thinkingLevel === 'HIGH' ? ThinkingLevel.HIGH
+    : thinkingLevel === 'MEDIUM' ? ThinkingLevel.MEDIUM
+    : ThinkingLevel.LOW
+
+  const colors = designSystem.colors
+  const typo = designSystem.typography
+  const effects = designSystem.effects
+  const motif = designSystem.motif
+  const cd = designSystem.creativeDirection
+
+  // ── Select archetype avoiding recent ones ──
+  const recentArchetypes = new Set<string>()
+  for (const prev of context.previousSlides) {
+    const decorTexts = (prev.elements || []).filter(
+      e => isTextElement(e) && e.role === 'decorative'
+    )
+    if (decorTexts.length > 0) recentArchetypes.add('brutalist')
+    const imgEls = (prev.elements || []).filter(e => e.type === 'image')
+    if (imgEls.some(img => img.width >= 1800)) recentArchetypes.add('full-bleed')
+  }
+
+  const typeAffinities: Record<string, number[]> = {
+    cover: [0, 3, 6], insight: [0, 3, 7], bigIdea: [0, 3, 6],
+    brief: [1, 6, 3], audience: [1, 3, 6],
+    strategy: [2, 5, 4], approach: [2, 5, 1],
+    goals: [5, 7, 2], deliverables: [5, 2, 4],
+    metrics: [7, 5, 4], competitive: [5, 4, 2],
+    closing: [0, 3, 6], whyNow: [7, 0, 3],
+  }
+  const preferred = typeAffinities[slide.slideType] || [slideIndex % layoutArchetypes.length]
+  let archetype = layoutArchetypes[preferred[0] % layoutArchetypes.length]
+  for (const idx of preferred) {
+    if (idx < layoutArchetypes.length) {
+      archetype = layoutArchetypes[idx]
+      break
+    }
+  }
+
+  // ── Build full presentation story (all curated slides) ──
+  const storyLines = context.allCurated.map((c, i) => {
+    const marker = i === slideIndex ? ' ← YOU ARE DESIGNING THIS ONE' : (i < slideIndex ? ' (done)' : '')
+    const summary = [
+      c.title,
+      c.keyNumber ? `keyNumber: ${c.keyNumber}` : '',
+      c.bulletPoints?.length ? `${c.bulletPoints.length} bullets` : '',
+      c.cards?.length ? `${c.cards.length} cards` : '',
+      c.tagline ? `tagline: "${c.tagline}"` : '',
+    ].filter(Boolean).join(' | ')
+    return `  Slide ${i + 1} (${c.slideType}): "${summary}"${marker}`
+  }).join('\n')
+
+  // ── Build previous slides context (full compact JSON of last 2) ──
+  let previousSlidesBlock: string
+  if (context.previousSlides.length > 0) {
+    const summaries = context.previousSlides.map(prev => {
+      const compactElements = (prev.elements || []).map(el => {
+        const base: Record<string, unknown> = {
+          type: el.type, x: el.x, y: el.y, w: el.width, h: el.height,
+        }
+        if (isTextElement(el)) { base.role = el.role; base.fontSize = el.fontSize }
+        if (el.type === 'image') { base.objectFit = (el as ImageElement).objectFit }
+        if (el.type === 'shape') { base.shapeType = (el as SlideElement & { shapeType?: string }).shapeType }
+        return base
+      })
+
+      const titleEl = (prev.elements || []).find(e => isTextElement(e) && e.role === 'title') as TextElement | undefined
+      const imgEl = (prev.elements || []).find(e => e.type === 'image')
+      const titlePos = titleEl ? `title at x:${titleEl.x} y:${titleEl.y} (${titleEl.x > 960 ? 'right' : 'left'} side)` : 'no title'
+      const imgPos = imgEl ? `image at x:${imgEl.x} y:${imgEl.y} w:${imgEl.width} h:${imgEl.height}` : 'no image'
+
+      return `<previous_slide type="${prev.slideType}" label="${prev.label}">
+  <layout_summary>${titlePos}, ${imgPos}, bg: ${prev.background?.type}=${prev.background?.value?.slice(0, 80)}</layout_summary>
+  <elements>${JSON.stringify(compactElements)}</elements>
+</previous_slide>`
+    }).join('\n')
+
+    previousSlidesBlock = `${summaries}
+YOUR SLIDE MUST USE A DIFFERENT layout. Different title position, different image placement, different visual weight distribution.`
+  } else {
+    previousSlidesBlock = 'This is the first slide — design freely with maximum impact.'
+  }
+
+  // ── Build current slide content ──
+  const pacing = pacingMap[slide.slideType] || pacingMap.brief
+  const imageRoleHint = imageRoleHints[slide.slideType] || 'An image that reinforces the slide message.'
+
+  let contentBlock: string
+  if (curated) {
+    const parts: string[] = []
+    if (curated.title) parts.push(`<headline>${curated.title}</headline>`)
+    if (curated.subtitle) parts.push(`<subtitle>${curated.subtitle}</subtitle>`)
+    if (curated.keyNumber) parts.push(`<key_number value="${curated.keyNumber}" label="${curated.keyNumberLabel || ''}" />`)
+    if (curated.bodyText) parts.push(`<body>${curated.bodyText}</body>`)
+    if (curated.bulletPoints?.length) {
+      parts.push(`<bullets>\n${curated.bulletPoints.map(b => `  <item>${b}</item>`).join('\n')}\n</bullets>`)
+    }
+    if (curated.cards?.length) {
+      parts.push(`<cards>\n${curated.cards.map(c => `  <card title="${c.title}">${c.body}</card>`).join('\n')}\n</cards>`)
+    }
+    if (curated.tagline) parts.push(`<tagline>${curated.tagline}</tagline>`)
+    contentBlock = parts.join('\n')
+  } else {
+    contentBlock = `<raw_json>\n${JSON.stringify(slide.content, null, 2)}\n</raw_json>`
+  }
+
+  const emotionNote = curated?.emotionalNote ? `\n<emotion>${curated.emotionalNote}</emotion>` : ''
+  const imageTag = slide.imageUrl
+    ? `<image url="${slide.imageUrl}" role="${imageRoleHint}" />`
+    : '<no_image>Use decorative shapes, watermarks, and dramatic typography instead.</no_image>'
+
+  // ═══ THE PROMPT ═══
+  const prompt = `<task>
+Design exactly 1 premium presentation slide for "${brandName}".
+Canvas: 1920×1080px | RTL Hebrew | Font: Heebo | textAlign: "right" always.
+</task>
+
+<creative_brief>
+${cd ? `Visual Metaphor: ${cd.visualMetaphor}
+Visual Tension: ${cd.visualTension}
+Master Rule (this slide MUST obey): ${cd.oneRule}
+Color Story: ${cd.colorStory}
+Typography Voice: ${cd.typographyVoice}
+Emotional Arc: ${cd.emotionalArc}` : `Think like a Creative Director for "${brandName}".`}
+</creative_brief>
+
+<design_system>
+Colors: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
+Background: ${colors.background} | Text: ${colors.text} | Cards: ${colors.cardBg}
+Muted: ${colors.muted} | Highlight: ${colors.highlight}
+Aurora: ${effects.auroraGradient}
+
+Typography: display ${typo.displaySize}px | heading ${typo.headingSize}px | sub ${typo.subheadingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
+Spacing: tight ${typo.letterSpacingTight} | wide ${typo.letterSpacingWide} | Weights: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
+Line height: tight ${typo.lineHeightTight} | relaxed ${typo.lineHeightRelaxed}
+
+Cards: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
+Style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle} | Motif: ${motif.type} @ ${motif.opacity}
+</design_system>
+
+<full_presentation_story>
+This is the complete presentation. Understand the narrative arc so you design this slide in context:
+${storyLines}
+</full_presentation_story>
+
+<previous_slide_designs>
+${previousSlidesBlock}
+</previous_slide_designs>
+
+<slide_to_design index="${slideIndex + 1}" total="${context.totalSlides}" type="${slide.slideType}">
+<energy>${pacing.energy}</energy>
+<density>${pacing.density}</density>
+<layout_inspiration>${archetype}</layout_inspiration>
+${imageTag}${emotionNote}
+${cd?.oneRule ? `<master_rule>${cd.oneRule}</master_rule>` : ''}
+<content>
+${contentBlock}
+</content>
+</slide_to_design>
+
+<design_principles>
+${designPrinciples}
+DEPTH LAYERS: ${depthLayers}
+
+ANTI-PATTERNS (never do these):
+- Centered text in the middle of the screen
+- 3 identical equal-width cards in a row
+- All fonts at the same size
+- Simple linear gradient as only background
+- Rotation on body text
+- Opacity < 0.7 on readable text
+</design_principles>
+
+<element_format>
+${elementFormat}
+</element_format>
+
+<technical_rules>
+${technicalRules}
+- Create depth through layered shapes with subtle offset shadows
+- For full-bleed images: image at zIndex 1, gradient overlay at zIndex 2, text at zIndex 8+
+- For split layouts: image on one side (40-50%), content on the other with breathing room
+- Key numbers: fontSize 80-140px, fontWeight 900, accent color
+</technical_rules>
+
+<image_placement>
+When an image URL is provided:
+- You MUST include an image element in your design. This is mandatory.
+- YOU decide the size, position, and cropping as part of your creative composition.
+- Consider: full-bleed background, half-split, corner accent, centered hero, or asymmetric panel.
+- Match the image role to the slide type and content.
+- If full-bleed: add gradient overlay shape for text readability.
+- If no image URL: use decorative shapes, watermarks, and dramatic typography instead.
+NEVER use default positions. Every image placement must be a creative decision.
+</image_placement>
+
+<visualization_checklist>
+BEFORE outputting, mentally render this slide at 1920×1080:
+1. Can I read every text? Is contrast sufficient?
+2. Does any text overlap another element without a contrast layer?
+3. Is the composition asymmetric and interesting?
+4. Is there ONE dominant visual element?
+5. Does the key number (if any) feel like a hero?
+6. Is there enough white space?
+7. Is this slide DIFFERENT from the previous slides?
+If ANY check fails → fix before outputting.
+</visualization_checklist>
+
+<final_instruction>
+${finalInstruction}
+</final_instruction>`
+
+  // ── Call Gemini with retry ──
+  const CALL_TIMEOUT = 60_000
+  const batchSysInstruction = await getSystemInstruction()
+  const batchModels = await getBatchModels()
+
+  const attempts: Array<{ model: string; thinking: ThinkingLevel; label: string }> = [
+    { model: batchModels[0], thinking: resolvedThinking, label: `${batchModels[0]} (${thinkingLevel})` },
+    ...(resolvedThinking !== ThinkingLevel.LOW
+      ? [{ model: batchModels[0], thinking: ThinkingLevel.LOW, label: `${batchModels[0]} (LOW)` }]
+      : []),
+    ...(batchModels[1] !== batchModels[0]
+      ? [{ model: batchModels[1], thinking: ThinkingLevel.LOW, label: `${batchModels[1]} (LOW)` }]
+      : []),
+  ]
+
+  for (let attempt = 0; attempt < attempts.length; attempt++) {
+    const { model, thinking, label } = attempts[attempt]
+    try {
+      console.log(`[SlideDesigner][${requestId}] Calling ${label} (attempt ${attempt + 1}/${attempts.length})...`)
+
+      const geminiCall = ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          systemInstruction: batchSysInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: SLIDE_BATCH_SCHEMA,
+          thinkingConfig: { thinkingLevel: thinking },
+          maxOutputTokens,
+          temperature,
+          httpOptions: { timeout: CALL_TIMEOUT },
+        },
+      })
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('SINGLE_SLIDE_TIMEOUT')), CALL_TIMEOUT)
+      )
+      const response = await Promise.race([geminiCall, timeoutPromise])
+
+      let parsed: { slides: Slide[] }
+      try {
+        parsed = JSON.parse(response.text || '') as { slides: Slide[] }
+      } catch {
+        const { parseGeminiJson } = await import('@/lib/utils/json-cleanup')
+        const fallback = parseGeminiJson<{ slides: Slide[] }>(response.text || '')
+        if (!fallback) throw new Error('JSON parse failed')
+        parsed = fallback
+      }
+
+      if (parsed?.slides?.length > 0) {
+        const result = parsed.slides[0]
+        console.log(`[SlideDesigner][${requestId}] Slide ${slideIndex + 1} generated: ${result.elements?.length || 0} elements (${label})`)
+        return {
+          id: result.id || `slide-${slideIndex}`,
+          slideType: (result.slideType || slide.slideType) as SlideType,
+          label: result.label || slide.title || `שקף ${slideIndex + 1}`,
+          background: result.background || { type: 'solid' as const, value: colors.background },
+          elements: (result.elements || []).map((el, j) => ({
+            ...el,
+            id: el.id || `el-${slideIndex}-${j}`,
+          })),
+        }
+      }
+      throw new Error('No slides in response')
+    } catch (error) {
+      const msg = detailedError(error)
+      console.error(`[SlideDesigner][${requestId}] Attempt ${attempt + 1}/${attempts.length} failed (${label}): ${msg}`)
+      if (attempt < attempts.length - 1) {
+        await new Promise(r => setTimeout(r, 1500))
+      }
+    }
+  }
+
+  // All attempts failed — return fallback
+  console.warn(`[SlideDesigner][${requestId}] All attempts failed. Generating fallback.`)
+  return buildSimpleFallbackSlide(slide, slideIndex, colors)
+}
+
+/** Simple fallback for single-slide mode */
+function buildSimpleFallbackSlide(
+  slide: SlideContentInput,
+  index: number,
+  colors: PremiumDesignSystem['colors'],
+): Slide {
+  return {
+    id: `slide-${index}`,
+    slideType: slide.slideType as SlideType,
+    label: slide.title || `שקף ${index + 1}`,
+    background: { type: 'solid' as const, value: colors.background },
+    elements: [
+      {
+        id: `el-${index}-0`, type: 'shape' as const, x: 0, y: 0, width: 1920, height: 1080,
+        zIndex: 0, shapeType: 'background' as const,
+        fill: `linear-gradient(135deg, ${colors.primary}30 0%, ${colors.background} 60%, ${colors.accent}20 100%)`,
+        opacity: 1,
+      },
+      {
+        id: `el-${index}-1`, type: 'text' as const, x: 120, y: 400, width: 1680, height: 120,
+        zIndex: 10, content: slide.title || `שקף ${index + 1}`,
+        fontSize: 64, fontWeight: 800 as FontWeight, color: colors.text,
+        textAlign: 'right' as const, role: 'title' as const, lineHeight: 1.1,
+      },
+    ] as SlideElement[],
+  }
 }
 
 /** Generate a minimal but valid placeholder slide when AI fails */
@@ -1138,20 +1572,79 @@ function validateSlide(
   return { valid: issues.filter(i => i.severity === 'critical').length === 0, score: Math.max(0, score), issues }
 }
 
+/**
+ * Find the best placement for an image by analyzing existing elements.
+ * Scans the canvas for the largest unoccupied region.
+ */
+function findBestImagePlacement(
+  elements: SlideElement[],
+  bgColor: string,
+): { x: number; y: number; width: number; height: number; fullBleed: boolean } {
+  const contentBoxes = elements
+    .filter(e => e.type === 'text' || (e.type === 'shape' && (e as SlideElement & { shapeType?: string }).shapeType !== 'background'))
+    .map(e => ({ x: e.x, y: e.y, width: e.width, height: e.height }))
+
+  if (contentBoxes.length === 0) {
+    return { x: 0, y: 0, width: 1920, height: 1080, fullBleed: true }
+  }
+
+  // Check if all content is on one side (RTL: content usually on right)
+  const contentCenterX = contentBoxes.reduce((sum, b) => sum + b.x + b.width / 2, 0) / contentBoxes.length
+  const contentMinX = Math.min(...contentBoxes.map(b => b.x))
+  const contentMaxX = Math.max(...contentBoxes.map(b => b.x + b.width))
+
+  // Left half is free — place image there
+  if (contentMinX > 800) {
+    return { x: 0, y: 0, width: Math.min(contentMinX - 40, 960), height: 1080, fullBleed: false }
+  }
+
+  // Right half is free
+  if (contentMaxX < 1120) {
+    return { x: Math.max(contentMaxX + 40, 960), y: 0, width: 1920 - Math.max(contentMaxX + 40, 960), height: 1080, fullBleed: false }
+  }
+
+  // Content spans the width — check vertical space
+  const contentMinY = Math.min(...contentBoxes.map(b => b.y))
+  const contentMaxY = Math.max(...contentBoxes.map(b => b.y + b.height))
+
+  // Bottom half is free
+  if (contentMaxY < 600) {
+    return { x: 80, y: contentMaxY + 40, width: 1760, height: 1080 - contentMaxY - 80, fullBleed: false }
+  }
+
+  // No clear empty space — use full-bleed behind content
+  return { x: 0, y: 0, width: 1920, height: 1080, fullBleed: true }
+}
+
 function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSystem: PremiumDesignSystem, expectedImageUrl?: string): Slide {
   const fixed = { ...slide, elements: [...slide.elements] }
 
   for (const issue of issues) {
     if (!issue.autoFixable) continue
 
-    // Missing image — inject a default image element on the right side
+    // Missing image — find best placement by analyzing existing layout
     if (issue.category === 'missing-image' && expectedImageUrl) {
+      const placement = findBestImagePlacement(fixed.elements, designSystem.colors.background)
       const imgElement: ImageElement = {
         id: `autofix-img-${slide.id}`, type: 'image',
-        x: 80, y: 100, width: 720, height: 880, zIndex: 5,
-        src: expectedImageUrl, objectFit: 'cover', borderRadius: 20,
+        x: placement.x, y: placement.y,
+        width: placement.width, height: placement.height,
+        zIndex: placement.fullBleed ? 1 : 5,
+        src: expectedImageUrl, objectFit: 'cover',
+        borderRadius: placement.fullBleed ? 0 : 16,
+        opacity: placement.fullBleed ? 0.4 : 1,
       }
       fixed.elements.push(imgElement)
+
+      if (placement.fullBleed) {
+        fixed.elements.push({
+          id: `autofix-overlay-${slide.id}`, type: 'shape' as const,
+          x: 0, y: 0, width: 1920, height: 1080, zIndex: 2,
+          shapeType: 'background' as const,
+          fill: `linear-gradient(180deg, ${designSystem.colors.background}CC 0%, ${designSystem.colors.background}40 40%, ${designSystem.colors.background}CC 100%)`,
+          opacity: 1,
+        })
+      }
       continue
     }
 
@@ -1256,24 +1749,25 @@ function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDesignSys
 
   if (allTitles.length < 3) return slides
 
-  // Skip peak-energy slides that intentionally use different sizes/positions
+  // Skip high-energy slides that intentionally use different sizes/positions
+  const skipTypes = new Set(['cover', 'closing', 'bigIdea', 'insight', 'whyNow', 'competitive', 'strategy'])
   const regularTitles = allTitles.filter(t => {
     const st = slides[t.slideIndex]?.slideType
-    return st !== 'cover' && st !== 'closing' && st !== 'bigIdea' && st !== 'insight'
+    return !skipTypes.has(st)
   })
 
   if (regularTitles.length > 0) {
-    // Align title Y positions to median (only fix wild outliers, 100px+ deviation)
+    // Only fix extreme Y outliers (200px+ deviation) — allow layout variety
     const medianY = regularTitles.map(t => t.y).sort((a, b) => a - b)[Math.floor(regularTitles.length / 2)]
     for (const t of regularTitles) {
-      if (Math.abs(t.y - medianY) > 100) t.element.y = medianY
+      if (Math.abs(t.y - medianY) > 200) t.element.y = medianY
     }
 
-    // Normalize heading font sizes (only fix unintentional drift, 6-15px range)
+    // Only normalize extreme font size drift (20px+) — preserve intentional scale differences
     const headingSizes = regularTitles.map(t => t.element.fontSize || 48)
     const medianSize = headingSizes.sort((a, b) => a - b)[Math.floor(headingSizes.length / 2)]
     for (const t of regularTitles) {
-      if (Math.abs(t.fontSize - medianSize) > 6 && Math.abs(t.fontSize - medianSize) < 15) {
+      if (Math.abs(t.fontSize - medianSize) > 20) {
         t.element.fontSize = medianSize
       }
     }
@@ -1308,13 +1802,26 @@ function createFallbackSlide(input: SlideContentInput, designSystem: PremiumDesi
       shapeType: 'decorative', fill: colors.muted, opacity: designSystem.motif.opacity, rotation: 15 },
   ]
 
-  // Add image element when imageUrl is available
   if (input.imageUrl) {
+    const placement = findBestImagePlacement(elements, colors.background)
     elements.push({
       id: `fb-${index}-img`, type: 'image',
-      x: 80, y: 100, width: 720, height: 880, zIndex: 5,
-      src: input.imageUrl, objectFit: 'cover', borderRadius: 20,
+      x: placement.x, y: placement.y,
+      width: placement.width, height: placement.height,
+      zIndex: placement.fullBleed ? 1 : 5,
+      src: input.imageUrl, objectFit: 'cover',
+      borderRadius: placement.fullBleed ? 0 : 16,
+      opacity: placement.fullBleed ? 0.4 : 1,
     })
+    if (placement.fullBleed) {
+      elements.push({
+        id: `fb-${index}-overlay`, type: 'shape',
+        x: 0, y: 0, width: 1920, height: 1080, zIndex: 2,
+        shapeType: 'background' as const,
+        fill: `linear-gradient(180deg, ${colors.background}CC 0%, ${colors.background}40 40%, ${colors.background}CC 100%)`,
+        opacity: 1,
+      })
+    }
   }
 
   return {
@@ -1701,78 +2208,75 @@ export async function generateAIPresentation(
   console.log(`[SlideDesigner] ── Step 1/2: Design System ──`)
   const designSystem = await generateDesignSystem(brandInput)
 
-  // ── Step 2: Generate slides in batches ──
-  console.log(`[SlideDesigner] ── Step 2/2: Slide Generation ──`)
+  // ── Step 2: Build slides + curate content ──
+  console.log(`[SlideDesigner] ── Step 2/3: Content Curation ──`)
   const allBatches = await buildSlideBatches(data, config)
+  const flatSlides = allBatches.flat()
 
-  // ── DEBUG: Log all slide content that will be sent to AI ──
-  console.log(`[SlideDesigner][${requestId}] ═══ BATCH CONTENT DUMP ═══`)
-  allBatches.forEach((batch, bi) => {
-    batch.forEach((slide, si) => {
-      const contentKeys = Object.keys(slide.content)
-      const nonEmptyKeys = contentKeys.filter(k => {
-        const v = slide.content[k]
-        return v !== '' && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)
-      })
-      console.log(`[SlideDesigner][${requestId}]   Batch ${bi + 1}, Slide ${si + 1} (${slide.slideType}): ${nonEmptyKeys.length}/${contentKeys.length} fields filled [${nonEmptyKeys.join(', ')}]${slide.imageUrl ? ' +image' : ''}`)
-      console.log(`[SlideDesigner][${requestId}]     content: ${JSON.stringify(slide.content).slice(0, 500)}`)
-    })
-  })
-  console.log(`[SlideDesigner][${requestId}] ═══ END BATCH CONTENT DUMP ═══`)
+  let allCurated: CuratedSlideContent[] = []
+  try {
+    allCurated = await curateSlideContent(flatSlides, data.brandName || '', designSystem.creativeDirection)
+    console.log(`[SlideDesigner][${requestId}] Content curated: ${allCurated.length} slides`)
+  } catch (err) {
+    console.warn(`[SlideDesigner][${requestId}] Curation failed, using raw content:`, err)
+  }
 
-  let allSlides: Slide[] = []
-  let visualSummary = ''
-  let slideIndex = 0
+  // ── Step 3: Sequential slide generation ──
+  console.log(`[SlideDesigner] ── Step 3/3: Sequential Slide Generation (${flatSlides.length} slides) ──`)
 
-  for (let b = 0; b < allBatches.length; b++) {
-    const batch = allBatches[b]
-    console.log(`[SlideDesigner] Batch ${b + 1}/${allBatches.length} (${batch.length} slides)`)
+  const allGeneratedSlides: Slide[] = []
+  let previousSlides: Slide[] = []
+  const pacingMap = await getPacingMap()
+
+  for (let si = 0; si < flatSlides.length; si++) {
+    const slideInput = flatSlides[si]
+    const curated = allCurated[si]
+    console.log(`[SlideDesigner] Slide ${si + 1}/${flatSlides.length} (${slideInput.slideType})${curated ? ' +curated' : ''}`)
+
     try {
-      const batchSlides = await generateSlidesBatchAST(
-        designSystem, batch, b, data.brandName || '',
-        { previousSlidesVisualSummary: visualSummary, slideIndex, totalSlides: allBatches.flat().length },
+      const generatedSlide = await generateSingleSlide(
+        designSystem, slideInput, curated, si, data.brandName || '',
+        { allCurated, previousSlides: previousSlides.slice(-2), totalSlides: flatSlides.length },
       )
-      allSlides.push(...batchSlides)
-      visualSummary += batchSlides.map((s, i) => {
-        const elCount = s.elements?.length || 0
-        const hasImage = s.elements?.some(e => e.type === 'image') || false
-        return `שקף ${slideIndex + i + 1} (${s.slideType}): ${elCount} elements, hasImage: ${hasImage}`
-      }).join('\n') + '\n'
-      slideIndex += batch.length
+
+      // Validate + auto-fix inline
+      const pacing = pacingMap[slideInput.slideType] || pacingMap.brief
+      const validResult = validateSlide(generatedSlide, designSystem, pacing, slideInput.imageUrl)
+      let finalSlide = generatedSlide
+      if (validResult.issues.some(i => i.autoFixable)) {
+        finalSlide = autoFixSlide(generatedSlide, validResult.issues.filter(i => i.autoFixable), designSystem, slideInput.imageUrl)
+      }
+
+      allGeneratedSlides.push(finalSlide)
+      previousSlides = [...previousSlides, finalSlide].slice(-2)
     } catch (error) {
-      console.error(`[SlideDesigner] Batch ${b + 1} failed:`, error)
-      for (const slide of batch) allSlides.push(createFallbackSlide(slide, designSystem, slideIndex++))
+      console.error(`[SlideDesigner] Slide ${si + 1} failed:`, error)
+      const fallback = createFallbackSlide(slideInput, designSystem, si)
+      allGeneratedSlides.push(fallback)
+      previousSlides = [...previousSlides, fallback].slice(-2)
     }
   }
 
-  if (allSlides.length === 0) throw new Error('All batches failed — no slides generated')
+  if (allGeneratedSlides.length === 0) throw new Error('All slides failed — no slides generated')
 
-  // Build flat list of expected image URLs for validation
-  const allInputs = allBatches.flat()
-
-  // ── Validate + auto-fix ──
-  const pacingMap = await getPacingMap()
+  // ── Final validation pass ──
   console.log(`[SlideDesigner][${requestId}] ═══ VALIDATION ═══`)
   const validatedSlides: Slide[] = []
   let totalScore = 0
 
-  for (let si = 0; si < allSlides.length; si++) {
-    const slide = allSlides[si]
-    const expectedImage = allInputs[si]?.imageUrl
+  for (let si = 0; si < allGeneratedSlides.length; si++) {
+    const slide = allGeneratedSlides[si]
+    const expectedImage = flatSlides[si]?.imageUrl
     const pacing = pacingMap[slide.slideType] || pacingMap.brief
     const result = validateSlide(slide, designSystem, pacing, expectedImage)
     totalScore += result.score
     const issueStr = result.issues.length > 0 ? result.issues.map(i => `${i.category}(${i.severity}${i.autoFixable ? ',fix' : ''})`).join(', ') : 'clean'
     console.log(`[SlideDesigner][${requestId}]   Slide ${si + 1} (${slide.slideType}): score=${result.score}, issues=[${issueStr}]`)
-    if (result.issues.some(i => i.autoFixable)) {
-      validatedSlides.push(autoFixSlide(slide, result.issues, designSystem, expectedImage))
-    } else {
-      validatedSlides.push(slide)
-    }
+    validatedSlides.push(slide)
   }
   console.log(`[SlideDesigner][${requestId}] ═══ END VALIDATION ═══`)
 
-  const avgScore = Math.round(totalScore / allSlides.length)
+  const avgScore = Math.round(totalScore / allGeneratedSlides.length)
   const consistentSlides = checkVisualConsistency(validatedSlides, designSystem)
   const withLeadersLogo = injectLeadersLogo(consistentSlides)
   const clientLogoUrl = config.clientLogoUrl || (typeof data._scraped?.logoUrl === 'string' ? data._scraped.logoUrl : '') || config.brandLogoUrl || ''
@@ -1869,57 +2373,116 @@ export async function pipelineFoundation(
   console.log(`[SlideDesigner][${requestId}] _influencerStrategy keys: ${d._influencerStrategy ? Object.keys(d._influencerStrategy).join(', ') : 'NONE'}`)
   console.log(`[SlideDesigner][${requestId}] ═══ END FOUNDATION BATCH CONTENT ═══`)
 
+  // Flatten all slides for sequential processing (1 slide per batch)
+  const allSlides = allBatches.flat()
+  const singleSlideBatches = allSlides.map(s => [s])
+
+  // ── Content Curation: transform raw data into presentation-ready copy ──
+  console.log(`[SlideDesigner][${requestId}] Running Content Curator on ${allSlides.length} slides...`)
+  let allCurated: CuratedSlideContent[] = []
+
+  try {
+    // Curate all slides at once for narrative coherence
+    allCurated = await curateSlideContent(
+      allSlides,
+      d.brandName || '',
+      designSystem.creativeDirection,
+    )
+    console.log(`[SlideDesigner][${requestId}] Content Curator complete: ${allCurated.length} slides curated`)
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    console.warn(`[SlideDesigner][${requestId}] Content Curator failed (${msg}), will use raw content`)
+  }
+
+  // Build per-slide curatedBatches for backward compat
+  const curatedBatches = allCurated.length > 0
+    ? allCurated.map(c => [c])
+    : undefined
+
   const foundation: PipelineFoundation = {
     designSystem,
-    batches: allBatches,
+    batches: singleSlideBatches,
+    curatedBatches,
+    allCurated,
+    allSlides,
     brandName: d.brandName || '',
     clientLogo,
     leadersLogo,
-    totalSlides: allBatches.flat().length,
+    totalSlides: allSlides.length,
   }
 
-  console.log(`[SlideDesigner][${requestId}] Foundation complete: ${foundation.totalSlides} slides across ${allBatches.length} batches`)
+  console.log(`[SlideDesigner][${requestId}] Foundation complete: ${foundation.totalSlides} slides (sequential mode)`)
   return foundation
 }
 
 /**
- * Stage 2 (per batch): Generate one batch of slides. Runs in ~40-60s.
+ * Stage 2 (per slide): Generate a single slide with full sequential context.
+ * batchIndex maps 1:1 to slideIndex in sequential mode.
+ * previousContext.generatedSlides carries the last 2 slides' full JSON.
  */
 export async function pipelineBatch(
   foundation: PipelineFoundation,
   batchIndex: number,
   previousContext: BatchResult | null,
 ): Promise<BatchResult> {
-  const requestId = `batch-${batchIndex}-${Date.now()}`
-  const batch = foundation.batches[batchIndex]
-  if (!batch) throw new Error(`Invalid batch index: ${batchIndex}`)
+  const requestId = `seq-${batchIndex}-${Date.now()}`
+  const slideIndex = batchIndex
+  const slide = foundation.allSlides[slideIndex]
+  if (!slide) throw new Error(`Invalid slide index: ${slideIndex}`)
 
-  const slideIndex = previousContext?.slideIndex ?? 0
-  const visualSummary = previousContext?.visualSummary ?? ''
+  const curated = foundation.allCurated?.[slideIndex]
+  const previousSlides = previousContext?.generatedSlides || []
 
-  console.log(`[SlideDesigner][${requestId}] Batch ${batchIndex + 1}/${foundation.batches.length} (${batch.length} slides)`)
+  console.log(`[SlideDesigner][${requestId}] Sequential slide ${slideIndex + 1}/${foundation.totalSlides} (${slide.slideType})${curated ? ' +curated' : ' (raw)'} | ${previousSlides.length} prev slides`)
 
   try {
-    const batchSlides = await generateSlidesBatchAST(
-      foundation.designSystem, batch, batchIndex, foundation.brandName,
-      { previousSlidesVisualSummary: visualSummary, slideIndex, totalSlides: foundation.totalSlides },
+    const generatedSlide = await generateSingleSlide(
+      foundation.designSystem,
+      slide,
+      curated,
+      slideIndex,
+      foundation.brandName,
+      {
+        allCurated: foundation.allCurated || [],
+        previousSlides: previousSlides.slice(-2),
+        totalSlides: foundation.totalSlides,
+      },
     )
 
-    const newVisualSummary = visualSummary + batchSlides.map((s, i) => {
-      const elCount = s.elements?.length || 0
-      const hasImage = s.elements?.some(e => e.type === 'image') || false
-      return `שקף ${slideIndex + i + 1} (${s.slideType}): ${elCount} elements, hasImage: ${hasImage}`
-    }).join('\n') + '\n'
+    // Validate + auto-fix
+    const pacingMap = await getPacingMap()
+    const pacing = pacingMap[slide.slideType] || pacingMap.brief
+    const validationResult = validateSlide(generatedSlide, foundation.designSystem, pacing, slide.imageUrl)
 
-    console.log(`[SlideDesigner][${requestId}] Batch ${batchIndex + 1} done: ${batchSlides.length} slides`)
-    return { slides: batchSlides, visualSummary: newVisualSummary, slideIndex: slideIndex + batch.length }
-  } catch (error) {
-    console.error(`[SlideDesigner][${requestId}] Batch ${batchIndex + 1} failed:`, error)
-    const fallbackSlides: Slide[] = []
-    for (let i = 0; i < batch.length; i++) {
-      fallbackSlides.push(createFallbackSlide(batch[i], foundation.designSystem, slideIndex + i))
+    let finalSlide = generatedSlide
+    if (!validationResult.valid || validationResult.score < 70) {
+      const fixableIssues = validationResult.issues.filter(i => i.autoFixable)
+      if (fixableIssues.length > 0) {
+        finalSlide = autoFixSlide(generatedSlide, fixableIssues, foundation.designSystem, slide.imageUrl)
+        console.log(`[SlideDesigner][${requestId}] Auto-fixed ${fixableIssues.length} issues`)
+      }
     }
-    return { slides: fallbackSlides, visualSummary, slideIndex: slideIndex + batch.length }
+
+    // Keep sliding window of last 2 slides
+    const updatedHistory = [...previousSlides, finalSlide].slice(-2)
+
+    console.log(`[SlideDesigner][${requestId}] Slide ${slideIndex + 1} done: ${finalSlide.elements?.length || 0} elements`)
+    return {
+      slides: [finalSlide],
+      visualSummary: '',
+      slideIndex: slideIndex + 1,
+      generatedSlides: updatedHistory,
+    }
+  } catch (error) {
+    console.error(`[SlideDesigner][${requestId}] Slide ${slideIndex + 1} failed:`, error)
+    const fallbackSlide = createFallbackSlide(slide, foundation.designSystem, slideIndex)
+    const updatedHistory = [...previousSlides, fallbackSlide].slice(-2)
+    return {
+      slides: [fallbackSlide],
+      visualSummary: '',
+      slideIndex: slideIndex + 1,
+      generatedSlides: updatedHistory,
+    }
   }
 }
 

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Heebo, Assistant, Rubik } from 'next/font/google'
+import { Toaster } from 'sonner'
 import './globals.css'
 
 const heebo = Heebo({
@@ -34,6 +35,7 @@ export default function RootLayout({
     <html lang="he" dir="rtl" className={`${heebo.variable} ${assistant.variable} ${rubik.variable}`}>
       <body className="font-heebo antialiased bg-background text-foreground min-h-screen">
         {children}
+        <Toaster dir="rtl" position="top-center" richColors closeButton />
       </body>
     </html>
   )

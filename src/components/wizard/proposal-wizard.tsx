@@ -33,6 +33,7 @@ import WizardProgress from './wizard-progress'
 import WizardNavigation from './wizard-navigation'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 // Dynamically imported step components
 import StepBrief from './steps/step-brief'
@@ -215,12 +216,14 @@ export default function ProposalWizard({
 
         if (!res.ok) {
           console.error('[Wizard] Save failed:', res.status)
+          toast.error('השמירה נכשלה — נסה שוב')
           return
         }
 
         dispatch({ type: 'MARK_SAVED', timestamp: new Date().toISOString() })
       } catch (err) {
         console.error('[Wizard] Save error:', err)
+        toast.error('שגיאה בשמירה — בדוק את החיבור לאינטרנט')
       } finally {
         setIsSaving(false)
       }
@@ -322,6 +325,10 @@ export default function ProposalWizard({
       const errors = validateStep(state.currentStep, currentStepData)
       if (errors) {
         setStepErrors(errors)
+        setTimeout(() => {
+          const firstError = document.querySelector('[data-error="true"]')
+          firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
         return
       }
     }
@@ -384,6 +391,10 @@ export default function ProposalWizard({
       const errors = validateStep(state.currentStep, currentStepData)
       if (errors) {
         setStepErrors(errors)
+        setTimeout(() => {
+          const firstError = document.querySelector('[data-error="true"]')
+          firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
         return
       }
     }
@@ -434,7 +445,7 @@ export default function ProposalWizard({
       router.push(`/generate/${documentId}`)
     } catch (err) {
       console.error('[Wizard] Generate error:', err)
-      alert('שגיאה ביצירת ההצעה. נסה שוב.')
+      toast.error('שגיאה ביצירת ההצעה — נסה שוב')
     } finally {
       setIsGenerating(false)
     }
@@ -582,6 +593,7 @@ export default function ProposalWizard({
         isFirstStep={isFirstStep}
         isLastStep={isLastStep}
         isRequired={currentStepMeta.required}
+        isGenerating={isGenerating}
         onBack={handleBack}
         onSkip={handleSkip}
         onContinue={handleContinue}

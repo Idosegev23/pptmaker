@@ -96,6 +96,8 @@ export default async function DashboardPage() {
                 const hasWizardData = !!docData._stepData || !!docData._extractedData
                 const researchDone = pipelineStatus.research === 'complete'
                 const slidesGenerated = pipelineStatus.slideGeneration === 'complete' || hasPresentation
+                const bgPipeline = docData._pipeline as { status?: string; mode?: string; progress?: number; currentSlide?: number; totalSlides?: number } | undefined
+                const isBackgroundGenerating = bgPipeline?.mode === 'background' && bgPipeline?.status === 'generating'
 
                 // Determine where to send the user based on pipeline state
                 let href: string
@@ -103,7 +105,15 @@ export default async function DashboardPage() {
                 let statusColor: string
                 let flowHint: string
 
-                if (slidesGenerated) {
+                if (isBackgroundGenerating) {
+                  href = `/generate/${doc.id}`
+                  const slideInfo = bgPipeline.currentSlide && bgPipeline.totalSlides
+                    ? ` (${bgPipeline.currentSlide}/${bgPipeline.totalSlides})`
+                    : ''
+                  statusLabel = `בהפקה...${slideInfo}`
+                  statusColor = 'bg-yellow-100 text-yellow-700 animate-pulse'
+                  flowHint = 'הפקה ברקע'
+                } else if (slidesGenerated) {
                   href = `/edit/${doc.id}`
                   statusLabel = 'מצגת מוכנה'
                   statusColor = 'bg-green-100 text-green-700'

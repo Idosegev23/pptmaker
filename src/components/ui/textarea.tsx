@@ -25,6 +25,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         )}
         <textarea
           id={textareaId}
+          data-error={error ? 'true' : undefined}
           className={cn(
             'flex min-h-[120px] w-full rounded-xl border bg-white px-4 py-3',
             'text-sm leading-relaxed text-foreground placeholder:text-wizard-text-tertiary placeholder:font-light resize-none',

@@ -48,10 +48,16 @@ function renderBackground(bg: Slide['background']): string {
   }
 }
 
-function renderTextElement(el: TextElement, defaultFont: string): string {
+function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false): string {
   const isGradientText = !!el.gradientFill
   const fontFamily = el.fontFamily || defaultFont || 'Heebo'
   const overflowVisible = ['title', 'subtitle', 'decorative'].includes(el.role || '')
+
+  // In PDF mode, skip gradient text (causes rasterization in Chromium's print engine)
+  // and force full opacity so text stays as vector for Canva editability
+  const useGradient = isGradientText && !pdfMode
+  const effectiveOpacity = pdfMode ? Math.max(el.opacity ?? 1, 0.85) : (el.opacity ?? 1)
+
   const styles = [
     `position: absolute`,
     `left: ${el.x}px`,
@@ -61,7 +67,7 @@ function renderTextElement(el: TextElement, defaultFont: string): string {
     `z-index: ${el.zIndex}`,
     `font-size: ${el.fontSize}px`,
     `font-weight: ${el.fontWeight}`,
-    `color: ${isGradientText ? 'transparent' : el.color}`,
+    `color: ${useGradient ? 'transparent' : el.color}`,
     `text-align: ${el.textAlign}`,
     `white-space: pre-wrap`,
     `word-wrap: break-word`,
@@ -74,16 +80,14 @@ function renderTextElement(el: TextElement, defaultFont: string): string {
   if (el.letterSpacing) styles.push(`letter-spacing: ${el.letterSpacing}px`)
   if (el.textDecoration && el.textDecoration !== 'none') styles.push(`text-decoration: ${el.textDecoration}`)
   if (el.textTransform && el.textTransform !== 'none') styles.push(`text-transform: ${el.textTransform}`)
-  if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
+  if (effectiveOpacity !== 1) styles.push(`opacity: ${effectiveOpacity}`)
   if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
   if (el.backgroundColor) styles.push(`background-color: ${el.backgroundColor}`)
   if (el.borderRadius) styles.push(`border-radius: ${el.borderRadius}px`)
   if (el.padding) styles.push(`padding: ${el.padding}px`)
-  if (el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
-  // Hollow/Stroke Typography
+  if (!pdfMode && el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
   if (el.textStroke) styles.push(`-webkit-text-stroke: ${el.textStroke.width}px ${el.textStroke.color}`)
-  // Gradient text fill
-  if (isGradientText) {
+  if (useGradient) {
     styles.push(`background: ${el.gradientFill}`)
     styles.push(`-webkit-background-clip: text`)
     styles.push(`background-clip: text`)
@@ -146,10 +150,10 @@ function renderShapeElement(el: ShapeElement): string {
   return `<div style="${styles.join('; ')}"></div>`
 }
 
-function renderElement(el: SlideElement, defaultFont: string): string {
+function renderElement(el: SlideElement, defaultFont: string, pdfMode = false): string {
   switch (el.type) {
     case 'text':
-      return renderTextElement(el, defaultFont)
+      return renderTextElement(el, defaultFont, pdfMode)
     case 'image':
       return renderImageElement(el)
     case 'shape':
@@ -161,14 +165,18 @@ function renderElement(el: SlideElement, defaultFont: string): string {
 
 /**
  * Convert a single Slide AST to a self-contained HTML document.
+ * When pdfMode=true, optimizes for vector text output (Canva editability):
+ * - Disables gradient text fill (causes rasterization)
+ * - Forces minimum text opacity
+ * - Skips blend modes on text
  */
-export function slideToHtml(slide: Slide, designSystem: DesignSystem): string {
+export function slideToHtml(slide: Slide, designSystem: DesignSystem, pdfMode = false): string {
   const headingFont = designSystem.fonts.heading || 'Heebo'
   const bodyFont = designSystem.fonts.body || headingFont
   const bgCSS = renderBackground(slide.background)
   const elementsHtml = slide.elements
     .sort((a, b) => a.zIndex - b.zIndex)
-    .map(el => renderElement(el, headingFont))
+    .map(el => renderElement(el, headingFont, pdfMode))
     .join('\n    ')
 
   // Collect all unique fonts used in this slide (designSystem + per-element overrides)
@@ -223,10 +231,10 @@ export function slideToHtml(slide: Slide, designSystem: DesignSystem): string {
 
 /**
  * Convert all slides in a Presentation to HTML strings.
- * Used for PDF export via Puppeteer.
+ * Used for PDF export via Puppeteer. Pass pdfMode=true for Canva-optimized output.
  */
-export function presentationToHtmlSlides(presentation: Presentation): string[] {
+export function presentationToHtmlSlides(presentation: Presentation, pdfMode = false): string[] {
   return presentation.slides.map(slide =>
-    slideToHtml(slide, presentation.designSystem)
+    slideToHtml(slide, presentation.designSystem, pdfMode)
   )
 }

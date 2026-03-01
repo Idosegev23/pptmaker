@@ -4,14 +4,15 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import FlowStepper from '@/components/flow-stepper'
+import { toast } from 'sonner'
 
 // ── Progress weights — how much of the 100% bar each phase takes ──
 const PHASE_WEIGHTS = {
-  research: 10,
-  visuals: 10,
-  foundation: 15,
-  batches: 55, // split evenly across N batches
-  finalize: 10,
+  research: 8,
+  visuals: 8,
+  foundation: 12,
+  batches: 65, // sequential — 1 slide per call, ~15 calls
+  finalize: 7,
 }
 
 const TIPS = [
@@ -159,6 +160,48 @@ export default function GeneratePage() {
       const pipelineStatus = data._pipelineStatus || {}
       const brandName = data.brandName || ''
 
+      // Check if background generation completed
+      if (data._presentation?.slides?.length > 0) {
+        console.log('[Generate] Presentation already exists, redirecting to editor')
+        animateProgressTo(100)
+        setStage('done')
+        setTimeout(() => router.push(`/edit/${documentId}`), 1000)
+        return
+      }
+
+      // Check if background generation is in progress
+      const bgPipeline = data._pipeline as { status?: string; mode?: string; progress?: number; currentSlide?: number; totalSlides?: number } | undefined
+      if (bgPipeline?.mode === 'background' && bgPipeline?.status === 'generating') {
+        console.log('[Generate] Background generation in progress, polling...')
+        setStage('batch')
+        if (bgPipeline.totalSlides) setTotalSlides(bgPipeline.totalSlides)
+        if (bgPipeline.currentSlide) {
+          setBatchIndex(bgPipeline.currentSlide - 1)
+          setSlidesDone(bgPipeline.currentSlide)
+        }
+        animateProgressTo(bgPipeline.progress || 20)
+        // Poll for completion
+        const pollInterval = setInterval(async () => {
+          const pollRes = await fetch(`/api/documents/${documentId}`)
+          const pollData = await pollRes.json()
+          const pollDoc = pollData.document?.data || pollData.data || {}
+          if (pollDoc._presentation?.slides?.length > 0) {
+            clearInterval(pollInterval)
+            animateProgressTo(100)
+            setStage('done')
+            setTimeout(() => router.push(`/edit/${documentId}`), 1000)
+          } else if (pollDoc._pipeline?.status === 'error') {
+            clearInterval(pollInterval)
+            throw new Error(pollDoc._pipeline.error || 'Background generation failed')
+          } else if (pollDoc._pipeline?.currentSlide) {
+            setSlidesDone(pollDoc._pipeline.currentSlide)
+            setBatchIndex(pollDoc._pipeline.currentSlide - 1)
+            animateProgressTo(pollDoc._pipeline.progress || 20)
+          }
+        }, 5000)
+        return
+      }
+
       // 2. Research
       if (pipelineStatus.research === 'pending') {
         setStage('research')
@@ -294,71 +337,71 @@ export default function GeneratePage() {
       if (!foundationOk) {
         throw new Error((foundationData.details || foundationData.error || 'Foundation failed') as string)
       }
-      const bc = (foundationData.batchCount as number) || 3
+      // In sequential mode: batchCount = totalSlides (1 slide per call)
       const ts = (foundationData.totalSlides as number) || 12
-      const bs: number[] = (foundationData.batchSizes as number[]) || []
+      const bc = ts // 1 slide per call
 
       setBatchCount(bc)
       setTotalSlides(ts)
-      setBatchSizes(bs)
+      setBatchSizes(Array(ts).fill(1))
       setSlidesDone(0)
       animateProgressTo(getPhaseStart('foundation') + PHASE_WEIGHTS.foundation)
-      console.log(`[Generate] Foundation complete: ${bc} batches, ${ts} slides`)
+      console.log(`[Generate] Foundation complete: ${ts} slides (sequential mode)`)
 
-      // 5b: Batches (with client-side retry)
-      const MAX_BATCH_RETRIES = 2
+      // 5b: Sequential slide generation (1 per call, with retry)
+      const MAX_RETRY = 2
       let accumulated = 0
-      const perBatch = PHASE_WEIGHTS.batches / bc
+      const perSlide = PHASE_WEIGHTS.batches / ts
+      const batchesStart = PHASE_WEIGHTS.research + PHASE_WEIGHTS.visuals + PHASE_WEIGHTS.foundation
 
-      for (let b = 0; b < bc; b++) {
+      for (let s = 0; s < ts; s++) {
         setStage('batch')
-        setBatchIndex(b)
+        setBatchIndex(s)
 
-        const batchStart = PHASE_WEIGHTS.research + PHASE_WEIGHTS.visuals + PHASE_WEIGHTS.foundation + perBatch * b
-        animateProgressTo(batchStart + perBatch * 0.15)
+        const slideProgressStart = batchesStart + perSlide * s
+        animateProgressTo(slideProgressStart + perSlide * 0.15)
 
-        let batchSucceeded = false
-        for (let retry = 0; retry <= MAX_BATCH_RETRIES; retry++) {
+        let slideSucceeded = false
+        for (let retry = 0; retry <= MAX_RETRY; retry++) {
           if (retry > 0) {
-            console.log(`[Generate] Retrying batch ${b + 1}/${bc} (attempt ${retry + 1}/${MAX_BATCH_RETRIES + 1})...`)
+            console.log(`[Generate] Retrying slide ${s + 1}/${ts} (attempt ${retry + 1}/${MAX_RETRY + 1})...`)
             await new Promise(r => setTimeout(r, 2000))
           } else {
-            console.log(`[Generate] Running batch ${b + 1}/${bc}...`)
+            console.log(`[Generate] Generating slide ${s + 1}/${ts}...`)
           }
 
           try {
             const batchRes = await fetch('/api/generate-slides-stage', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ documentId, stage: 'batch', batchIndex: b }),
+              body: JSON.stringify({ documentId, stage: 'batch', batchIndex: s }),
             })
 
             const { ok: batchOk, data: batchData } = await safeJson(batchRes)
             if (!batchOk) {
-              const errMsg = (batchData.details || batchData.error || `Batch ${b + 1} failed`) as string
-              if (retry < MAX_BATCH_RETRIES) {
-                console.warn(`[Generate] Batch ${b + 1} failed (will retry): ${errMsg}`)
+              const errMsg = (batchData.details || batchData.error || `Slide ${s + 1} failed`) as string
+              if (retry < MAX_RETRY) {
+                console.warn(`[Generate] Slide ${s + 1} failed (will retry): ${errMsg}`)
                 continue
               }
               throw new Error(errMsg)
             }
-            accumulated = (batchData.totalSlidesAccumulated as number) || (accumulated + (bs[b] || 0))
+            accumulated = (batchData.totalSlidesAccumulated as number) || (accumulated + 1)
             setSlidesDone(accumulated)
-            animateProgressTo(batchStart + perBatch)
-            console.log(`[Generate] Batch ${b + 1} done: ${batchData.slidesGenerated} slides (total: ${accumulated})${retry > 0 ? ` [after ${retry} retries]` : ''}`)
-            batchSucceeded = true
+            animateProgressTo(slideProgressStart + perSlide)
+            console.log(`[Generate] Slide ${s + 1}/${ts} done (total: ${accumulated})${retry > 0 ? ` [after ${retry} retries]` : ''}`)
+            slideSucceeded = true
             break
           } catch (fetchErr) {
-            // Network error (ERR_CONNECTION_CLOSED, Failed to fetch, etc.)
-            if (retry < MAX_BATCH_RETRIES) {
-              console.warn(`[Generate] Batch ${b + 1} network error (will retry): ${fetchErr}`)
+            if (retry < MAX_RETRY) {
+              console.warn(`[Generate] Slide ${s + 1} network error (will retry): ${fetchErr}`)
               continue
             }
             throw fetchErr
           }
         }
-        if (!batchSucceeded) {
-          throw new Error(`Batch ${b + 1} failed after ${MAX_BATCH_RETRIES + 1} attempts`)
+        if (!slideSucceeded) {
+          throw new Error(`Slide ${s + 1} failed after ${MAX_RETRY + 1} attempts`)
         }
       }
 
@@ -409,45 +452,48 @@ export default function GeneratePage() {
     runGeneration()
   }, [runGeneration])
 
-  // ── Build dynamic steps based on batch info ──
+  // ── Build dynamic steps — group slides into visual chunks ──
   const progressSteps: StepInfo[] = [
     { key: 'research', label: 'מחקר' },
     { key: 'visuals', label: 'ויזואליה' },
     { key: 'foundation', label: 'מערכת עיצוב' },
   ]
 
-  if (batchCount > 0) {
-    // Dynamic batch steps with slide ranges
-    let slideStart = 1
-    for (let b = 0; b < batchCount; b++) {
-      const size = batchSizes[b] || 0
-      const slideEnd = slideStart + size - 1
+  if (totalSlides > 0) {
+    // Group slides into ~4-5 visual chunks for the progress bar
+    const chunkSize = Math.max(1, Math.ceil(totalSlides / 4))
+    for (let start = 0; start < totalSlides; start += chunkSize) {
+      const end = Math.min(start + chunkSize, totalSlides)
       progressSteps.push({
-        key: `batch_${b}`,
-        label: batchCount <= 3
-          ? `שקפים ${slideStart}-${slideEnd}`
-          : `קבוצה ${b + 1}`,
+        key: `slides_${start}`,
+        label: `שקפים ${start + 1}-${end}`,
       })
-      slideStart = slideEnd + 1
     }
   } else {
-    // Before foundation returns — show placeholder
-    progressSteps.push({ key: 'batch_0', label: 'עיצוב שקפים' })
+    progressSteps.push({ key: 'slides_0', label: 'עיצוב שקפים' })
   }
 
   progressSteps.push({ key: 'finalize', label: 'בדיקות' })
 
   // ── Step status logic ──
   function getStepStatus(stepKey: string): 'pending' | 'active' | 'done' {
-    // Build ordered list of step keys
     const order = ['research', 'visuals', 'foundation']
-    for (let b = 0; b < Math.max(batchCount, 1); b++) order.push(`batch_${b}`)
+    if (totalSlides > 0) {
+      const chunkSize = Math.max(1, Math.ceil(totalSlides / 4))
+      for (let start = 0; start < totalSlides; start += chunkSize) {
+        order.push(`slides_${start}`)
+      }
+    } else {
+      order.push('slides_0')
+    }
     order.push('finalize', 'done')
 
-    // Map current stage to a key in the order
+    // Map current stage to a key
     let currentKey = stage
-    if (stage === 'batch' && batchIndex >= 0) {
-      currentKey = `batch_${batchIndex}`
+    if (stage === 'batch' && batchIndex >= 0 && totalSlides > 0) {
+      const chunkSize = Math.max(1, Math.ceil(totalSlides / 4))
+      const chunkStart = Math.floor(batchIndex / chunkSize) * chunkSize
+      currentKey = `slides_${chunkStart}`
     }
 
     const stepIdx = order.indexOf(stepKey)
@@ -466,7 +512,7 @@ export default function GeneratePage() {
     if (stage === 'visuals') return 'יצירת שפה ויזואלית ותמונות'
     if (stage === 'foundation') return 'בניית כיוון קריאייטיבי ומערכת עיצוב'
     if (stage === 'batch' && batchIndex >= 0) {
-      return `עיצוב שקפים — קבוצה ${batchIndex + 1} מתוך ${batchCount}`
+      return `מעצב שקף ${batchIndex + 1} מתוך ${totalSlides}`
     }
     if (stage === 'finalize') return 'בדיקת איכות והרכבה סופית'
     if (stage === 'done') return 'המצגת מוכנה!'
@@ -480,9 +526,7 @@ export default function GeneratePage() {
     if (stage === 'visuals') return 'מנתח שפה ויזואלית, לוגו, צבעים ותמונות מהאתר'
     if (stage === 'foundation') return 'ארט דיירקטור AI בונה מערכת עיצוב, טיפוגרפיה ואפקטים'
     if (stage === 'batch' && batchIndex >= 0) {
-      const size = batchSizes[batchIndex] || 0
-      const start = batchSizes.slice(0, batchIndex).reduce((s, v) => s + v, 0) + 1
-      return `מעצב ${size} שקפים (${start}-${start + size - 1}) עם AI`
+      return `כל שקף מעוצב לפי הנרטיב והשקפים הקודמים — שקף ${batchIndex + 1} מתוך ${totalSlides}`
     }
     if (stage === 'finalize') return 'מוודא ניגודיות, היררכיה, איזון ויזואלי ועקביות'
     if (stage === 'done') return 'מנווט לתצוגת מצגת...'
@@ -558,7 +602,7 @@ export default function GeneratePage() {
                   {totalSlides > 0 && (
                     <div className="flex justify-between text-xs text-white/40 font-medium px-0.5">
                       <span>{slidesDone}/{totalSlides} שקפים הושלמו</span>
-                      <span>{batchCount} קבוצות</span>
+                      <span>עיצוב סדרתי</span>
                     </div>
                   )}
                 </div>
@@ -615,6 +659,28 @@ export default function GeneratePage() {
                     <p className="text-white/60 text-sm leading-relaxed">{TIPS[tipIndex]}</p>
                   </div>
                 </div>
+              )}
+
+              {/* Background mode button — visible after foundation completes */}
+              {stage === 'batch' && totalSlides > 0 && (
+                <button
+                  onClick={async () => {
+                    try {
+                      fetch('/api/generate-background', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ documentId }),
+                      })
+                      toast.success('ההפקה ממשיכה ברקע — תוכלו לראות את הסטטוס בדשבורד')
+                      setTimeout(() => router.push('/dashboard'), 1500)
+                    } catch {
+                      toast.error('שגיאה בהפעלת הפקה ברקע')
+                    }
+                  }}
+                  className="w-full mt-3 py-2.5 px-4 text-sm font-medium text-white/50 hover:text-white/80 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all text-center"
+                >
+                  המשך ברקע — אחזור כשמוכן
+                </button>
               )}
 
               {/* Done celebration */}

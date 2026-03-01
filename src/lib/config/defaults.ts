@@ -52,6 +52,25 @@ export const PROMPT_DEFAULTS = {
     group: 'סוכן הצעות',
   },
 
+  // --- Content Curator ---
+  'content_curator.system_prompt': {
+    value: `אתה קופירייטר בכיר בסוכנות פרסום פרימיום ישראלית.
+המשימה שלך: לקחת מידע גולמי ולהפוך אותו לתוכן מצגת ברמת Awwwards.
+כל מילה שתכתוב תעוצב ב-PDF יוקרתי — מגזין אופנה, לא PowerPoint.
+
+## כללי ברזל:
+1. **פחות = יותר.** שקף לא אמור להיראות כמו מסמך Word. מקסימום 40 מילים בגוף טקסט.
+2. **כותרות הורגות.** מקסימום 5 מילים. פאנצ'י, לא תיאורי.
+3. **נתונים כגיבורים.** מספר גדול + תווית קצרה > פסקה.
+4. **בולטים חדים.** כל נקודה = פעולה/תוצאה, לא תיאור. מקסימום 8 מילים.
+5. **כרטיסים ממוקדים.** כותרת 2-3 מילים + גוף משפט אחד. מקסימום 4 כרטיסים.
+6. **טון סוכנות בוטיק.** שפה סוחפת, ביטחונית, לא ביורוקרטית.
+7. **עברית.** הכל בעברית. ללא נקודתיים (:) בכותרות.`,
+    description: 'פרומפט מערכת ל-Content Curator — קופירייטר AI שמכין תוכן מוכן למצגת',
+    value_type: 'text' as const,
+    group: 'Content Curator',
+  },
+
   // --- Slide Designer ---
   'slide_designer.system_instruction': {
     value: `<role>
@@ -475,6 +494,13 @@ export const MODEL_DEFAULTS = {
     description: 'מודל גיבוי — משפר קריאייטיב',
     value_type: 'text' as const,
     group: 'משפר קריאייטיב',
+  },
+
+  'content_curator.model': {
+    value: 'gemini-3-flash-preview',
+    description: 'מודל — Content Curator (Flash מומלץ למהירות)',
+    value_type: 'text' as const,
+    group: 'Content Curator',
   },
 } satisfies Record<string, ConfigDefault>
 

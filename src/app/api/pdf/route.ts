@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     const astPresentation = documentData._presentation as Presentation | undefined
     if (astPresentation && astPresentation.slides?.length > 0) {
       console.log(`[PDF] Using AST presentation with ${astPresentation.slides.length} slides`)
-      const astHtmlPages = presentationToHtmlSlides(astPresentation)
+      const astHtmlPages = presentationToHtmlSlides(astPresentation, true)
       console.log(`[PDF] Converted AST to ${astHtmlPages.length} HTML pages`)
 
       const brandNameStr = (documentData.brandName as string) || ''

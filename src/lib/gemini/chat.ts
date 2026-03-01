@@ -1,16 +1,14 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
 
-export const chatModel = genAI.getGenerativeModel({ 
-  model: 'gemini-pro',
-  generationConfig: {
-    temperature: 0.7,
-    topP: 0.8,
-    topK: 40,
-    maxOutputTokens: 2048,
-  },
-})
+const CHAT_MODEL = 'gemini-2.0-flash'
+const CHAT_CONFIG = {
+  temperature: 0.7,
+  topP: 0.8,
+  topK: 40,
+  maxOutputTokens: 2048,
+}
 
 // System prompts for different document types
 export const QUOTE_SYSTEM_PROMPT = `אתה עוזר ליצירת הצעות מחיר מקצועיות בעברית.
@@ -96,27 +94,27 @@ export interface ChatMessage {
 
 export async function startChat(documentType: 'quote' | 'deck') {
   const systemPrompt = documentType === 'quote' ? QUOTE_SYSTEM_PROMPT : DECK_SYSTEM_PROMPT
-  
-  const chat = chatModel.startChat({
+
+  const chat = ai.chats.create({
+    model: CHAT_MODEL,
+    config: {
+      systemInstruction: systemPrompt,
+      ...CHAT_CONFIG,
+    },
     history: [
-      {
-        role: 'user',
-        parts: [{ text: systemPrompt }],
-      },
       {
         role: 'model',
         parts: [{ text: 'הבנתי. אני מוכן לעזור ליצור ' + (documentType === 'quote' ? 'הצעת מחיר' : 'מצגת קריאטיב') + '. בוא נתחיל!' }],
       },
     ],
   })
-  
+
   return chat
 }
 
-export async function sendMessage(chat: ReturnType<typeof chatModel.startChat>, message: string) {
-  const result = await chat.sendMessage(message)
-  const response = await result.response
-  return response.text()
+export async function sendMessage(chat: Awaited<ReturnType<typeof startChat>>, message: string) {
+  const response = await chat.sendMessage({ message })
+  return response.text || ''
 }
 
 // Parse JSON from AI response

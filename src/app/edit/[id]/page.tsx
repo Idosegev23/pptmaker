@@ -14,6 +14,7 @@ import ImageSourceModal from '@/components/presentation/ImageSourceModal'
 import EditorToolbar from '@/components/presentation/EditorToolbar'
 import GoogleDriveSaveButton from '@/components/google-drive-save-button'
 import FeedbackDialog from '@/components/feedback-dialog'
+import PresentationMode from '@/components/presentation/PresentationMode'
 
 // ─── Empty presentation (placeholder while loading) ────────
 const EMPTY_PRESENTATION: Presentation = {
@@ -51,6 +52,8 @@ export default function PresentationEditorPage() {
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [gridVisible, setGridVisible] = useState(false)
   const [snapToGrid, setSnapToGrid] = useState(false)
+  const [isPresentationMode, setIsPresentationMode] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
 
   const editor = usePresentationEditor(EMPTY_PRESENTATION)
   const slideContainerRef = useRef<HTMLDivElement>(null)
@@ -115,6 +118,26 @@ export default function PresentationEditorPage() {
       setPageState('error')
     }
   }
+
+  // ─── Mobile detection ───────────────────────────────
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  // ─── F5 for presentation mode ──────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'F5') {
+        e.preventDefault()
+        setIsPresentationMode(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // ─── Auto-save on changes ────────────────────────────
   useEffect(() => {
@@ -391,6 +414,33 @@ export default function PresentationEditorPage() {
     setImageModalMode('replace')
   }, [editor, imageModalMode])
 
+  // ─── Mobile block ──────────────────────────────────
+  if (isMobile) {
+    return (
+      <div dir="rtl" className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/60">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+          </div>
+          <h2 className="text-white text-xl font-bold mb-2">עריכת מצגות זמינה רק במחשב</h2>
+          <p className="text-gray-400 text-sm mb-8 leading-relaxed">
+            לחוויית עריכה מלאה, פתחו את הדף בדפדפן במחשב שולחני או נייד.
+          </p>
+          <a
+            href="/dashboard"
+            className="inline-block px-6 py-2.5 bg-white text-[#0a0a0f] rounded-xl font-semibold text-sm hover:bg-gray-100 transition-colors"
+          >
+            חזרה לדשבורד
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   // ─── Loading state ──────────────────────────────────
   if (pageState === 'loading' || pageState === 'generating') {
     return (
@@ -506,6 +556,17 @@ export default function PresentationEditorPage() {
 
               <button onClick={() => setShowProperties(p => !p)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${showProperties ? 'text-white bg-white/20 ring-1 ring-white/30' : 'text-gray-400 bg-white/5 hover:bg-white/10 hover:text-white'}`}>
                 {showProperties ? 'סגור פאנל' : 'פאנל עריכה'}
+              </button>
+
+              <button
+                onClick={() => setIsPresentationMode(true)}
+                className="px-3 py-1.5 text-xs font-medium text-gray-300 bg-white/5 rounded-lg hover:bg-white/10 hover:text-white transition-colors"
+                title="מצב הצגה (F5)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline-block ml-1">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                הצגה
               </button>
 
               <button onClick={downloadPdf} disabled={isGeneratingPdf} className="px-4 py-1.5 text-xs font-medium text-black bg-white rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -677,6 +738,15 @@ export default function PresentationEditorPage() {
         isOpen={showFeedback}
         onClose={() => setShowFeedback(false)}
       />
+
+      {isPresentationMode && (
+        <PresentationMode
+          slides={slides}
+          designSystem={designSystem}
+          startIndex={editor.selectedSlideIndex}
+          onExit={() => setIsPresentationMode(false)}
+        />
+      )}
     </div>
   )
 }

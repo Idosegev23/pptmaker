@@ -61,6 +61,21 @@ export async function POST(request: NextRequest) {
 
     // ═══ STAGE: FOUNDATION ═══════════════════════════════
     if (stage === 'foundation') {
+      // Prevent double-run: check if generation is already in progress
+      const existingPipeline = documentData._pipeline as { status?: string; startedAt?: number } | undefined
+      if (existingPipeline?.status === 'generating') {
+        const elapsed = Date.now() - (existingPipeline.startedAt || 0)
+        // Allow re-run if stuck for > 15 minutes
+        if (elapsed < 15 * 60 * 1000) {
+          return NextResponse.json({ error: 'Generation already in progress', status: 'already_running' }, { status: 409 })
+        }
+      }
+
+      // Set lock immediately
+      await supabase.from('documents').update({
+        data: { ...documentData, _pipeline: { status: 'generating', startedAt: Date.now() } },
+      }).eq('id', documentId)
+
       console.log(`[${requestId}] Running foundation (stages 1-3)...`)
 
       const images = (documentData._generatedImages as Record<string, string>) || {}
@@ -111,14 +126,15 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // ═══ STAGE: BATCH ════════════════════════════════════
+    // ═══ STAGE: BATCH (sequential — 1 slide per call) ════
     if (stage === 'batch') {
       const idx = typeof batchIndex === 'number' ? batchIndex : 0
-      console.log(`[${requestId}] Running batch ${idx}...`)
+      console.log(`[${requestId}] Running sequential slide ${idx}...`)
 
       const pipeline = documentData._pipeline as {
         foundation: PipelineFoundation
         batchResults: BatchResult[]
+        lastGeneratedSlides?: Slide[]
         status: string
       } | undefined
 
@@ -126,16 +142,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Foundation not found. Run foundation stage first.' }, { status: 400 })
       }
 
-      // Get previous context from accumulated batch results
-      const prevResults = pipeline.batchResults || []
-      const previousContext: BatchResult | null = prevResults.length > 0
-        ? prevResults[prevResults.length - 1]
+      // Build previous context with last 2 slides for sequential memory
+      const previousContext: BatchResult | null = pipeline.lastGeneratedSlides?.length
+        ? {
+            slides: [],
+            visualSummary: '',
+            slideIndex: idx,
+            generatedSlides: pipeline.lastGeneratedSlides,
+          }
         : null
 
       const result = await pipelineBatch(pipeline.foundation, idx, previousContext)
 
-      // Accumulate batch results
-      const updatedBatchResults = [...prevResults, result]
+      // Accumulate slide results and keep last 2 slides for next call
+      const updatedBatchResults = [...(pipeline.batchResults || []), result]
 
       await supabase
         .from('documents')
@@ -145,20 +165,22 @@ export async function POST(request: NextRequest) {
             _pipeline: {
               ...pipeline,
               batchResults: updatedBatchResults,
-              status: `batch_${idx}_complete`,
+              lastGeneratedSlides: result.generatedSlides || [],
+              status: `slide_${idx}_complete`,
             },
           },
         })
         .eq('id', documentId)
 
-      console.log(`[${requestId}] Batch ${idx} cached. ${result.slides.length} slides generated.`)
+      const totalAccumulated = updatedBatchResults.reduce((sum, r) => sum + r.slides.length, 0)
+      console.log(`[${requestId}] Slide ${idx + 1} cached. Total accumulated: ${totalAccumulated}`)
 
       return NextResponse.json({
         success: true,
         stage: 'batch',
         batchIndex: idx,
         slidesGenerated: result.slides.length,
-        totalSlidesAccumulated: updatedBatchResults.reduce((sum, r) => sum + r.slides.length, 0),
+        totalSlidesAccumulated: totalAccumulated,
       })
     }
 
