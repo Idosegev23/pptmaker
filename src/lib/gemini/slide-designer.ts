@@ -43,12 +43,27 @@ async function getSlideDesignerModels(): Promise<string[]> {
 
 import { getConfig } from '@/lib/config/admin-config'
 
-const SYSTEM_INSTRUCTION_DEFAULT = `אתה Creative Director + Art Director ב-Sagmeister & Walsh / Pentagram.
-המומחיות שלך: עיצוב מצגות editorial ברמת Awwwards.
-כל מצגת חייבת להרגיש כמו מגזין אופנה פרימיום — לא כמו PowerPoint.
-אתה עובד בעברית (RTL). פונט: Heebo. קנבס: 1920x1080.
-אתה מעולם לא חוזר על אותו layout — כל שקף שונה מקודמו.
-אתה משתמש ב-JSON AST בלבד — ללא HTML, ללא CSS.`
+const SYSTEM_INSTRUCTION_DEFAULT = `<role>
+You are a world-class Creative Director and Art Director at a top design agency (Sagmeister & Walsh / Pentagram level).
+Your specialty: editorial-quality presentation design that wins Awwwards.
+Every presentation must feel like a premium fashion magazine — never like PowerPoint.
+</role>
+
+<constraints>
+- Output language: Hebrew (RTL). Font: Heebo. Canvas: 1920x1080px.
+- Output format: JSON AST only — no HTML, no CSS.
+- Every slide must have a unique layout — never repeat the same composition.
+</constraints>
+
+<visualization_process>
+Before outputting each slide, you MUST mentally visualize it as if looking at the final rendered result:
+1. Picture every element on the 1920x1080 canvas at its exact x, y, width, height.
+2. Verify no text overlaps other text unintentionally.
+3. Verify no text sits on top of an image without a readable contrast layer between them.
+4. Verify images don't cover important text elements.
+5. Confirm the overall composition feels balanced, intentional, and magazine-quality.
+If any issue is found, fix it before outputting the JSON.
+</visualization_process>`
 
 async function getSystemInstruction(): Promise<string> {
   return getConfig('ai_prompts', 'slide_designer.system_instruction', SYSTEM_INSTRUCTION_DEFAULT)
@@ -57,14 +72,14 @@ async function getSystemInstruction(): Promise<string> {
 // ─── Layout Archetypes (anti-generic design) ──────────────
 
 const LAYOUT_ARCHETYPES = [
-  'Brutalist typography — כותרת ענקית שחורגת מהמסך עם negative x-axis overflow + watermark טקסט שקוף',
-  'Asymmetric 30/70 split — חלוקה א-סימטרית עם אלמנט דקורטיבי שחוצה את הקו המפריד',
-  'Overlapping Z-index cards — כרטיסים חופפים עם fake-3D shadows ואפקט עומק',
-  'Full-bleed image — תמונה מלאה עם שכבת gradient ו-text cutout overlay שקוף',
-  'Diagonal grid — קומפוזיציה אלכסונית עם טקסט מסובב וקווי grid דקים',
-  'Bento box — רשת א-סימטרית של תאים בגדלים שונים עם נתונים ויזואליים',
-  'Magazine spread — פריסת מגזין עם pull-quote ענק ותמונה דומיננטית',
-  'Data art — מספרים ענקיים כאלמנט ויזואלי מרכזי עם דקורציה מינימלית',
+  'Brutalist typography — oversized title with negative overflow, transparent watermark text behind',
+  'Asymmetric split — uneven division with a decorative element crossing the dividing line',
+  'Overlapping Z-index cards — layered cards with fake-3D shadows creating depth',
+  'Full-bleed image — edge-to-edge image with gradient overlay and text floating on top',
+  'Diagonal grid — angled composition with rotated text and thin grid lines',
+  'Bento box — asymmetric grid of mixed-size cells with visual data inside',
+  'Magazine spread — editorial layout with a large pull-quote and dominant image',
+  'Data art — oversized numbers as the visual centerpiece with minimal decoration',
 ]
 
 // ─── Types ─────────────────────────────────────────────
@@ -194,32 +209,20 @@ const PACING_MAP: Record<string, PacingDirective> = {
   closing:   { energy: 'finale', density: 'minimal', surprise: true, maxElements: 8, minWhitespace: 45 },
 }
 
-// ─── Anti-Patterns (condensed) ──────────────────────────
-const ANTI_PATTERNS = `
-❌ אסור: טקסט ממורכז במרכז המסך | 3 כרטיסים זהים בשורה | כל הfonts באותו גודל | gradient ליניארי פשוט | rotation על body text | opacity < 0.7 על טקסט קריא
+// ─── Design Principles (positive patterns — tell the model what TO DO) ──
+const DESIGN_PRINCIPLES = `
+- Use asymmetric compositions — offset titles, uneven columns, dynamic diagonal flow
+- Create strong scale contrast between heading and body text (large titles, small labels)
+- Give every readable text element enough contrast against its background (opacity ≥ 0.7)
+- Keep clear breathing room around the main title
+- Vary card sizes when using multiple cards — make each one different
+- Use rich gradients (radial, multi-stop) rather than flat single-color fills
 `
 
-// ─── Depth Layering (condensed) ───────────────────────
+// ─── Depth Layering ───────────────────────
 const DEPTH_LAYERS = `
-zIndex: 0-1=BG(gradient/aurora) | 2-3=DECOR(watermark,shapes) | 4-5=STRUCTURE(cards,dividers) | 6-8=CONTENT(text,data,images) | 9-10=HERO(title,key number)
+zIndex guide: 0-1 = background layers | 2-3 = decorative elements (watermarks, shapes) | 4-5 = structural elements (cards, dividers) | 6-8 = content (text, data, images) | 9-10 = hero elements (main title, key number)
 `
-
-// ─── Composition Rules (condensed) ────────────────────
-const COMPOSITION_RULES = `
-- Rule of Thirds: focal points at (640,360), (1280,360), (640,720), (1280,720). Title on right ⅓ (RTL)
-- Scale Contrast: max font / min font ≥ 5:1 (peak slides: ≥ 10:1)
-- 80px+ clear space around main title
-- Diagonal flow: right-top → left-bottom, never static/centered
-- 3 main elements form a triangle around the focal point
-`
-
-// ─── Color Temperature ────────────────────────────────
-const TEMPERATURE_MAP: Record<string, 'cold' | 'neutral' | 'warm'> = {
-  cover: 'cold', brief: 'cold', goals: 'neutral', audience: 'neutral',
-  insight: 'warm', strategy: 'neutral', bigIdea: 'warm', approach: 'neutral',
-  deliverables: 'neutral', metrics: 'neutral', influencerStrategy: 'cold',
-  influencers: 'neutral', closing: 'warm',
-}
 
 // ─── DRY Color Helpers ───────────────────────────────────
 
@@ -305,6 +308,15 @@ function validateAndFixColors(colors: PremiumDesignSystem['colors']): PremiumDes
 }
 
 // ─── Spatial Helpers ───────────────────────────────────
+
+function boxesOverlap(a: BoundingBox, b: BoundingBox): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x &&
+    a.y < b.y + b.height && a.y + a.height > b.y
+}
+
+function isImageElement(el: SlideElement): el is ImageElement {
+  return el.type === 'image'
+}
 
 function computeOccupiedArea(elements: BoundingBox[]): number {
   const canvasArea = 1920 * 1080
@@ -682,125 +694,89 @@ async function generateSlidesBatchAST(
   // Creative Direction from Design System (if available)
   const cd = designSystem.creativeDirection
 
-  // ── Image sizing hints per slide type ──
-  const IMAGE_SIZE_HINTS: Record<string, string> = {
-    cover: 'Full-bleed (1920×1080) or right-half (960×1080). Image is the hero.',
-    brief: 'Right 40% (768×800), vertically centered. Leave left for text.',
-    audience: 'Right 45% (864×900). People-focused, large and immersive.',
-    insight: 'Background overlay (1920×1080) with gradient on top, or right 50%.',
-    bigIdea: 'Right 60% (1152×1080) full height. The visual IS the idea.',
-    strategy: 'Accent image, 30% (576×600), positioned as visual anchor.',
-    approach: 'Small accent (480×480), positioned at rule-of-thirds intersection.',
-    closing: 'Background overlay (1920×1080) at low opacity, or centered accent.',
+  // ── Image creative role per slide type (conceptual, not pixel-based) ──
+  const IMAGE_ROLE_HINTS: Record<string, string> = {
+    cover: 'The image IS the hero — it is the first thing the viewer sees. Let it dominate.',
+    brief: 'The image accompanies the story — it supports the text, not competes with it.',
+    audience: 'The image represents the people — large, immersive, human.',
+    insight: 'The image creates atmosphere — dramatic backdrop or visual element reinforcing the insight.',
+    bigIdea: 'The image IS the idea — the visual is the star, text complements it.',
+    strategy: 'The image anchors — a visual anchor point that adds depth to the text.',
+    approach: 'The image is an accent — a surprising element that adds visual interest.',
+    closing: 'The image closes the circle — warm atmosphere, invitation, strong ending.',
   }
 
-  // ── Build per-slide directives with pacing, layout & archetype ──
+  // ── Build per-slide directives ──
   const slidesDescription = slides.map((slide, i) => {
     const globalIndex = batchContext.slideIndex + i
     const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
-    const temperature = TEMPERATURE_MAP[slide.slideType] || 'neutral'
     const contentJson = JSON.stringify(slide.content, null, 2)
-    const hasTension = ['cover', 'insight', 'bigIdea', 'closing'].includes(slide.slideType)
-    const imageSizeHint = IMAGE_SIZE_HINTS[slide.slideType] || 'At least 40% of slide area'
+    const imageRoleHint = IMAGE_ROLE_HINTS[slide.slideType] || 'An image that reinforces the slide message.'
     const archetype = LAYOUT_ARCHETYPES[(globalIndex + batchIndex * 3) % LAYOUT_ARCHETYPES.length]
 
     return `
-═══ שקף ${globalIndex + 1}/${batchContext.totalSlides}: "${slide.title}" (${slide.slideType}) ═══
-🌡️ Temperature: ${temperature} | ⚡ Energy: ${pacing.energy} | 📊 Density: ${pacing.density}
-${hasTension ? '🔥 TENSION POINT — חובה נקודת מתח ויזואלית אחת בשקף הזה!' : ''}
-📐 מקסימום ${pacing.maxElements} אלמנטים | לפחות ${pacing.minWhitespace}% רווח לבן
-📐 Mandatory Layout Archetype: ${archetype}
-${slide.imageUrl ? `🖼️ Image: ${slide.imageUrl} — חובה element מסוג "image"!\n📏 Image sizing: ${imageSizeHint}` : '🚫 אין תמונה — השתמש ב-shapes דקורטיביים, watermarks, טיפוגרפיה דרמטית'}
-תוכן:
-\`\`\`json
+<slide index="${globalIndex + 1}" total="${batchContext.totalSlides}" type="${slide.slideType}" title="${slide.title}">
+  <energy>${pacing.energy}</energy>
+  <layout_inspiration>${archetype}</layout_inspiration>
+  ${slide.imageUrl ? `<image url="${slide.imageUrl}" role="${imageRoleHint}" />` : '<no_image>Use decorative shapes, watermarks, and dramatic typography instead.</no_image>'}
+  <content>
 ${contentJson}
-\`\`\``
+  </content>
+</slide>`
   }).join('\n')
 
-  const prompt = `עצב ${slides.length} שקפים למותג "${brandName}".
+  const prompt = `<task>
+Design ${slides.length} premium presentation slides for the brand "${brandName}".
+All slide content must be in Hebrew. All text is RTL with textAlign "right".
+</task>
 
-══════════════════════════════════
-🧠 THE CREATIVE BRIEF
-══════════════════════════════════
+<creative_brief>
 ${cd ? `
-**מטאפורה ויזואלית:** ${cd.visualMetaphor}
-**מתח ויזואלי:** ${cd.visualTension}
-**חוק-על (כל שקף חייב לקיים):** ${cd.oneRule}
-**סיפור צבע:** ${cd.colorStory}
-**קול טיפוגרפי:** ${cd.typographyVoice}
-**מסע רגשי:** ${cd.emotionalArc}
-` : `חשוב כמו Creative Director — מה המטאפורה הויזואלית של "${brandName}"? מה המתח? מה מפתיע?`}
+Visual Metaphor: ${cd.visualMetaphor}
+Visual Tension: ${cd.visualTension}
+Master Rule (every slide must follow): ${cd.oneRule}
+Color Story: ${cd.colorStory}
+Typography Voice: ${cd.typographyVoice}
+Emotional Arc: ${cd.emotionalArc}
+` : `Think like a Creative Director — what is the visual metaphor for "${brandName}"? What creates tension? What surprises?`}
+</creative_brief>
 
-══════════════════════════════════
-🎨 DESIGN SYSTEM
-══════════════════════════════════
-Canvas: 1920×1080px | RTL (עברית) | פונט: Heebo
+<design_system>
+Canvas: 1920×1080px | Direction: RTL (Hebrew) | Font: Heebo
 
-צבעים: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
-רקע: ${colors.background} | טקסט: ${colors.text} | כרטיסים: ${colors.cardBg}
-מושתק: ${colors.muted} | highlight: ${colors.highlight}
-Aurora: ${effects.auroraGradient}
+Colors: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
+Background: ${colors.background} | Text: ${colors.text} | Cards: ${colors.cardBg}
+Muted: ${colors.muted} | Highlight: ${colors.highlight}
+Aurora gradient: ${effects.auroraGradient}
 
-טיפוגרפיה: display ${typo.displaySize}px | heading ${typo.headingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
-Spacing tight: ${typo.letterSpacingTight} | wide: ${typo.letterSpacingWide}
+Typography sizes: display ${typo.displaySize}px | heading ${typo.headingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
+Letter spacing: tight ${typo.letterSpacingTight} | wide ${typo.letterSpacingWide}
 Weight pairs: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
 Line height: tight ${typo.lineHeightTight} | relaxed ${typo.lineHeightRelaxed}
 
 Card: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
 Decorative style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle}
 
-Motif: ${motif.type} (opacity: ${motif.opacity}, color: ${motif.color})
+Brand motif: ${motif.type} (opacity: ${motif.opacity}, color: ${motif.color})
 ${motif.implementation}
+</design_system>
 
-══════════════════════════════════
-📐 COMPOSITION & QUALITY RULES
-══════════════════════════════════
-
-${COMPOSITION_RULES}
-
+<design_principles>
+${DESIGN_PRINCIPLES}
 ${DEPTH_LAYERS}
+</design_principles>
 
-${ANTI_PATTERNS}
+<element_format>
+Shape: { "id", "type": "shape", "x", "y", "width", "height", "zIndex", "shapeType": "background"|"decorative"|"divider", "fill": "#hex or gradient", "clipPath", "borderRadius", "opacity", "rotation", "border" }
+Text:  { "id", "type": "text", "x", "y", "width", "height", "zIndex", "content": "Hebrew text", "fontSize", "fontWeight": 100-900, "color", "textAlign": "right", "role": "title"|"subtitle"|"body"|"caption"|"label"|"decorative", "lineHeight", "letterSpacing", "opacity", "rotation", "textStroke": { "width", "color" } }
+Image: { "id", "type": "image", "x", "y", "width", "height", "zIndex", "src": "THE_URL", "objectFit": "cover", "borderRadius" }
+Note: role "decorative" = large watermark text, low opacity, rotated, fontSize 200+, used as visual texture.
+</element_format>
 
-## Typography:
-- כותרות (60px+): letterSpacing ${typo.letterSpacingTight}, lineHeight ${typo.lineHeightTight}, weight ${typo.weightPairs[0]?.[0] || 900}
-- גוף/labels: letterSpacing ${typo.letterSpacingWide}, weight ${typo.weightPairs[0]?.[1] || 300}
-- מספרים ענקים: weight 900, letterSpacing -4, fontSize 80-140px
-- Watermark: role "decorative", fontSize 200-400, opacity 0.03-0.08, rotation -5° to -15°, textStroke
+<reference_examples>
+These examples show the QUALITY LEVEL expected. Create completely DIFFERENT designs — do not copy these layouts.
 
-## Design Principles:
-- א-סימטרי! לא PowerPoint. כל שקף שונה מקודמו
-- Fake 3D shadows (shape offset +12px, opacity 0.15), gradient overlays על תמונות
-- קווים דקים (1-2px) ב-accent color כמפרידים אלגנטיים
-
-══════════════════════════════════
-📦 ELEMENT TYPES (JSON FORMAT)
-══════════════════════════════════
-
-### Shape:
-{ "id": "el-X", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
-  "shapeType": "background"|"decorative"|"divider", "fill": "#hex or gradient", "clipPath": "...",
-  "borderRadius": px, "opacity": 0-1, "rotation": degrees, "border": "1px solid rgba(...)" }
-
-### Text:
-{ "id": "el-X", "type": "text", "x": 80, "y": 120, "width": 800, "height": 80, "zIndex": 10,
-  "content": "טקסט", "fontSize": px, "fontWeight": 100-900, "color": "#hex", "textAlign": "right",
-  "role": "title"|"subtitle"|"body"|"caption"|"label"|"decorative", "lineHeight": 0.9-1.6,
-  "letterSpacing": px, "opacity": 0-1, "rotation": degrees,
-  "textStroke": { "width": 2, "color": "#hex" } }
-  *** role "decorative" = watermark text ענק, opacity נמוך, rotation, fontSize 200+ ***
-
-### Image:
-{ "id": "el-X", "type": "image", "x": 960, "y": 0, "width": 960, "height": 1080, "zIndex": 5,
-  "src": "THE_URL", "objectFit": "cover", "borderRadius": px, "clipPath": "..." }
-
-**תמונות קריטי**: אם יש imageUrl לשקף → חובה element מסוג "image" עם src=URL, גודל ≥40% מהשקף
-
-══════════════════════════════════
-🖼️ REFERENCE EXAMPLES (THIS IS WHAT WOW LOOKS LIKE)
-══════════════════════════════════
-
-### דוגמה 1 — שקף שער (Typographic Brutalism):
+Example 1 — Cover slide (Typographic Brutalism, no image):
 \`\`\`json
 {
   "id": "slide-1", "slideType": "cover", "label": "שער",
@@ -808,58 +784,53 @@ ${ANTI_PATTERNS}
   "elements": [
     { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 20% 30%, ${colors.primary}50 0%, transparent 50%), radial-gradient(circle at 80% 80%, ${colors.accent}50 0%, transparent 50%)", "opacity": 0.7 },
     { "id": "watermark", "type": "text", "x": -150, "y": 180, "width": 2200, "height": 500, "zIndex": 2, "content": "BRAND", "fontSize": 380, "fontWeight": 900, "color": "transparent", "textAlign": "center", "lineHeight": 0.9, "letterSpacing": -8, "opacity": 0.12, "rotation": -8, "textStroke": { "width": 2, "color": "#ffffff" }, "role": "decorative" },
-    { "id": "line", "type": "shape", "x": 160, "y": 620, "width": 340, "height": 1, "zIndex": 2, "shapeType": "decorative", "fill": "${colors.text}30", "opacity": 1 },
-    { "id": "accent-circle", "type": "shape", "x": 1450, "y": -80, "width": 400, "height": 400, "zIndex": 2, "shapeType": "decorative", "fill": "${colors.accent}", "clipPath": "circle(50%)", "opacity": 0.12 },
     { "id": "title", "type": "text", "x": 120, "y": 380, "width": 900, "height": 200, "zIndex": 10, "content": "שם המותג", "fontSize": ${typo.displaySize}, "fontWeight": 900, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.0, "letterSpacing": -4, "role": "title" },
-    { "id": "subtitle", "type": "text", "x": 120, "y": 610, "width": 600, "height": 50, "zIndex": 8, "content": "הצעת שיתוף פעולה", "fontSize": 22, "fontWeight": 300, "color": "${colors.text}70", "textAlign": "right", "letterSpacing": 6, "role": "subtitle" },
-    { "id": "date", "type": "text", "x": 120, "y": 680, "width": 300, "height": 30, "zIndex": 8, "content": "ינואר 2025", "fontSize": 16, "fontWeight": 300, "color": "${colors.text}40", "textAlign": "right", "letterSpacing": 3, "role": "caption" }
+    { "id": "subtitle", "type": "text", "x": 120, "y": 610, "width": 600, "height": 50, "zIndex": 8, "content": "הצעת שיתוף פעולה", "fontSize": 22, "fontWeight": 300, "color": "${colors.text}70", "textAlign": "right", "letterSpacing": 6, "role": "subtitle" }
   ]
 }
 \`\`\`
 
-### דוגמה 2 — שקף מדדים (Bento Box + Data Art):
+Example 2 — Brief slide WITH image (Asymmetric Split):
 \`\`\`json
 {
-  "id": "slide-10", "slideType": "metrics", "label": "מדדים",
+  "id": "slide-2", "slideType": "brief", "label": "למה התכנסנו?",
   "background": { "type": "solid", "value": "${colors.background}" },
   "elements": [
-    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 50% 50%, ${colors.cardBg} 0%, ${colors.background} 70%)", "opacity": 1 },
-    { "id": "wm", "type": "text", "x": 800, "y": 600, "width": 1400, "height": 500, "zIndex": 1, "content": "DATA", "fontSize": 300, "fontWeight": 900, "color": "transparent", "textAlign": "center", "opacity": 0.04, "rotation": -12, "textStroke": { "width": 2, "color": "${colors.text}" }, "role": "decorative" },
-    { "id": "label", "type": "text", "x": 120, "y": 80, "width": 400, "height": 30, "zIndex": 8, "content": "יעדים ומדדים", "fontSize": 14, "fontWeight": 400, "color": "${colors.accent}", "textAlign": "right", "letterSpacing": 4, "role": "label" },
-    { "id": "title", "type": "text", "x": 120, "y": 120, "width": 800, "height": 80, "zIndex": 10, "content": "המספרים שמאחורי התוכנית", "fontSize": 56, "fontWeight": 800, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.1, "letterSpacing": -2, "role": "title" },
-    { "id": "c1-shadow", "type": "shape", "x": 135, "y": 275, "width": 520, "height": 320, "zIndex": 4, "shapeType": "decorative", "fill": "#000000", "borderRadius": 24, "opacity": 0.15 },
-    { "id": "c1", "type": "shape", "x": 120, "y": 260, "width": 520, "height": 320, "zIndex": 5, "shapeType": "decorative", "fill": "${colors.cardBg}", "borderRadius": 24, "opacity": 1, "border": "1px solid ${colors.text}10" },
-    { "id": "c1-num", "type": "text", "x": 160, "y": 290, "width": 440, "height": 120, "zIndex": 8, "content": "2.5M", "fontSize": 88, "fontWeight": 900, "color": "${colors.accent}", "textAlign": "right", "lineHeight": 1, "letterSpacing": -3, "role": "body" },
-    { "id": "c1-lbl", "type": "text", "x": 160, "y": 420, "width": 440, "height": 40, "zIndex": 8, "content": "חשיפות צפויות", "fontSize": 22, "fontWeight": 400, "color": "${colors.text}80", "textAlign": "right", "role": "body" },
-    { "id": "c2-shadow", "type": "shape", "x": 695, "y": 275, "width": 520, "height": 320, "zIndex": 4, "shapeType": "decorative", "fill": "#000000", "borderRadius": 24, "opacity": 0.15 },
-    { "id": "c2", "type": "shape", "x": 680, "y": 260, "width": 520, "height": 320, "zIndex": 5, "shapeType": "decorative", "fill": "${colors.cardBg}", "borderRadius": 24, "opacity": 1, "border": "1px solid ${colors.text}10" },
-    { "id": "c2-num", "type": "text", "x": 720, "y": 290, "width": 440, "height": 120, "zIndex": 8, "content": "12.4%", "fontSize": 88, "fontWeight": 900, "color": "${colors.highlight}", "textAlign": "right", "lineHeight": 1, "letterSpacing": -3, "role": "body" },
-    { "id": "c2-lbl", "type": "text", "x": 720, "y": 420, "width": 440, "height": 40, "zIndex": 8, "content": "אחוז מעורבות", "fontSize": 22, "fontWeight": 400, "color": "${colors.text}80", "textAlign": "right", "role": "body" }
+    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "${colors.background}", "opacity": 1 },
+    { "id": "img", "type": "image", "x": 80, "y": 100, "width": 720, "height": 880, "zIndex": 5, "src": "THE_IMAGE_URL", "objectFit": "cover", "borderRadius": 20 },
+    { "id": "title", "type": "text", "x": 880, "y": 200, "width": 900, "height": 100, "zIndex": 10, "content": "למה התכנסנו?", "fontSize": 52, "fontWeight": 800, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.1, "letterSpacing": -2, "role": "title" },
+    { "id": "body", "type": "text", "x": 880, "y": 340, "width": 900, "height": 500, "zIndex": 8, "content": "תוכן הבריף כאן...", "fontSize": 20, "fontWeight": 300, "color": "${colors.text}90", "textAlign": "right", "lineHeight": 1.6, "role": "body" }
   ]
 }
 \`\`\`
+</reference_examples>
 
-⚠️ צור עיצוב **שונה לחלוטין** מהדוגמאות — הן רק ברמת האיכות, לא בסגנון.
-
-══════════════════════════════════
-📝 CONTEXT FROM PREVIOUS SLIDES
-══════════════════════════════════
+<previous_slides>
 ${batchContext.previousSlidesVisualSummary
-    ? `⚠️ ANTI-REPETITION: הנה מה שכבר עוצב. אסור לחזור על אותם layouts, צבעים דומיננטיים, או מיקומי כותרת! כל שקף חייב להפתיע.\n${batchContext.previousSlidesVisualSummary}`
-    : 'זה הבאצ׳ הראשון — אין הקשר קודם.'}
+    ? `The following slides have already been designed. Each new slide must have a DIFFERENT layout, different dominant color usage, and different title placement.\n${batchContext.previousSlidesVisualSummary}`
+    : 'This is the first batch — no previous context.'}
+</previous_slides>
 
-══════════════════════════════════
-📋 SLIDES TO CREATE
-══════════════════════════════════
+<slides_to_create>
 ${slidesDescription}
+</slides_to_create>
 
-══════════════════════════════════
-⚙️ TECHNICAL RULES
-══════════════════════════════════
-- textAlign: "right" תמיד (RTL). כל הטקסט בעברית
-- zIndex layering: 0-1 רקע, 2-3 דקורציה, 4-5 מבנה, 6-8 תוכן, 9-10 hero
-- 🚫 אסור: box-shadow, backdrop-filter, filter: blur
-- ✅ Fake 3D: shape ב-x+12,y+12 fill:#000 opacity:0.12-0.18`
+<technical_rules>
+- textAlign: "right" always (RTL). All content text in Hebrew.
+- ${DEPTH_LAYERS}
+- Supported properties only: no box-shadow, no backdrop-filter, no filter:blur.
+- Fake 3D depth: use a shape at x+12, y+12 with fill:#000 opacity:0.12-0.18.
+</technical_rules>
+
+<final_instruction>
+Before returning the JSON, mentally render each slide in your mind:
+1. VISUALIZE the 1920x1080 canvas with all elements at their exact positions.
+2. CHECK: Can I read every text element clearly? Is anything hidden behind another element?
+3. CHECK: If there is an image, does it have its own space? Is text placed in a separate area?
+4. CHECK: Does the overall composition feel like a premium magazine page?
+5. If any check fails, fix the layout before outputting.
+Only use image URLs that are explicitly provided in the slide data. Never invent image URLs.
+</final_instruction>`
 
   // Flash first (fast + cheap), Pro fallback with exponential backoff
   const batchSysInstruction = await getSystemInstruction()
@@ -877,7 +848,7 @@ ${slidesDescription}
           responseSchema: SLIDE_BATCH_SCHEMA,
           thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
           maxOutputTokens: 65536,
-          temperature: 0.8,
+          temperature: 1.0, // Gemini 3 recommended default — do not lower
         },
       })
 
@@ -932,12 +903,14 @@ function validateSlide(
   slide: Slide,
   designSystem: PremiumDesignSystem,
   pacing: PacingDirective,
+  expectedImageUrl?: string,
 ): ValidationResult {
   const issues: ValidationIssue[] = []
   let score = 100
 
   const elements: SlideElement[] = slide.elements || []
   const textElements = elements.filter(isTextElement)
+  const imageElements = elements.filter(isImageElement)
   const contentTexts = textElements.filter(el => el.role !== 'decorative')
   const allBoxes: BoundingBox[] = elements.map(e => ({ x: e.x || 0, y: e.y || 0, width: e.width || 0, height: e.height || 0 }))
 
@@ -999,6 +972,40 @@ function validateSlide(
     score -= 10
   }
 
+  // ── Image validation ──
+  if (expectedImageUrl && imageElements.length === 0) {
+    issues.push({ severity: 'warning', category: 'missing-image', message: 'Slide has imageUrl but no image element', autoFixable: true })
+    score -= 20
+  }
+
+  for (const img of imageElements) {
+    // Out of bounds
+    const ix = img.x || 0, iy = img.y || 0, iw = img.width || 0, ih = img.height || 0
+    if (ix < -10 || iy < -10 || ix + iw > 1930 || iy + ih > 1090) {
+      issues.push({ severity: 'warning', category: 'image-bounds', message: `Image "${img.id}" out of canvas bounds`, elementId: img.id, autoFixable: true })
+      score -= 10
+    }
+
+    // Too small (less than 15% of canvas — very small)
+    const imgArea = iw * ih
+    const canvasArea = 1920 * 1080
+    if (imgArea > 0 && imgArea < canvasArea * 0.15) {
+      issues.push({ severity: 'suggestion', category: 'image-small', message: `Image "${img.id}" is only ${Math.round(imgArea / canvasArea * 100)}% of canvas`, elementId: img.id, autoFixable: true })
+      score -= 5
+    }
+
+    // Overlaps title
+    const imgBox: BoundingBox = { x: ix, y: iy, width: iw, height: ih }
+    const titles = contentTexts.filter(e => e.role === 'title')
+    for (const title of titles) {
+      const titleBox: BoundingBox = { x: title.x || 0, y: title.y || 0, width: title.width || 0, height: title.height || 0 }
+      if (boxesOverlap(imgBox, titleBox)) {
+        issues.push({ severity: 'warning', category: 'image-overlap-title', message: `Image "${img.id}" overlaps title "${title.id}"`, elementId: img.id, autoFixable: true })
+        score -= 12
+      }
+    }
+  }
+
   // Balance
   const balance = computeBalanceScore(allBoxes)
   if (balance < 0.3) {
@@ -1009,11 +1016,24 @@ function validateSlide(
   return { valid: issues.filter(i => i.severity === 'critical').length === 0, score: Math.max(0, score), issues }
 }
 
-function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSystem: PremiumDesignSystem): Slide {
+function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSystem: PremiumDesignSystem, expectedImageUrl?: string): Slide {
   const fixed = { ...slide, elements: [...slide.elements] }
 
   for (const issue of issues) {
-    if (!issue.autoFixable || !issue.elementId) continue
+    if (!issue.autoFixable) continue
+
+    // Missing image — inject a default image element on the right side
+    if (issue.category === 'missing-image' && expectedImageUrl) {
+      const imgElement: ImageElement = {
+        id: `autofix-img-${slide.id}`, type: 'image',
+        x: 80, y: 100, width: 720, height: 880, zIndex: 5,
+        src: expectedImageUrl, objectFit: 'cover', borderRadius: 20,
+      }
+      fixed.elements.push(imgElement)
+      continue
+    }
+
+    if (!issue.elementId) continue
     const elIndex = fixed.elements.findIndex(e => e.id === issue.elementId)
     if (elIndex === -1) continue
 
@@ -1038,6 +1058,62 @@ function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSystem: Pre
       updated.x = Math.max(80, Math.min(updated.x, 1920 - 80 - (updated.width || 200)))
       updated.y = Math.max(80, Math.min(updated.y, 1080 - 80 - (updated.height || 60)))
       fixed.elements[elIndex] = updated
+    }
+
+    // Image out of bounds — clamp to canvas
+    if (issue.category === 'image-bounds') {
+      const el = fixed.elements[elIndex]
+      if (isImageElement(el)) {
+        const updated: ImageElement = { ...el }
+        updated.x = Math.max(0, updated.x)
+        updated.y = Math.max(0, updated.y)
+        if (updated.x + updated.width > 1920) updated.width = 1920 - updated.x
+        if (updated.y + updated.height > 1080) updated.height = 1080 - updated.y
+        fixed.elements[elIndex] = updated
+      }
+    }
+
+    // Image too small — enlarge to at least 25% of canvas
+    if (issue.category === 'image-small') {
+      const el = fixed.elements[elIndex]
+      if (isImageElement(el)) {
+        const updated: ImageElement = { ...el }
+        const targetArea = 1920 * 1080 * 0.25
+        const currentArea = updated.width * updated.height
+        if (currentArea > 0 && currentArea < targetArea) {
+          const scale = Math.sqrt(targetArea / currentArea)
+          updated.width = Math.min(1920, Math.round(updated.width * scale))
+          updated.height = Math.min(1080, Math.round(updated.height * scale))
+          // Clamp position
+          if (updated.x + updated.width > 1920) updated.x = 1920 - updated.width
+          if (updated.y + updated.height > 1080) updated.y = 1080 - updated.height
+          updated.x = Math.max(0, updated.x)
+          updated.y = Math.max(0, updated.y)
+        }
+        fixed.elements[elIndex] = updated
+      }
+    }
+
+    // Image overlaps title — move image to opposite side
+    if (issue.category === 'image-overlap-title') {
+      const el = fixed.elements[elIndex]
+      if (isImageElement(el)) {
+        const updated: ImageElement = { ...el }
+        // Find the title to determine which side it's on
+        const titles = fixed.elements.filter(e => isTextElement(e) && e.role === 'title') as TextElement[]
+        if (titles.length > 0) {
+          const titleCenterX = (titles[0].x || 0) + (titles[0].width || 0) / 2
+          // Move image to the opposite half
+          if (titleCenterX > 960) {
+            // Title on right → image to left
+            updated.x = 80
+          } else {
+            // Title on left → image to right
+            updated.x = 1920 - updated.width - 80
+          }
+        }
+        fixed.elements[elIndex] = updated
+      }
     }
   }
 
@@ -1097,23 +1173,34 @@ function createFallbackSlide(input: SlideContentInput, designSystem: PremiumDesi
     || input.title
     || `שקף ${index + 1}`
 
+  const elements: SlideElement[] = [
+    { id: `fb-${index}-bg`, type: 'shape', x: 0, y: 0, width: 1920, height: 1080, zIndex: 0,
+      shapeType: 'decorative', fill: `radial-gradient(circle at 50% 50%, ${colors.cardBg} 0%, ${colors.background} 100%)`, opacity: 1 },
+    { id: `fb-${index}-line`, type: 'shape', x: input.imageUrl ? 880 : 120, y: 200, width: 60, height: 4, zIndex: 4,
+      shapeType: 'decorative', fill: colors.accent, opacity: 0.8 },
+    { id: `fb-${index}-title`, type: 'text', x: input.imageUrl ? 880 : 120, y: 220, width: input.imageUrl ? 900 : 800, height: 100, zIndex: 10,
+      content: title, fontSize: typo.headingSize, fontWeight: (typo.weightPairs[0]?.[0] || 800) as FontWeight,
+      color: colors.text, textAlign: 'right', lineHeight: typo.lineHeightTight,
+      letterSpacing: typo.letterSpacingTight, role: 'title' },
+    { id: `fb-${index}-motif`, type: 'shape', x: -100, y: 800, width: 2200, height: 1, zIndex: 2,
+      shapeType: 'decorative', fill: colors.muted, opacity: designSystem.motif.opacity, rotation: 15 },
+  ]
+
+  // Add image element when imageUrl is available
+  if (input.imageUrl) {
+    elements.push({
+      id: `fb-${index}-img`, type: 'image',
+      x: 80, y: 100, width: 720, height: 880, zIndex: 5,
+      src: input.imageUrl, objectFit: 'cover', borderRadius: 20,
+    })
+  }
+
   return {
     id: `slide-fallback-${index}`,
     slideType: input.slideType as SlideType,
     label: input.title,
     background: { type: 'solid', value: colors.background },
-    elements: [
-      { id: `fb-${index}-bg`, type: 'shape', x: 0, y: 0, width: 1920, height: 1080, zIndex: 0,
-        shapeType: 'decorative', fill: `radial-gradient(circle at 50% 50%, ${colors.cardBg} 0%, ${colors.background} 100%)`, opacity: 1 },
-      { id: `fb-${index}-line`, type: 'shape', x: 120, y: 200, width: 60, height: 4, zIndex: 4,
-        shapeType: 'decorative', fill: colors.accent, opacity: 0.8 },
-      { id: `fb-${index}-title`, type: 'text', x: 120, y: 220, width: 800, height: 100, zIndex: 10,
-        content: title, fontSize: typo.headingSize, fontWeight: (typo.weightPairs[0]?.[0] || 800) as FontWeight,
-        color: colors.text, textAlign: 'right', lineHeight: typo.lineHeightTight,
-        letterSpacing: typo.letterSpacingTight, role: 'title' },
-      { id: `fb-${index}-motif`, type: 'shape', x: -100, y: 800, width: 2200, height: 1, zIndex: 2,
-        shapeType: 'decorative', fill: colors.muted, opacity: designSystem.motif.opacity, rotation: 15 },
-    ],
+    elements,
   }
 }
 
@@ -1320,17 +1407,22 @@ export async function generateAIPresentation(
 
   if (allSlides.length === 0) throw new Error('All batches failed — no slides generated')
 
+  // Build flat list of expected image URLs for validation
+  const allInputs = allBatches.flat()
+
   // ── Validate + auto-fix ──
   console.log(`[SlideDesigner] Validating ${allSlides.length} slides...`)
   const validatedSlides: Slide[] = []
   let totalScore = 0
 
-  for (const slide of allSlides) {
+  for (let si = 0; si < allSlides.length; si++) {
+    const slide = allSlides[si]
+    const expectedImage = allInputs[si]?.imageUrl
     const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
-    const result = validateSlide(slide, designSystem, pacing)
+    const result = validateSlide(slide, designSystem, pacing, expectedImage)
     totalScore += result.score
-    if (result.issues.some(i => i.severity === 'critical' && i.autoFixable)) {
-      validatedSlides.push(autoFixSlide(slide, result.issues, designSystem))
+    if (result.issues.some(i => i.autoFixable)) {
+      validatedSlides.push(autoFixSlide(slide, result.issues, designSystem, expectedImage))
     } else {
       validatedSlides.push(slide)
     }
@@ -1566,15 +1658,20 @@ export function pipelineFinalize(
 
   if (allSlides.length === 0) throw new Error('No slides to finalize')
 
+  // Build flat list of expected image URLs for validation
+  const allInputs = foundation.batches.flat()
+
   const validatedSlides: Slide[] = []
   let totalScore = 0
 
-  for (const slide of allSlides) {
+  for (let si = 0; si < allSlides.length; si++) {
+    const slide = allSlides[si]
+    const expectedImage = allInputs[si]?.imageUrl
     const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
-    const result = validateSlide(slide, foundation.designSystem, pacing)
+    const result = validateSlide(slide, foundation.designSystem, pacing, expectedImage)
     totalScore += result.score
-    if (result.issues.some(i => i.severity === 'critical' && i.autoFixable)) {
-      validatedSlides.push(autoFixSlide(slide, result.issues, foundation.designSystem))
+    if (result.issues.some(i => i.autoFixable)) {
+      validatedSlides.push(autoFixSlide(slide, result.issues, foundation.designSystem, expectedImage))
     } else {
       validatedSlides.push(slide)
     }
@@ -1626,9 +1723,10 @@ export async function regenerateSingleSlide(
   if (slides.length === 0) throw new Error('Failed to regenerate slide')
 
   const pacing = PACING_MAP[slideContent.slideType] || PACING_MAP.brief
-  const validation = validateSlide(slides[0], designSystem, pacing)
-  if (validation.issues.some(i => i.severity === 'critical' && i.autoFixable)) {
-    return autoFixSlide(slides[0], validation.issues, designSystem)
+  const expectedImage = slideContent.imageUrl
+  const validation = validateSlide(slides[0], designSystem, pacing, expectedImage)
+  if (validation.issues.some(i => i.autoFixable)) {
+    return autoFixSlide(slides[0], validation.issues, designSystem, expectedImage)
   }
 
   return slides[0]
