@@ -134,11 +134,15 @@ export default function ProposalWizard({
       let stepData = initialData._stepData as Partial<WizardStepDataMap>
 
       // Enrich with research data if available
-      stepData = enrichStepData(
-        stepData,
-        initialData._brandResearch,
-        initialData._influencerStrategy,
-      )
+      try {
+        stepData = enrichStepData(
+          stepData,
+          initialData._brandResearch,
+          initialData._influencerStrategy,
+        )
+      } catch (err) {
+        console.error('[Wizard] enrichStepData error (non-fatal):', err)
+      }
 
       base.stepData = stepData
       base.extractedData = stepData

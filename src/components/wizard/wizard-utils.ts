@@ -357,7 +357,7 @@ export function enrichStepData(
         if (contextParts.length) {
           result.strategy = { ...result.strategy, strategyDescription: contextParts.join('. ') }
         }
-      } else if (israeliContext && !result.strategy.strategyDescription.includes(israeliContext.slice(0, 20))) {
+      } else if (israeliContext && typeof result.strategy.strategyDescription === 'string' && !result.strategy.strategyDescription.includes(israeliContext.slice(0, 20))) {
         // Append Israeli market context if not already included and description is short
         if (result.strategy.strategyDescription.length < 250) {
           result.strategy = {
@@ -431,7 +431,7 @@ export function enrichStepData(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const israeliContext = (brandResearch as any).israeliMarketContext as string | undefined
     if (result.brief && israeliContext) {
-      const currentBrief = result.brief.brandBrief || ''
+      const currentBrief = (typeof result.brief.brandBrief === 'string' ? result.brief.brandBrief : '') || ''
       if (currentBrief.length < 300 && !currentBrief.includes(israeliContext.slice(0, 20))) {
         result.brief = {
           ...result.brief,
@@ -482,7 +482,7 @@ export function enrichStepData(
     const dominantPlatform = (brandResearch as any)?.dominantPlatformInIsrael as string | undefined
     if (result.influencers && dominantPlatform) {
       const note = `פלטפורמה מובילה בישראל לקהל זה: ${dominantPlatform}`
-      const existing = result.influencers.influencerNote || ''
+      const existing = (typeof result.influencers.influencerNote === 'string' ? result.influencers.influencerNote : '') || ''
       if (!existing.includes(dominantPlatform)) {
         result.influencers = {
           ...result.influencers,
