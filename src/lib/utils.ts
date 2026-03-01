@@ -143,6 +143,23 @@ export const slideTypeLabels: Record<string, string> = {
   moodboard: 'לוח השראה',
   comparison: 'השוואה',
   summary: 'סיכום',
+  // JSON AST slide types
+  cover: 'שער',
+  brief: 'למה התכנסנו?',
+  goals: 'מטרות הקמפיין',
+  insight: 'התובנה המרכזית',
+  whyNow: 'למה עכשיו?',
+  strategy: 'האסטרטגיה',
+  competitive: 'נוף תחרותי',
+  bigIdea: 'הרעיון המרכזי',
+  approach: 'הגישה שלנו',
+  deliverables: 'תוצרים',
+  metrics: 'יעדים ומדדים',
+  influencerStrategy: 'אסטרטגיית משפיענים',
+  contentStrategy: 'אסטרטגיית תוכן',
+  influencers: 'משפיענים מומלצים',
+  timeline: 'מפת דרכים',
+  closing: 'סיום',
 }
 
 

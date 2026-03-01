@@ -206,6 +206,10 @@ const PACING_MAP: Record<string, PacingDirective> = {
   metrics:   { energy: 'building', density: 'dense', surprise: false, maxElements: 16, minWhitespace: 20 },
   influencerStrategy: { energy: 'calm', density: 'balanced', surprise: false, maxElements: 12, minWhitespace: 30 },
   influencers: { energy: 'breath', density: 'dense', surprise: false, maxElements: 20, minWhitespace: 15 },
+  whyNow:    { energy: 'peak', density: 'balanced', surprise: true, maxElements: 10, minWhitespace: 30 },
+  competitive: { energy: 'building', density: 'dense', surprise: false, maxElements: 16, minWhitespace: 20 },
+  contentStrategy: { energy: 'calm', density: 'balanced', surprise: false, maxElements: 14, minWhitespace: 25 },
+  timeline:  { energy: 'building', density: 'balanced', surprise: false, maxElements: 14, minWhitespace: 25 },
   closing:   { energy: 'finale', density: 'minimal', surprise: true, maxElements: 8, minWhitespace: 45 },
 }
 
@@ -704,6 +708,10 @@ async function generateSlidesBatchAST(
     strategy: 'The image anchors — a visual anchor point that adds depth to the text.',
     approach: 'The image is an accent — a surprising element that adds visual interest.',
     closing: 'The image closes the circle — warm atmosphere, invitation, strong ending.',
+    whyNow: 'The image captures urgency — trending visuals, timely context, market energy.',
+    competitive: 'The image maps the landscape — abstract market visualization or brand positioning.',
+    contentStrategy: 'The image previews content — creative examples, platform visuals, content mood.',
+    timeline: 'The image shows progress — journey, roadmap, forward motion.',
   }
 
   // ── Build per-slide directives ──
@@ -839,6 +847,8 @@ Only use image URLs that are explicitly provided in the slide data. Never invent
     const model = batchModels[attempt]
     try {
       console.log(`[SlideDesigner][${requestId}] Calling ${model} for batch (attempt ${attempt + 1}/${batchModels.length})...`)
+      console.log(`[SlideDesigner][${requestId}] PROMPT LENGTH: ${prompt.length} chars`)
+      console.log(`[SlideDesigner][${requestId}] PROMPT PREVIEW:\n${prompt.slice(0, 2000)}${prompt.length > 2000 ? '\n... [truncated]' : ''}`)
       const response = await ai.models.generateContent({
         model,
         contents: prompt,
@@ -866,6 +876,15 @@ Only use image URLs that are explicitly provided in the slide data. Never invent
 
       if (parsed?.slides?.length > 0) {
         console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} AST slides (model: ${model})`)
+        // ── DEBUG: Log raw response and parsed details ──
+        const rawText = response.text || ''
+        console.log(`[SlideDesigner][${requestId}] RAW RESPONSE (${rawText.length} chars):\n${rawText.slice(0, 3000)}${rawText.length > 3000 ? '\n... [truncated]' : ''}`)
+        parsed.slides.forEach((s, idx) => {
+          const elTypes: Record<string, number> = {}
+          for (const el of s.elements || []) elTypes[el.type] = (elTypes[el.type] || 0) + 1
+          const typeStr = Object.entries(elTypes).map(([t, c]) => `${t} x${c}`).join(', ')
+          console.log(`[SlideDesigner][${requestId}]   PARSED Slide ${idx + 1} (${s.slideType}): ${s.elements?.length || 0} elements [${typeStr}], bg: ${s.background?.type}=${s.background?.value?.slice(0, 60)}`)
+        })
         if (attempt > 0) console.log(`[SlideDesigner][${requestId}] ✅ Batch succeeded with fallback (${model})`)
 
         return parsed.slides.map((slide, i) => ({
@@ -1210,8 +1229,13 @@ function createFallbackSlide(input: SlideContentInput, designSystem: PremiumDesi
 
 interface InfluencerResearchData {
   strategySummary?: string
+  strategyTitle?: string
   recommendations?: { name?: string; handle?: string; followers?: string; engagement?: string; whyRelevant?: string; profilePicUrl?: string }[]
-  contentThemes?: { theme?: string }[]
+  contentThemes?: { theme?: string; description?: string }[]
+  tiers?: { name?: string; description?: string; recommendedCount?: number; budgetAllocation?: number; purpose?: string }[]
+  expectedKPIs?: { metric?: string; target?: string; rationale?: string }[]
+  suggestedTimeline?: { phase?: string; duration?: string; activities?: string[] }[]
+  potentialRisks?: { risk?: string; mitigation?: string }[]
   [key: string]: unknown
 }
 
@@ -1262,13 +1286,57 @@ interface PremiumProposalData {
   scrapedInfluencers?: { name?: string; username?: string; profilePicUrl?: string; followers?: number; engagementRate?: number }[]
   enhancedInfluencers?: { name: string; username: string; profilePicUrl: string; categories: string[]; followers: number; engagementRate: number }[]
   _brandColors?: { primary: string; secondary: string; accent: string; background?: string; text?: string; style?: string; mood?: string; palette?: string[] }
-  _brandResearch?: { industry?: string; brandPersonality?: string[]; [key: string]: unknown }
+  _brandResearch?: {
+    industry?: string
+    brandPersonality?: string[]
+    brandValues?: string[]
+    brandPromise?: string
+    companyDescription?: string
+    whyNowTrigger?: string
+    israeliMarketContext?: string
+    dominantPlatformInIsrael?: string
+    competitiveGap?: string
+    competitiveAdvantages?: string[]
+    uniqueSellingPoints?: string[]
+    marketPosition?: string
+    competitors?: { name?: string; description?: string; differentiator?: string }[]
+    competitorCampaigns?: { competitorName?: string; campaignDescription?: string; opportunityForBrand?: string }[]
+    industryTrends?: string[]
+    targetDemographics?: { primaryAudience?: { gender?: string; ageRange?: string; socioeconomic?: string; lifestyle?: string; interests?: string[]; painPoints?: string[]; aspirations?: string[] }; behavior?: string; purchaseDrivers?: string[] }
+    toneOfVoice?: string
+    suggestedApproach?: string
+    [key: string]: unknown
+  }
   _scraped?: { logoUrl?: string; [key: string]: unknown }
   _generatedImages?: Record<string, string>
   _extraImages?: { id: string; url: string; placement: string }[]
   _imageStrategy?: { conceptSummary?: string; visualDirection?: string; styleGuide?: string }
   _influencerStrategy?: InfluencerResearchData
   [key: string]: unknown
+}
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+
+/** Remove empty/null/undefined/[] fields so the AI prompt isn't cluttered */
+function cleanContent(content: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(content)) {
+    if (v === '' || v === null || v === undefined) continue
+    if (Array.isArray(v) && v.length === 0) continue
+    cleaned[k] = v
+  }
+  return cleaned
+}
+
+/** Split an array into chunks of max size */
+function chunkByMax<T>(arr: T[], max: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < arr.length; i += max) {
+    chunks.push(arr.slice(i, i + max))
+  }
+  return chunks
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1283,6 +1351,8 @@ function buildSlideBatches(
   } = {},
 ): SlideContentInput[][] {
   const currency = data.currency === 'USD' ? '$' : data.currency === 'EUR' ? '€' : '₪'
+  const br = data._brandResearch || {}
+  const ir = data._influencerStrategy || data.influencerResearch || {} as InfluencerResearchData
 
   // Build a map of extra images by placement for easy lookup
   const extraByPlacement: Record<string, string> = {}
@@ -1290,46 +1360,197 @@ function buildSlideBatches(
     if (img.url && img.placement) extraByPlacement[img.placement] = img.url
   }
 
-  const batch1: SlideContentInput[] = [
-    { slideType: 'cover', title: 'שער', content: { brandName: data.brandName, campaignSubtitle: data.campaignSubtitle || data.strategyHeadline || 'הצעת שיתוף פעולה', issueDate: data.issueDate || new Date().toLocaleDateString('he-IL') }, imageUrl: config.images?.coverImage },
-    { slideType: 'brief', title: 'למה התכנסנו?', content: { headline: 'למה התכנסנו?', brandBrief: data.brandBrief || '', painPoints: data.brandPainPoints || [], objective: data.brandObjective || '', successMetrics: data.successMetrics || [], clientRequests: data.clientSpecificRequests || [] }, imageUrl: config.images?.brandImage },
-    { slideType: 'goals', title: 'מטרות הקמפיין', content: { headline: 'מטרות הקמפיין', goals: data.goalsDetailed || (data.goals || []).map(g => ({ title: g, description: '' })), measurableTargets: data.measurableTargets || [] }, imageUrl: extraByPlacement['goals'] },
-    { slideType: 'audience', title: 'קהל היעד', content: { headline: 'קהל היעד', gender: data.targetGender || '', ageRange: data.targetAgeRange || '', description: data.targetDescription || '', behavior: data.targetBehavior || '', insights: data.targetInsights || [] }, imageUrl: config.images?.audienceImage },
-    { slideType: 'insight', title: 'התובנה המרכזית', content: { headline: 'התובנה המרכזית', keyInsight: data.keyInsight || '', source: data.insightSource || '', data: data.insightData || '' }, imageUrl: extraByPlacement['insight'] },
-  ]
+  // ── Build all slides in narrative order ──
+  const allSlides: SlideContentInput[] = []
 
-  const batch2: SlideContentInput[] = [
-    { slideType: 'strategy', title: 'האסטרטגיה', content: { headline: 'האסטרטגיה', strategyHeadline: data.strategyHeadline || '', description: data.strategyDescription || '', pillars: data.strategyPillars || [] }, imageUrl: extraByPlacement['strategy'] },
-    { slideType: 'bigIdea', title: 'הרעיון המרכזי', content: { headline: data.activityTitle || 'הרעיון המרכזי', concept: data.activityConcept || '', description: data.activityDescription || '' }, imageUrl: config.images?.activityImage || config.images?.brandImage },
-    { slideType: 'approach', title: 'הגישה שלנו', content: { headline: 'הגישה שלנו', approaches: data.activityApproach || [], differentiator: data.activityDifferentiator || '' }, imageUrl: extraByPlacement['approach'] },
-    { slideType: 'deliverables', title: 'תוצרים', content: { headline: 'תוצרים', deliverables: data.deliverablesDetailed || (data.deliverables || []).map(d => ({ type: d, quantity: 1, description: '' })), summary: data.deliverablesSummary || '' } },
-    { slideType: 'metrics', title: 'יעדים ומדדים', content: { headline: 'יעדים ומדדים', budget: data.budget ? `${currency}${formatNum(data.budget)}` : '', reach: formatNum(data.potentialReach), engagement: formatNum(data.potentialEngagement), impressions: formatNum(data.estimatedImpressions), cpe: data.cpe ? `${currency}${data.cpe.toFixed(1)}` : '', explanation: data.metricsExplanation || '', successMetrics: data.successMetrics || [], measurableTargets: data.measurableTargets || [] } },
-  ]
+  // 1. Cover
+  allSlides.push({ slideType: 'cover', title: 'שער', imageUrl: config.images?.coverImage, content: cleanContent({
+    brandName: data.brandName,
+    campaignSubtitle: data.campaignSubtitle || data.strategyHeadline || 'הצעת שיתוף פעולה',
+    issueDate: data.issueDate || new Date().toLocaleDateString('he-IL'),
+    industry: br.industry,
+    tagline: br.brandPromise,
+  }) })
 
+  // 2. Brief
+  allSlides.push({ slideType: 'brief', title: 'למה התכנסנו?', imageUrl: config.images?.brandImage, content: cleanContent({
+    headline: 'למה התכנסנו?',
+    brandBrief: data.brandBrief,
+    painPoints: data.brandPainPoints,
+    objective: data.brandObjective,
+    successMetrics: data.successMetrics,
+    clientRequests: data.clientSpecificRequests,
+    companyDescription: br.companyDescription,
+    brandValues: br.brandValues,
+    whyNow: br.whyNowTrigger,
+  }) })
+
+  // 3. Goals
+  allSlides.push({ slideType: 'goals', title: 'מטרות הקמפיין', imageUrl: extraByPlacement['goals'], content: cleanContent({
+    headline: 'מטרות הקמפיין',
+    goals: data.goalsDetailed || (data.goals || []).map(g => ({ title: g, description: '' })),
+    measurableTargets: data.measurableTargets,
+    successMetrics: data.successMetrics,
+  }) })
+
+  // 4. Audience
+  allSlides.push({ slideType: 'audience', title: 'קהל היעד', imageUrl: config.images?.audienceImage, content: cleanContent({
+    headline: 'קהל היעד',
+    gender: data.targetGender,
+    ageRange: data.targetAgeRange,
+    description: data.targetDescription,
+    behavior: data.targetBehavior,
+    insights: data.targetInsights,
+    researchDemographics: br.targetDemographics?.primaryAudience,
+    purchaseDrivers: br.targetDemographics?.purchaseDrivers,
+  }) })
+
+  // 5. Insight
+  allSlides.push({ slideType: 'insight', title: 'התובנה המרכזית', imageUrl: extraByPlacement['insight'], content: cleanContent({
+    headline: 'התובנה המרכזית',
+    keyInsight: data.keyInsight,
+    source: data.insightSource,
+    data: data.insightData,
+    israeliMarketContext: br.israeliMarketContext,
+    industryTrends: (br.industryTrends || []).slice(0, 3),
+  }) })
+
+  // 6. (Conditional) Why Now
+  const hasWhyNow = br.whyNowTrigger || (br.industryTrends && br.industryTrends.length > 0)
+  if (hasWhyNow) {
+    allSlides.push({ slideType: 'whyNow', title: 'למה עכשיו?', imageUrl: extraByPlacement['whyNow'], content: cleanContent({
+      headline: 'למה עכשיו?',
+      whyNowTrigger: br.whyNowTrigger,
+      industryTrends: br.industryTrends,
+      israeliMarketContext: br.israeliMarketContext,
+    }) })
+  }
+
+  // 7. Strategy
+  allSlides.push({ slideType: 'strategy', title: 'האסטרטגיה', imageUrl: extraByPlacement['strategy'], content: cleanContent({
+    headline: 'האסטרטגיה',
+    strategyHeadline: data.strategyHeadline,
+    description: data.strategyDescription,
+    pillars: data.strategyPillars,
+    flow: data.strategyFlow as unknown,
+    competitiveGap: br.competitiveGap,
+  }) })
+
+  // 8. (Conditional) Competitive Landscape
+  const competitors = br.competitors || []
+  if (competitors.length >= 2) {
+    allSlides.push({ slideType: 'competitive', title: 'נוף תחרותי', content: cleanContent({
+      headline: 'נוף תחרותי',
+      competitors: competitors.slice(0, 5).map(c => ({ name: c.name, description: c.description })),
+      marketPosition: br.marketPosition,
+      competitiveAdvantages: br.competitiveAdvantages,
+      usp: (br.uniqueSellingPoints || []).slice(0, 3),
+      competitiveGap: br.competitiveGap,
+    }) })
+  }
+
+  // 9. Big Idea
+  allSlides.push({ slideType: 'bigIdea', title: 'הרעיון המרכזי', imageUrl: config.images?.activityImage || config.images?.brandImage, content: cleanContent({
+    headline: data.activityTitle || 'הרעיון המרכזי',
+    concept: data.activityConcept,
+    description: data.activityDescription,
+    differentiator: data.activityDifferentiator,
+    brandPersonality: br.brandPersonality,
+  }) })
+
+  // 10. Approach
+  allSlides.push({ slideType: 'approach', title: 'הגישה שלנו', imageUrl: extraByPlacement['approach'], content: cleanContent({
+    headline: 'הגישה שלנו',
+    approaches: data.activityApproach,
+    differentiator: data.activityDifferentiator,
+    contentThemes: (ir.contentThemes || []).slice(0, 4),
+  }) })
+
+  // 11. Deliverables
+  const quantitiesSummary = data.quantitiesSummary as { campaignDurationMonths?: number; totalDeliverables?: number } | undefined
+  allSlides.push({ slideType: 'deliverables', title: 'תוצרים', content: cleanContent({
+    headline: 'תוצרים',
+    deliverables: data.deliverablesDetailed || (data.deliverables || []).map(d => ({ type: d, quantity: 1, description: '' })),
+    summary: data.deliverablesSummary,
+    campaignDuration: quantitiesSummary?.campaignDurationMonths ? `${quantitiesSummary.campaignDurationMonths} חודשים` : undefined,
+    totalDeliverables: quantitiesSummary?.totalDeliverables,
+  }) })
+
+  // 12. Metrics
+  allSlides.push({ slideType: 'metrics', title: 'יעדים ומדדים', content: cleanContent({
+    headline: 'יעדים ומדדים',
+    budget: data.budget ? `${currency}${formatNum(data.budget)}` : undefined,
+    reach: formatNum(data.potentialReach),
+    engagement: formatNum(data.potentialEngagement),
+    impressions: formatNum(data.estimatedImpressions),
+    cpe: data.cpe ? `${currency}${data.cpe.toFixed(1)}` : undefined,
+    cpm: data.cpm ? `${currency}${data.cpm.toFixed(1)}` : undefined,
+    explanation: data.metricsExplanation,
+    successMetrics: data.successMetrics,
+    measurableTargets: data.measurableTargets,
+    expectedKPIs: (ir.expectedKPIs || []).slice(0, 5),
+  }) })
+
+  // 13. Influencer Strategy
+  allSlides.push({ slideType: 'influencerStrategy', title: 'אסטרטגיית משפיענים', content: cleanContent({
+    headline: 'אסטרטגיית משפיענים',
+    strategy: data.influencerStrategy || ir.strategySummary,
+    criteria: data.influencerCriteria || (ir.contentThemes || []).map((t: { theme?: string }) => t.theme).filter(Boolean),
+    guidelines: data.contentGuidelines,
+    tiers: (ir.tiers || []).map(t => ({ name: t.name, description: t.description, count: t.recommendedCount })),
+    timelinePhases: (ir.suggestedTimeline || []).map(t => ({ phase: t.phase, duration: t.duration, activities: t.activities })),
+  }) })
+
+  // 14. (Conditional) Content Strategy
+  const hasContentStrategy = (ir.contentThemes || []).length >= 2 || (ir.tiers || []).length >= 2
+  if (hasContentStrategy) {
+    allSlides.push({ slideType: 'contentStrategy', title: 'אסטרטגיית תוכן', content: cleanContent({
+      headline: 'אסטרטגיית תוכן',
+      contentThemes: (ir.contentThemes || []).slice(0, 5).map(t => ({ theme: t.theme, description: t.description })),
+      tiers: (ir.tiers || []).map(t => ({ name: t.name, description: t.description, count: t.recommendedCount, budgetAllocation: t.budgetAllocation })),
+      dominantPlatform: br.dominantPlatformInIsrael,
+    }) })
+  }
+
+  // 15. Influencers (conditional)
   const influencers = data.enhancedInfluencers || data.scrapedInfluencers?.map(i => ({
     name: i.name || i.username || '', username: i.username || '', profilePicUrl: i.profilePicUrl || '',
     categories: [] as string[], followers: i.followers || 0, engagementRate: i.engagementRate || 0,
   })) || []
-  // Research saves as _influencerStrategy, wizard maps to influencerResearch — check both
-  const researchStrategy = data._influencerStrategy || data.influencerResearch
-  const aiRecs = researchStrategy?.recommendations || []
+  const aiRecs = ir.recommendations || []
 
-  const batch3: SlideContentInput[] = [
-    { slideType: 'influencerStrategy', title: 'אסטרטגיית משפיענים', content: { headline: 'אסטרטגיית משפיענים', strategy: data.influencerStrategy || researchStrategy?.strategySummary || '', criteria: data.influencerCriteria || researchStrategy?.contentThemes?.map((t: { theme?: string }) => t.theme || t) || [], guidelines: data.contentGuidelines || [] } },
-  ]
   if (influencers.length > 0 || aiRecs.length > 0) {
-    batch3.push({
+    allSlides.push({
       slideType: 'influencers', title: 'משפיענים מומלצים',
-      content: {
+      content: cleanContent({
         headline: 'משפיענים מומלצים',
         influencers: influencers.slice(0, 6).map(inf => ({ name: inf.name, username: inf.username, profilePicUrl: inf.profilePicUrl, followers: formatNum(inf.followers), engagementRate: `${inf.engagementRate?.toFixed(1) || '0'}%`, categories: inf.categories?.join(', ') || '' })),
         aiRecommendations: aiRecs.slice(0, 6).map((rec: { name?: string; handle?: string; followers?: string; engagement?: string; whyRelevant?: string; profilePicUrl?: string }) => ({ name: rec.name || '', handle: rec.handle || '', followers: rec.followers || '', engagement: rec.engagement || '', reason: rec.whyRelevant || '', profilePicUrl: rec.profilePicUrl || '' })),
-      },
+      }),
     })
   }
-  batch3.push({ slideType: 'closing', title: 'סיום', content: { brandName: data.brandName || '', headline: 'בואו ניצור ביחד', subheadline: `נשמח להתחיל לעבוד עם ${data.brandName}` } })
 
-  return [batch1, batch2, batch3]
+  // 16. (Conditional) Timeline
+  const hasTimeline = (data.measurableTargets || []).length > 0 || (ir.suggestedTimeline || []).length > 0
+  if (hasTimeline) {
+    allSlides.push({ slideType: 'timeline', title: 'מפת דרכים', content: cleanContent({
+      headline: 'מפת דרכים',
+      measurableTargets: data.measurableTargets,
+      timelinePhases: (ir.suggestedTimeline || []).map(t => ({ phase: t.phase, duration: t.duration, activities: t.activities })),
+      campaignDuration: quantitiesSummary?.campaignDurationMonths ? `${quantitiesSummary.campaignDurationMonths} חודשים` : undefined,
+      expectedKPIs: (ir.expectedKPIs || []).slice(0, 4),
+    }) })
+  }
+
+  // 17. Closing (always last)
+  allSlides.push({ slideType: 'closing', title: 'סיום', content: cleanContent({
+    brandName: data.brandName || '',
+    headline: 'בואו ניצור ביחד',
+    subheadline: `נשמח להתחיל לעבוד עם ${data.brandName}`,
+  }) })
+
+  // ── Split into balanced batches of max 6 ──
+  return chunkByMax(allSlides, 6)
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1380,6 +1601,21 @@ export async function generateAIPresentation(
   console.log(`[SlideDesigner] ── Step 2/2: Slide Generation ──`)
   const allBatches = buildSlideBatches(data, config)
 
+  // ── DEBUG: Log all slide content that will be sent to AI ──
+  console.log(`[SlideDesigner][${requestId}] ═══ BATCH CONTENT DUMP ═══`)
+  allBatches.forEach((batch, bi) => {
+    batch.forEach((slide, si) => {
+      const contentKeys = Object.keys(slide.content)
+      const nonEmptyKeys = contentKeys.filter(k => {
+        const v = slide.content[k]
+        return v !== '' && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)
+      })
+      console.log(`[SlideDesigner][${requestId}]   Batch ${bi + 1}, Slide ${si + 1} (${slide.slideType}): ${nonEmptyKeys.length}/${contentKeys.length} fields filled [${nonEmptyKeys.join(', ')}]${slide.imageUrl ? ' +image' : ''}`)
+      console.log(`[SlideDesigner][${requestId}]     content: ${JSON.stringify(slide.content).slice(0, 500)}`)
+    })
+  })
+  console.log(`[SlideDesigner][${requestId}] ═══ END BATCH CONTENT DUMP ═══`)
+
   let allSlides: Slide[] = []
   let visualSummary = ''
   let slideIndex = 0
@@ -1411,7 +1647,7 @@ export async function generateAIPresentation(
   const allInputs = allBatches.flat()
 
   // ── Validate + auto-fix ──
-  console.log(`[SlideDesigner] Validating ${allSlides.length} slides...`)
+  console.log(`[SlideDesigner][${requestId}] ═══ VALIDATION ═══`)
   const validatedSlides: Slide[] = []
   let totalScore = 0
 
@@ -1421,12 +1657,15 @@ export async function generateAIPresentation(
     const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
     const result = validateSlide(slide, designSystem, pacing, expectedImage)
     totalScore += result.score
+    const issueStr = result.issues.length > 0 ? result.issues.map(i => `${i.category}(${i.severity}${i.autoFixable ? ',fix' : ''})`).join(', ') : 'clean'
+    console.log(`[SlideDesigner][${requestId}]   Slide ${si + 1} (${slide.slideType}): score=${result.score}, issues=[${issueStr}]`)
     if (result.issues.some(i => i.autoFixable)) {
       validatedSlides.push(autoFixSlide(slide, result.issues, designSystem, expectedImage))
     } else {
       validatedSlides.push(slide)
     }
   }
+  console.log(`[SlideDesigner][${requestId}] ═══ END VALIDATION ═══`)
 
   const avgScore = Math.round(totalScore / allSlides.length)
   const consistentSlides = checkVisualConsistency(validatedSlides, designSystem)
@@ -1506,6 +1745,24 @@ export async function pipelineFoundation(
 
   // Prepare batches
   const allBatches = buildSlideBatches(d, config)
+
+  // ── DEBUG: Log all slide content for staged pipeline ──
+  console.log(`[SlideDesigner][${requestId}] ═══ FOUNDATION BATCH CONTENT ═══`)
+  allBatches.forEach((batch, bi) => {
+    batch.forEach((slide, si) => {
+      const contentKeys = Object.keys(slide.content)
+      const nonEmptyKeys = contentKeys.filter(k => {
+        const v = slide.content[k]
+        return v !== '' && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)
+      })
+      console.log(`[SlideDesigner][${requestId}]   Batch ${bi + 1}, Slide ${si + 1} (${slide.slideType}): ${nonEmptyKeys.length}/${contentKeys.length} fields [${nonEmptyKeys.join(', ')}]${slide.imageUrl ? ' +image' : ''}`)
+      console.log(`[SlideDesigner][${requestId}]     content: ${JSON.stringify(slide.content).slice(0, 500)}`)
+    })
+  })
+  // Also log what research data is available
+  console.log(`[SlideDesigner][${requestId}] _brandResearch keys: ${d._brandResearch ? Object.keys(d._brandResearch).join(', ') : 'NONE'}`)
+  console.log(`[SlideDesigner][${requestId}] _influencerStrategy keys: ${d._influencerStrategy ? Object.keys(d._influencerStrategy).join(', ') : 'NONE'}`)
+  console.log(`[SlideDesigner][${requestId}] ═══ END FOUNDATION BATCH CONTENT ═══`)
 
   const foundation: PipelineFoundation = {
     designSystem,
@@ -1661,6 +1918,7 @@ export function pipelineFinalize(
   // Build flat list of expected image URLs for validation
   const allInputs = foundation.batches.flat()
 
+  console.log(`[SlideDesigner][${requestId}] ═══ FINALIZE VALIDATION ═══`)
   const validatedSlides: Slide[] = []
   let totalScore = 0
 
@@ -1670,12 +1928,15 @@ export function pipelineFinalize(
     const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
     const result = validateSlide(slide, foundation.designSystem, pacing, expectedImage)
     totalScore += result.score
+    const issueStr = result.issues.length > 0 ? result.issues.map(i => `${i.category}(${i.severity}${i.autoFixable ? ',fix' : ''})`).join(', ') : 'clean'
+    console.log(`[SlideDesigner][${requestId}]   Slide ${si + 1} (${slide.slideType}): score=${result.score}, issues=[${issueStr}]`)
     if (result.issues.some(i => i.autoFixable)) {
       validatedSlides.push(autoFixSlide(slide, result.issues, foundation.designSystem, expectedImage))
     } else {
       validatedSlides.push(slide)
     }
   }
+  console.log(`[SlideDesigner][${requestId}] ═══ END FINALIZE VALIDATION ═══`)
 
   const avgScore = Math.round(totalScore / allSlides.length)
   const consistentSlides = checkVisualConsistency(validatedSlides, foundation.designSystem)

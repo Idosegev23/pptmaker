@@ -70,13 +70,17 @@ export type SlideType =
   | 'goals'
   | 'audience'
   | 'insight'
+  | 'whyNow'
   | 'strategy'
+  | 'competitive'
   | 'bigIdea'
   | 'approach'
   | 'deliverables'
   | 'metrics'
   | 'influencerStrategy'
+  | 'contentStrategy'
   | 'influencers'
+  | 'timeline'
   | 'closing'
 
 export interface SlideBackground {
