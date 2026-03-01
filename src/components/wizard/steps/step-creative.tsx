@@ -1,20 +1,23 @@
 'use client'
 
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState, useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import type { CreativeStepData } from '@/types/wizard'
+import BriefQuotePanel from '../brief-quote-panel'
+import { extractBriefExcerpt } from '../brief-excerpt-utils'
 
 interface StepCreativeProps {
   data: Partial<CreativeStepData>
   extractedData: Partial<CreativeStepData>
   onChange: (data: Partial<CreativeStepData>) => void
   errors: Record<string, string> | null
+  rawBriefText?: string
 }
 
-export default function StepCreative({ data, extractedData, onChange, errors }: StepCreativeProps) {
+export default function StepCreative({ data, extractedData, onChange, errors, rawBriefText }: StepCreativeProps) {
   const activityTitle = data.activityTitle ?? ''
   const activityConcept = data.activityConcept ?? ''
   const activityDescription = data.activityDescription ?? ''
@@ -25,6 +28,11 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
+
+  const creativeExcerpt = useMemo(
+    () => rawBriefText ? extractBriefExcerpt(rawBriefText, 'creative') : null,
+    [rawBriefText]
+  )
 
   // Approach items
   const addApproach = useCallback(() => {
@@ -112,6 +120,14 @@ export default function StepCreative({ data, extractedData, onChange, errors }: 
 
   return (
     <div dir="rtl" className="space-y-10">
+      {/* Brief quote for creative */}
+      {creativeExcerpt && (
+        <BriefQuotePanel
+          title="הקשר קריאייטיבי מהבריף"
+          briefExcerpt={creativeExcerpt}
+        />
+      )}
+
       {/* Suggested references from research */}
       {suggestedReferences.length > 0 && (
         <div className="space-y-3">

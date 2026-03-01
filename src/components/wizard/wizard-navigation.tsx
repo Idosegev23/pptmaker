@@ -85,7 +85,7 @@ export default function WizardNavigation({
       className={cn(
         'fixed bottom-0 left-0 right-0 z-50',
         'border-t border-wizard-border bg-white/95 backdrop-blur-xl shadow-nav-up',
-        'px-6 py-4'
+        'px-6 py-5'
       )}
     >
       <div className="mx-auto flex max-w-3xl items-center justify-between">
@@ -93,25 +93,27 @@ export default function WizardNavigation({
         <div className="flex items-center">
           <Button
             variant="outline"
-            size="sm"
+            size="md"
             onClick={onBack}
             disabled={isFirstStep}
-            className="gap-2 rounded-xl border-wizard-border px-4 py-2.5 text-wizard-text-secondary hover:text-wizard-text-primary hover:bg-brand-pearl"
+            className="gap-2 rounded-xl border-wizard-border bg-white px-5 py-3 text-wizard-text-secondary hover:text-wizard-text-primary hover:bg-brand-pearl shadow-wizard-sm"
           >
             <ArrowRightIcon />
             <span>הקודם</span>
           </Button>
         </div>
 
-        {/* Center: Skip link (only if step is not required) */}
+        {/* Center: Skip button (only if step is not required) */}
         <div className="flex items-center">
           {!isRequired && !isLastStep && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onSkip}
-              className="text-sm font-medium text-wizard-text-tertiary hover:text-wizard-text-secondary transition-colors duration-200 underline-offset-4 hover:underline"
+              className="text-wizard-text-tertiary hover:text-wizard-text-secondary"
             >
               דלג על שלב זה
-            </button>
+            </Button>
           )}
         </div>
 
@@ -132,9 +134,9 @@ export default function WizardNavigation({
           ) : (
             <Button
               variant="primary"
-              size="sm"
+              size="md"
               onClick={onContinue}
-              className="gap-2 rounded-xl px-6 py-2.5 font-heebo font-bold shadow-wizard-md hover:shadow-wizard-lg"
+              className="gap-2 rounded-xl px-8 py-3 font-heebo text-base font-bold shadow-wizard-md hover:shadow-wizard-lg"
             >
               <span>המשך</span>
               <ArrowLeftIcon />

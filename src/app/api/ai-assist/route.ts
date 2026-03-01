@@ -18,6 +18,7 @@ type AiAssistAction =
   | 'refine_strategy_pillars'
   | 'suggest_content_formats'
   | 'find_brand_logo'
+  | 'reprocess_field'
 
 export async function POST(request: NextRequest) {
   const requestId = `ai-assist-${Date.now()}`
@@ -58,6 +59,9 @@ export async function POST(request: NextRequest) {
         break
       case 'find_brand_logo':
         prompt = await buildFindLogoPrompt(params)
+        break
+      case 'reprocess_field':
+        prompt = await buildReprocessFieldPrompt(params)
         break
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
@@ -260,4 +264,37 @@ async function buildFindLogoPrompt(params: Record<string, unknown>): Promise<str
   const template = await getConfig('ai_prompts', 'ai_assist.find_logo', PROMPT_DEFAULTS['ai_assist.find_logo'].value as string)
   const brandName = params.brandName as string || ''
   return template.replace(/\{brandName\}/g, brandName)
+}
+
+async function buildReprocessFieldPrompt(params: Record<string, unknown>): Promise<string> {
+  const fieldName = params.fieldName as string || ''
+  const currentValue = params.currentValue as string || ''
+  const briefExcerpt = params.briefExcerpt as string || ''
+  const fullBriefContext = params.fullBriefContext as string || ''
+  const fieldInstructions = params.fieldInstructions as string || ''
+
+  return `אתה עוזר מקצועי לכתיבת הצעות שיווק ופרסום בעברית.
+
+המשימה: שפר ועבד מחדש את השדה "${fieldName}" תוך שימוש בתוכן המקורי מהבריף של הלקוח.
+
+--- ציטוט רלוונטי מהבריף ---
+${briefExcerpt}
+
+--- הקשר מלא מהבריף ---
+${fullBriefContext}
+
+--- ערך נוכחי של השדה ---
+${currentValue}
+
+${fieldInstructions ? `--- הנחיות נוספות ---\n${fieldInstructions}` : ''}
+
+הנחיות:
+1. שמור על תוכן איכותי מהבריף — ציטוטים, נתונים, שמות ומושגים מדויקים
+2. שלב בין המידע המקורי של הלקוח לבין עיבוד מקצועי
+3. כתוב בעברית תקנית, ברמה מקצועית של סוכנות פרסום מובילה
+4. אל תמציא מידע שלא מופיע בבריף — השתמש רק במה שניתן
+5. התוצאה צריכה להיות מוכנה להצגה בהצעה מקצועית
+
+החזר JSON:
+{ "value": "הערך המשופר והמעובד" }`
 }

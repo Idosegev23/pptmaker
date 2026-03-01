@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useCallback, useState, useRef, useEffect } from 'react'
+import React, { useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { GoalsStepData } from '@/types/wizard'
+import BriefQuotePanel from '../brief-quote-panel'
+import { extractBriefExcerpt } from '../brief-excerpt-utils'
 
 interface StepGoalsProps {
   data: Partial<GoalsStepData>
@@ -13,6 +15,7 @@ interface StepGoalsProps {
   onChange: (data: Partial<GoalsStepData>) => void
   errors: Record<string, string> | null
   briefContext?: string
+  rawBriefText?: string
 }
 
 const PREDEFINED_GOALS = [
@@ -25,12 +28,17 @@ const PREDEFINED_GOALS = [
   { title: 'חיזוק נאמנות', subtitle: 'העמקת קשר עם לקוחות קיימים' },
 ]
 
-export default function StepGoals({ data, extractedData, onChange, errors, briefContext }: StepGoalsProps) {
+export default function StepGoals({ data, extractedData, onChange, errors, briefContext, rawBriefText }: StepGoalsProps) {
   const goals = data.goals ?? []
   const customGoals = data.customGoals ?? []
   const targets = data.targets ?? []
   const [newCustomGoal, setNewCustomGoal] = useState('')
   const [loadingGoals, setLoadingGoals] = useState<Set<string>>(new Set())
+
+  const goalsExcerpt = useMemo(
+    () => rawBriefText ? extractBriefExcerpt(rawBriefText, 'goals') : null,
+    [rawBriefText]
+  )
 
   // Batch generation: collect newly-added goals and generate in bulk
   const pendingBatchRef = useRef<string[]>([])
@@ -186,6 +194,14 @@ export default function StepGoals({ data, extractedData, onChange, errors, brief
 
   return (
     <div dir="rtl" className="space-y-10">
+      {/* Brief quote for goals */}
+      {goalsExcerpt && (
+        <BriefQuotePanel
+          title="מה הלקוח כתב על המטרות"
+          briefExcerpt={goalsExcerpt}
+        />
+      )}
+
       {/* Goal selection header */}
       <div>
         <div className="flex items-center justify-between mb-3">

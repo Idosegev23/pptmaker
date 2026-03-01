@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import type { StrategyStepData, AiVersionEntry } from '@/types/wizard'
 import AiVersionNavigator from '../ai-version-navigator'
+import BriefQuotePanel from '../brief-quote-panel'
+import { extractBriefExcerpt } from '../brief-excerpt-utils'
 
 interface StepStrategyProps {
   data: Partial<StrategyStepData>
@@ -13,17 +15,23 @@ interface StepStrategyProps {
   onChange: (data: Partial<StrategyStepData>) => void
   errors: Record<string, string> | null
   briefContext?: string
+  rawBriefText?: string
   aiVersionHistory?: Record<string, { versions: AiVersionEntry[]; currentIndex: number }>
   onPushVersion?: (key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') => void
   onNavigateVersion?: (key: string, direction: 'prev' | 'next') => void
 }
 
-export default function StepStrategy({ data, extractedData, onChange, errors, briefContext, aiVersionHistory, onPushVersion, onNavigateVersion }: StepStrategyProps) {
+export default function StepStrategy({ data, extractedData, onChange, errors, briefContext, rawBriefText, aiVersionHistory, onPushVersion, onNavigateVersion }: StepStrategyProps) {
   const strategyHeadline = data.strategyHeadline ?? ''
   const strategyDescription = data.strategyDescription ?? ''
   const strategyPillars = data.strategyPillars ?? []
   const strategyFlow = data.strategyFlow ?? { steps: [] }
   const [isGeneratingFlow, setIsGeneratingFlow] = useState(false)
+
+  const strategyExcerpt = useMemo(
+    () => rawBriefText ? extractBriefExcerpt(rawBriefText, 'strategy') : null,
+    [rawBriefText]
+  )
   const [isRefiningPillars, setIsRefiningPillars] = useState(false)
   const [refiningPillarIndex, setRefiningPillarIndex] = useState<number | null>(null)
 
@@ -138,6 +146,14 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
 
   return (
     <div dir="rtl" className="space-y-10">
+      {/* Brief quote for strategy */}
+      {strategyExcerpt && (
+        <BriefQuotePanel
+          title="הקשר אסטרטגי מהבריף"
+          briefExcerpt={strategyExcerpt}
+        />
+      )}
+
       {/* Strategy Headline */}
       <div className="space-y-2">
         <Input
@@ -185,11 +201,11 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
           <div className="flex items-center gap-2">
             {strategyPillars.length > 0 && (
               <Button
-                variant="outline"
+                variant="ai"
                 size="sm"
                 onClick={handleRefineAllPillars}
                 disabled={isRefiningPillars}
-                className="gap-1.5 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
+                className="gap-1.5"
               >
                 {isRefiningPillars ? (
                   <>
@@ -288,11 +304,11 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
             תהליך עבודה (Flow)
           </label>
           <Button
-            variant="outline"
+            variant="ai"
             size="sm"
             onClick={handleGenerateFlow}
             disabled={isGeneratingFlow || !strategyHeadline}
-            className="gap-1.5 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
+            className="gap-1.5"
           >
             {isGeneratingFlow ? (
               <>

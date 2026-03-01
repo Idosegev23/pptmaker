@@ -60,6 +60,8 @@ export interface StepProps {
   onChange: (data: Partial<WizardStepDataMap[WizardStepId]>) => void
   errors: Record<string, string> | null
   briefContext?: string
+  rawBriefText?: string
+  rawKickoffText?: string
 }
 
 // ---------- Step component map ----------
@@ -155,6 +157,16 @@ export default function ProposalWizard({
 
     return base
   })
+
+  // Raw brief texts — read-only, never edited
+  const rawBriefText = useMemo(
+    () => (initialData._briefText as string) || '',
+    [initialData._briefText]
+  )
+  const rawKickoffText = useMemo(
+    () => (initialData._kickoffText as string) || '',
+    [initialData._kickoffText]
+  )
 
   const [isSaving, setIsSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -532,6 +544,8 @@ export default function ProposalWizard({
                 onChange={handleStepDataChange}
                 errors={stepErrors}
                 briefContext={`${state.stepData.brief?.brandName || ''}: ${state.stepData.brief?.brandBrief || ''}`}
+                rawBriefText={rawBriefText}
+                rawKickoffText={rawKickoffText}
                 successMetrics={state.stepData.brief?.successMetrics}
                 aiVersionHistory={state.aiVersionHistory}
                 onPushVersion={(key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') =>

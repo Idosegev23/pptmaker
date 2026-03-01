@@ -1,12 +1,14 @@
 'use client'
 
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import type { TargetAudienceStepData } from '@/types/wizard'
+import BriefQuotePanel from '../brief-quote-panel'
+import { extractBriefExcerpt } from '../brief-excerpt-utils'
 
 interface AudienceInsight {
   text: string
@@ -22,6 +24,7 @@ interface StepTargetAudienceProps {
   onChange: (data: Partial<TargetAudienceStepData>) => void
   errors: Record<string, string> | null
   briefContext?: string
+  rawBriefText?: string
 }
 
 const GENDER_OPTIONS = [
@@ -37,6 +40,7 @@ export default function StepTargetAudience({
   onChange,
   errors,
   briefContext,
+  rawBriefText,
 }: StepTargetAudienceProps) {
   const targetGender = data.targetGender ?? ''
   const targetAgeRange = data.targetAgeRange ?? ''
@@ -47,6 +51,11 @@ export default function StepTargetAudience({
 
   const [showSecondary, setShowSecondary] = useState(!!targetSecondary)
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false)
+
+  const audienceExcerpt = useMemo(
+    () => rawBriefText ? extractBriefExcerpt(rawBriefText, 'audience') : null,
+    [rawBriefText]
+  )
 
   const handleGenerateInsights = useCallback(async () => {
     if (!targetGender && !targetAgeRange) return
@@ -140,6 +149,14 @@ export default function StepTargetAudience({
 
   return (
     <div dir="rtl" className="space-y-10">
+      {/* Brief quote for audience */}
+      {audienceExcerpt && (
+        <BriefQuotePanel
+          title="מה הלקוח כתב על קהל היעד"
+          briefExcerpt={audienceExcerpt}
+        />
+      )}
+
       {/* Primary audience */}
       <div className="space-y-4">
         <h3 className="text-lg font-heebo font-bold text-wizard-text-primary">קהל יעד ראשי</h3>
@@ -188,11 +205,11 @@ export default function StepTargetAudience({
             </label>
             <div className="flex gap-2">
               <Button
-                variant="outline"
+                variant="ai"
                 size="sm"
                 onClick={handleGenerateInsights}
                 disabled={isGeneratingInsights || (!targetGender && !targetAgeRange)}
-                className="gap-1.5 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
+                className="gap-1.5"
               >
                 {isGeneratingInsights ? (
                   <>

@@ -1,12 +1,14 @@
 'use client'
 
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useMemo } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { KeyInsightStepData, AiVersionEntry } from '@/types/wizard'
 import AiVersionNavigator from '../ai-version-navigator'
+import BriefQuotePanel from '../brief-quote-panel'
+import { extractBriefExcerpt } from '../brief-excerpt-utils'
 
 interface StepKeyInsightProps {
   data: Partial<KeyInsightStepData>
@@ -14,6 +16,7 @@ interface StepKeyInsightProps {
   onChange: (data: Partial<KeyInsightStepData>) => void
   errors: Record<string, string> | null
   briefContext?: string
+  rawBriefText?: string
   aiVersionHistory?: Record<string, { versions: AiVersionEntry[]; currentIndex: number }>
   onPushVersion?: (key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') => void
   onNavigateVersion?: (key: string, direction: 'prev' | 'next') => void
@@ -25,6 +28,7 @@ export default function StepKeyInsight({
   onChange,
   errors,
   briefContext,
+  rawBriefText,
   aiVersionHistory,
   onPushVersion,
   onNavigateVersion,
@@ -33,6 +37,11 @@ export default function StepKeyInsight({
   const insightSource = data.insightSource ?? ''
   const insightData = data.insightData ?? ''
   const [isRefining, setIsRefining] = useState(false)
+
+  const insightExcerpt = useMemo(
+    () => rawBriefText ? extractBriefExcerpt(rawBriefText, 'insight') : null,
+    [rawBriefText]
+  )
 
   const handleRefineWithAI = useCallback(async () => {
     setIsRefining(true)
@@ -84,6 +93,14 @@ export default function StepKeyInsight({
 
   return (
     <div dir="rtl" className="space-y-6">
+      {/* Brief quote for insight */}
+      {insightExcerpt && (
+        <BriefQuotePanel
+          title="הקשר רלוונטי מהבריף"
+          briefExcerpt={insightExcerpt}
+        />
+      )}
+
       {/* Extracted insight banner */}
       {hasExtractedInsight && (
         <Card className="border-wizard-border bg-brand-pearl/50">
@@ -102,10 +119,10 @@ export default function StepKeyInsight({
               </p>
             )}
             <Button
-              variant="outline"
+              variant="ai"
               size="sm"
               onClick={applyExtracted}
-              className="mt-2 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
+              className="mt-2"
             >
               החל תובנה מחולצת
             </Button>
@@ -134,11 +151,11 @@ export default function StepKeyInsight({
             )}
           </div>
           <Button
-            variant="outline"
+            variant="ai"
             size="sm"
             onClick={handleRefineWithAI}
             disabled={isRefining}
-            className="gap-1.5 border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
+            className="gap-1.5"
           >
             {isRefining ? (
               <>
