@@ -573,7 +573,8 @@ async function generateDesignSystem(
 
 פונט: Heebo.`
 
-  // Flash first (fast + no 503), Pro fallback with exponential backoff
+  // Design system generation with per-call timeout
+  const DS_TIMEOUT_MS = 150_000 // 2.5 minutes per attempt (total max ~5 min for 2 attempts)
   const sysInstruction = await getSystemInstruction()
   const models = await getSlideDesignerModels()
   const [dsThinkingLevel, dsMaxOutputTokens] = await Promise.all([getThinkingLevel(), getMaxOutputTokens()])
@@ -584,8 +585,8 @@ async function generateDesignSystem(
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
-      console.log(`[SlideDesigner][${requestId}] Calling ${model} for design system (attempt ${attempt + 1}/${models.length})...`)
-      const response = await ai.models.generateContent({
+      console.log(`[SlideDesigner][${requestId}] Calling ${model} for design system (attempt ${attempt + 1}/${models.length}, timeout ${DS_TIMEOUT_MS / 1000}s)...`)
+      const dsCall = ai.models.generateContent({
         model,
         contents: prompt,
         config: {
@@ -594,8 +595,13 @@ async function generateDesignSystem(
           responseSchema: DESIGN_SYSTEM_SCHEMA,
           thinkingConfig: { thinkingLevel: dsThinking },
           maxOutputTokens: dsMaxOutputTokens,
+          httpOptions: { timeout: DS_TIMEOUT_MS },
         },
       })
+      const dsTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('DS_TIMEOUT')), DS_TIMEOUT_MS)
+      )
+      const response = await Promise.race([dsCall, dsTimeout])
 
       const rawText = response.text || ''
       console.log(`[SlideDesigner][${requestId}] Raw response length: ${rawText.length} chars (model: ${model})`)
@@ -628,11 +634,16 @@ async function generateDesignSystem(
       }
       throw new Error(`Invalid design system response — parsed colors missing. Keys: [${topKeys}]`)
     } catch (error) {
+      const isTimeout = error instanceof Error && (
+        error.message === 'DS_TIMEOUT' ||
+        error.message.includes('timeout') ||
+        error.message.includes('fetch failed')
+      )
       const msg = error instanceof Error ? error.message : String(error)
-      console.error(`[SlideDesigner][${requestId}] Design system attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
+      console.error(`[SlideDesigner][${requestId}] Design system attempt ${attempt + 1}/${models.length} failed (${model}): ${isTimeout ? 'TIMEOUT' : msg}`)
       if (attempt < models.length - 1) {
         console.log(`[SlideDesigner][${requestId}] ⚡ Falling back to ${models[attempt + 1]}...`)
-        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+        await new Promise(r => setTimeout(r, 1500))
       }
     }
   }
