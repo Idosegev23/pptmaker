@@ -30,6 +30,14 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 },
 })
+import { getConfig } from '@/lib/config/admin-config'
+import {
+  PROMPT_DEFAULTS,
+  DESIGN_DEFAULTS,
+  MODEL_DEFAULTS,
+  PIPELINE_DEFAULTS,
+} from '@/lib/config/defaults'
+
 const PRO_MODEL_DEFAULT = 'gemini-3.1-pro-preview'
 const FLASH_MODEL_DEFAULT = 'gemini-3-flash-preview'
 
@@ -39,48 +47,59 @@ async function getSlideDesignerModels(): Promise<string[]> {
   return [primary, fallback]
 }
 
-// ─── System Instruction (shared persona) ─────────────────
-
-import { getConfig } from '@/lib/config/admin-config'
-
-const SYSTEM_INSTRUCTION_DEFAULT = `<role>
-You are a world-class Creative Director and Art Director at a top design agency (Sagmeister & Walsh / Pentagram level).
-Your specialty: editorial-quality presentation design that wins Awwwards.
-Every presentation must feel like a premium fashion magazine — never like PowerPoint.
-</role>
-
-<constraints>
-- Output language: Hebrew (RTL). Font: Heebo. Canvas: 1920x1080px.
-- Output format: JSON AST only — no HTML, no CSS.
-- Every slide must have a unique layout — never repeat the same composition.
-</constraints>
-
-<visualization_process>
-Before outputting each slide, you MUST mentally visualize it as if looking at the final rendered result:
-1. Picture every element on the 1920x1080 canvas at its exact x, y, width, height.
-2. Verify no text overlaps other text unintentionally.
-3. Verify no text sits on top of an image without a readable contrast layer between them.
-4. Verify images don't cover important text elements.
-5. Confirm the overall composition feels balanced, intentional, and magazine-quality.
-If any issue is found, fix it before outputting the JSON.
-</visualization_process>`
+// ─── Config Loaders (all connected to admin panel) ────────
 
 async function getSystemInstruction(): Promise<string> {
-  return getConfig('ai_prompts', 'slide_designer.system_instruction', SYSTEM_INSTRUCTION_DEFAULT)
+  return getConfig('ai_prompts', 'slide_designer.system_instruction', PROMPT_DEFAULTS['slide_designer.system_instruction'].value as string)
 }
 
-// ─── Layout Archetypes (anti-generic design) ──────────────
+async function getDesignPrinciples(): Promise<string> {
+  return getConfig('ai_prompts', 'slide_designer.design_principles', PROMPT_DEFAULTS['slide_designer.design_principles'].value as string)
+}
 
-const LAYOUT_ARCHETYPES = [
-  'Brutalist typography — oversized title with negative overflow, transparent watermark text behind',
-  'Asymmetric split — uneven division with a decorative element crossing the dividing line',
-  'Overlapping Z-index cards — layered cards with fake-3D shadows creating depth',
-  'Full-bleed image — edge-to-edge image with gradient overlay and text floating on top',
-  'Diagonal grid — angled composition with rotated text and thin grid lines',
-  'Bento box — asymmetric grid of mixed-size cells with visual data inside',
-  'Magazine spread — editorial layout with a large pull-quote and dominant image',
-  'Data art — oversized numbers as the visual centerpiece with minimal decoration',
-]
+async function getElementFormat(): Promise<string> {
+  return getConfig('ai_prompts', 'slide_designer.element_format', PROMPT_DEFAULTS['slide_designer.element_format'].value as string)
+}
+
+async function getTechnicalRules(): Promise<string> {
+  return getConfig('ai_prompts', 'slide_designer.technical_rules', PROMPT_DEFAULTS['slide_designer.technical_rules'].value as string)
+}
+
+async function getFinalInstruction(): Promise<string> {
+  return getConfig('ai_prompts', 'slide_designer.final_instruction', PROMPT_DEFAULTS['slide_designer.final_instruction'].value as string)
+}
+
+async function getImageRoleHints(): Promise<Record<string, string>> {
+  return getConfig('ai_prompts', 'slide_designer.image_role_hints', PROMPT_DEFAULTS['slide_designer.image_role_hints'].value as Record<string, string>)
+}
+
+async function getLayoutArchetypes(): Promise<string[]> {
+  return getConfig('design_system', 'layout_archetypes', DESIGN_DEFAULTS['layout_archetypes'].value as string[])
+}
+
+async function getPacingMap(): Promise<Record<string, PacingDirective>> {
+  return getConfig('design_system', 'pacing_map', DESIGN_DEFAULTS['pacing_map'].value as Record<string, PacingDirective>)
+}
+
+async function getDepthLayers(): Promise<string> {
+  return getConfig('design_system', 'depth_layers', DESIGN_DEFAULTS['depth_layers'].value as string)
+}
+
+async function getThinkingLevel(): Promise<string> {
+  return getConfig('ai_models', 'slide_designer.thinking_level', MODEL_DEFAULTS['slide_designer.thinking_level'].value as string)
+}
+
+async function getMaxOutputTokens(): Promise<number> {
+  return getConfig('ai_models', 'slide_designer.max_output_tokens', MODEL_DEFAULTS['slide_designer.max_output_tokens'].value as number)
+}
+
+async function getTemperature(): Promise<number> {
+  return getConfig('ai_models', 'slide_designer.temperature', MODEL_DEFAULTS['slide_designer.temperature'].value as number)
+}
+
+async function getBatchSize(): Promise<number> {
+  return getConfig('pipeline', 'slide_designer.batch_size', PIPELINE_DEFAULTS['slide_designer.batch_size'].value as number)
+}
 
 // ─── Types ─────────────────────────────────────────────
 
@@ -191,42 +210,7 @@ export interface BatchResult {
   slideIndex: number
 }
 
-// ─── Pacing Map ────────────────────────────────────────
-
-const PACING_MAP: Record<string, PacingDirective> = {
-  cover:     { energy: 'peak', density: 'minimal', surprise: true, maxElements: 8, minWhitespace: 40 },
-  brief:     { energy: 'calm', density: 'balanced', surprise: false, maxElements: 12, minWhitespace: 30 },
-  goals:     { energy: 'building', density: 'balanced', surprise: false, maxElements: 14, minWhitespace: 25 },
-  audience:  { energy: 'building', density: 'balanced', surprise: false, maxElements: 12, minWhitespace: 30 },
-  insight:   { energy: 'peak', density: 'minimal', surprise: true, maxElements: 8, minWhitespace: 40 },
-  strategy:  { energy: 'building', density: 'balanced', surprise: false, maxElements: 12, minWhitespace: 30 },
-  bigIdea:   { energy: 'peak', density: 'minimal', surprise: true, maxElements: 10, minWhitespace: 35 },
-  approach:  { energy: 'calm', density: 'balanced', surprise: false, maxElements: 14, minWhitespace: 25 },
-  deliverables: { energy: 'calm', density: 'dense', surprise: false, maxElements: 18, minWhitespace: 20 },
-  metrics:   { energy: 'building', density: 'dense', surprise: false, maxElements: 16, minWhitespace: 20 },
-  influencerStrategy: { energy: 'calm', density: 'balanced', surprise: false, maxElements: 12, minWhitespace: 30 },
-  influencers: { energy: 'breath', density: 'dense', surprise: false, maxElements: 20, minWhitespace: 15 },
-  whyNow:    { energy: 'peak', density: 'balanced', surprise: true, maxElements: 10, minWhitespace: 30 },
-  competitive: { energy: 'building', density: 'dense', surprise: false, maxElements: 16, minWhitespace: 20 },
-  contentStrategy: { energy: 'calm', density: 'balanced', surprise: false, maxElements: 14, minWhitespace: 25 },
-  timeline:  { energy: 'building', density: 'balanced', surprise: false, maxElements: 14, minWhitespace: 25 },
-  closing:   { energy: 'finale', density: 'minimal', surprise: true, maxElements: 8, minWhitespace: 45 },
-}
-
-// ─── Design Principles (positive patterns — tell the model what TO DO) ──
-const DESIGN_PRINCIPLES = `
-- Use asymmetric compositions — offset titles, uneven columns, dynamic diagonal flow
-- Create strong scale contrast between heading and body text (large titles, small labels)
-- Give every readable text element enough contrast against its background (opacity ≥ 0.7)
-- Keep clear breathing room around the main title
-- Vary card sizes when using multiple cards — make each one different
-- Use rich gradients (radial, multi-stop) rather than flat single-color fills
-`
-
-// ─── Depth Layering ───────────────────────
-const DEPTH_LAYERS = `
-zIndex guide: 0-1 = background layers | 2-3 = decorative elements (watermarks, shapes) | 4-5 = structural elements (cards, dividers) | 6-8 = content (text, data, images) | 9-10 = hero elements (main title, key number)
-`
+// ─── All design constants loaded from admin config at runtime via getConfig() ──
 
 // ─── DRY Color Helpers ───────────────────────────────────
 
@@ -588,6 +572,11 @@ async function generateDesignSystem(
   // Flash first (fast + no 503), Pro fallback with exponential backoff
   const sysInstruction = await getSystemInstruction()
   const models = await getSlideDesignerModels()
+  const [dsThinkingLevel, dsMaxOutputTokens] = await Promise.all([getThinkingLevel(), getMaxOutputTokens()])
+  const dsThinking = dsThinkingLevel === 'HIGH' ? ThinkingLevel.HIGH
+    : dsThinkingLevel === 'MEDIUM' ? ThinkingLevel.MEDIUM
+    : ThinkingLevel.LOW
+
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -599,8 +588,8 @@ async function generateDesignSystem(
           systemInstruction: sysInstruction,
           responseMimeType: 'application/json',
           responseSchema: DESIGN_SYSTEM_SCHEMA,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-          maxOutputTokens: 65536,
+          thinkingConfig: { thinkingLevel: dsThinking },
+          maxOutputTokens: dsMaxOutputTokens,
         },
       })
 
@@ -690,6 +679,21 @@ async function generateSlidesBatchAST(
   const requestId = `sb-${batchIndex}-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Step 2: Batch ${batchIndex + 1} (${slides.length} slides)`)
 
+  // ── Load ALL config from admin panel (cached 60s) ──
+  const [
+    pacingMap, layoutArchetypes, imageRoleHints,
+    designPrinciples, depthLayers, elementFormat, technicalRules, finalInstruction,
+    thinkingLevel, maxOutputTokens, temperature,
+  ] = await Promise.all([
+    getPacingMap(), getLayoutArchetypes(), getImageRoleHints(),
+    getDesignPrinciples(), getDepthLayers(), getElementFormat(), getTechnicalRules(), getFinalInstruction(),
+    getThinkingLevel(), getMaxOutputTokens(), getTemperature(),
+  ])
+
+  const resolvedThinking = thinkingLevel === 'HIGH' ? ThinkingLevel.HIGH
+    : thinkingLevel === 'MEDIUM' ? ThinkingLevel.MEDIUM
+    : ThinkingLevel.LOW
+
   const colors = designSystem.colors
   const typo = designSystem.typography
   const effects = designSystem.effects
@@ -698,29 +702,13 @@ async function generateSlidesBatchAST(
   // Creative Direction from Design System (if available)
   const cd = designSystem.creativeDirection
 
-  // ── Image creative role per slide type (conceptual, not pixel-based) ──
-  const IMAGE_ROLE_HINTS: Record<string, string> = {
-    cover: 'The image IS the hero — it is the first thing the viewer sees. Let it dominate.',
-    brief: 'The image accompanies the story — it supports the text, not competes with it.',
-    audience: 'The image represents the people — large, immersive, human.',
-    insight: 'The image creates atmosphere — dramatic backdrop or visual element reinforcing the insight.',
-    bigIdea: 'The image IS the idea — the visual is the star, text complements it.',
-    strategy: 'The image anchors — a visual anchor point that adds depth to the text.',
-    approach: 'The image is an accent — a surprising element that adds visual interest.',
-    closing: 'The image closes the circle — warm atmosphere, invitation, strong ending.',
-    whyNow: 'The image captures urgency — trending visuals, timely context, market energy.',
-    competitive: 'The image maps the landscape — abstract market visualization or brand positioning.',
-    contentStrategy: 'The image previews content — creative examples, platform visuals, content mood.',
-    timeline: 'The image shows progress — journey, roadmap, forward motion.',
-  }
-
   // ── Build per-slide directives ──
   const slidesDescription = slides.map((slide, i) => {
     const globalIndex = batchContext.slideIndex + i
-    const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
+    const pacing = pacingMap[slide.slideType] || pacingMap.brief
     const contentJson = JSON.stringify(slide.content, null, 2)
-    const imageRoleHint = IMAGE_ROLE_HINTS[slide.slideType] || 'An image that reinforces the slide message.'
-    const archetype = LAYOUT_ARCHETYPES[(globalIndex + batchIndex * 3) % LAYOUT_ARCHETYPES.length]
+    const imageRoleHint = imageRoleHints[slide.slideType] || 'An image that reinforces the slide message.'
+    const archetype = layoutArchetypes[(globalIndex + batchIndex * 3) % layoutArchetypes.length]
 
     return `
 <slide index="${globalIndex + 1}" total="${batchContext.totalSlides}" type="${slide.slideType}" title="${slide.title}">
@@ -770,15 +758,12 @@ ${motif.implementation}
 </design_system>
 
 <design_principles>
-${DESIGN_PRINCIPLES}
-${DEPTH_LAYERS}
+${designPrinciples}
+${depthLayers}
 </design_principles>
 
 <element_format>
-Shape: { "id", "type": "shape", "x", "y", "width", "height", "zIndex", "shapeType": "background"|"decorative"|"divider", "fill": "#hex or gradient", "clipPath", "borderRadius", "opacity", "rotation", "border" }
-Text:  { "id", "type": "text", "x", "y", "width", "height", "zIndex", "content": "Hebrew text", "fontSize", "fontWeight": 100-900, "color", "textAlign": "right", "role": "title"|"subtitle"|"body"|"caption"|"label"|"decorative", "lineHeight", "letterSpacing", "opacity", "rotation", "textStroke": { "width", "color" } }
-Image: { "id", "type": "image", "x", "y", "width", "height", "zIndex", "src": "THE_URL", "objectFit": "cover", "borderRadius" }
-Note: role "decorative" = large watermark text, low opacity, rotated, fontSize 200+, used as visual texture.
+${elementFormat}
 </element_format>
 
 <reference_examples>
@@ -824,20 +809,12 @@ ${slidesDescription}
 </slides_to_create>
 
 <technical_rules>
-- textAlign: "right" always (RTL). All content text in Hebrew.
-- ${DEPTH_LAYERS}
-- Supported properties only: no box-shadow, no backdrop-filter, no filter:blur.
-- Fake 3D depth: use a shape at x+12, y+12 with fill:#000 opacity:0.12-0.18.
+${technicalRules}
+- ${depthLayers}
 </technical_rules>
 
 <final_instruction>
-Before returning the JSON, mentally render each slide in your mind:
-1. VISUALIZE the 1920x1080 canvas with all elements at their exact positions.
-2. CHECK: Can I read every text element clearly? Is anything hidden behind another element?
-3. CHECK: If there is an image, does it have its own space? Is text placed in a separate area?
-4. CHECK: Does the overall composition feel like a premium magazine page?
-5. If any check fails, fix the layout before outputting.
-Only use image URLs that are explicitly provided in the slide data. Never invent image URLs.
+${finalInstruction}
 </final_instruction>`
 
   // Flash first (fast + cheap), Pro fallback with exponential backoff
@@ -856,9 +833,9 @@ Only use image URLs that are explicitly provided in the slide data. Never invent
           systemInstruction: batchSysInstruction,
           responseMimeType: 'application/json',
           responseSchema: SLIDE_BATCH_SCHEMA,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-          maxOutputTokens: 65536,
-          temperature: 1.0, // Gemini 3 recommended default — do not lower
+          thinkingConfig: { thinkingLevel: resolvedThinking },
+          maxOutputTokens,
+          temperature,
         },
       })
 
@@ -1343,13 +1320,13 @@ function chunkByMax<T>(arr: T[], max: number): T[][] {
 //  SLIDE CONTENT BUILDER
 // ═══════════════════════════════════════════════════════════
 
-function buildSlideBatches(
+async function buildSlideBatches(
   data: PremiumProposalData,
   config: {
     images?: { coverImage?: string; brandImage?: string; audienceImage?: string; activityImage?: string }
     extraImages?: { id: string; url: string; placement: string }[]
   } = {},
-): SlideContentInput[][] {
+): Promise<SlideContentInput[][]> {
   const currency = data.currency === 'USD' ? '$' : data.currency === 'EUR' ? '€' : '₪'
   const br = data._brandResearch || {}
   const ir = data._influencerStrategy || data.influencerResearch || {} as InfluencerResearchData
@@ -1549,10 +1526,9 @@ function buildSlideBatches(
     subheadline: `נשמח להתחיל לעבוד עם ${data.brandName}`,
   }) })
 
-  // ── Split into small batches of max 2 for quality ──
-  // Gemini struggles with 6 slides per batch (returns 1 instead of 6).
-  // 2 slides per batch = reliable output with full element detail.
-  return chunkByMax(allSlides, 2)
+  // ── Split into small batches (configurable via admin panel) ──
+  const batchSize = await getBatchSize()
+  return chunkByMax(allSlides, batchSize)
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1601,7 +1577,7 @@ export async function generateAIPresentation(
 
   // ── Step 2: Generate slides in batches ──
   console.log(`[SlideDesigner] ── Step 2/2: Slide Generation ──`)
-  const allBatches = buildSlideBatches(data, config)
+  const allBatches = await buildSlideBatches(data, config)
 
   // ── DEBUG: Log all slide content that will be sent to AI ──
   console.log(`[SlideDesigner][${requestId}] ═══ BATCH CONTENT DUMP ═══`)
@@ -1649,6 +1625,7 @@ export async function generateAIPresentation(
   const allInputs = allBatches.flat()
 
   // ── Validate + auto-fix ──
+  const pacingMap = await getPacingMap()
   console.log(`[SlideDesigner][${requestId}] ═══ VALIDATION ═══`)
   const validatedSlides: Slide[] = []
   let totalScore = 0
@@ -1656,7 +1633,7 @@ export async function generateAIPresentation(
   for (let si = 0; si < allSlides.length; si++) {
     const slide = allSlides[si]
     const expectedImage = allInputs[si]?.imageUrl
-    const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
+    const pacing = pacingMap[slide.slideType] || pacingMap.brief
     const result = validateSlide(slide, designSystem, pacing, expectedImage)
     totalScore += result.score
     const issueStr = result.issues.length > 0 ? result.issues.map(i => `${i.category}(${i.severity}${i.autoFixable ? ',fix' : ''})`).join(', ') : 'clean'
@@ -1746,7 +1723,7 @@ export async function pipelineFoundation(
   const designSystem = await generateDesignSystem(brandInput)
 
   // Prepare batches
-  const allBatches = buildSlideBatches(d, config)
+  const allBatches = await buildSlideBatches(d, config)
 
   // ── DEBUG: Log all slide content for staged pipeline ──
   console.log(`[SlideDesigner][${requestId}] ═══ FOUNDATION BATCH CONTENT ═══`)
@@ -1908,14 +1885,16 @@ function injectClientLogo(slides: Slide[], clientLogoUrl: string): Slide[] {
 /**
  * Stage 3: Validate, auto-fix, consistency check, assemble final Presentation.
  */
-export function pipelineFinalize(
+export async function pipelineFinalize(
   foundation: PipelineFoundation,
   allSlides: Slide[],
-): Presentation {
+): Promise<Presentation> {
   const requestId = `final-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Finalizing: ${allSlides.length} slides`)
 
   if (allSlides.length === 0) throw new Error('No slides to finalize')
+
+  const pacingMap = await getPacingMap()
 
   // Build flat list of expected image URLs for validation
   const allInputs = foundation.batches.flat()
@@ -1927,7 +1906,7 @@ export function pipelineFinalize(
   for (let si = 0; si < allSlides.length; si++) {
     const slide = allSlides[si]
     const expectedImage = allInputs[si]?.imageUrl
-    const pacing = PACING_MAP[slide.slideType] || PACING_MAP.brief
+    const pacing = pacingMap[slide.slideType] || pacingMap.brief
     const result = validateSlide(slide, foundation.designSystem, pacing, expectedImage)
     totalScore += result.score
     const issueStr = result.issues.length > 0 ? result.issues.map(i => `${i.category}(${i.severity}${i.autoFixable ? ',fix' : ''})`).join(', ') : 'clean'
@@ -1985,7 +1964,8 @@ export async function regenerateSingleSlide(
 
   if (slides.length === 0) throw new Error('Failed to regenerate slide')
 
-  const pacing = PACING_MAP[slideContent.slideType] || PACING_MAP.brief
+  const pacingMap = await getPacingMap()
+  const pacing = pacingMap[slideContent.slideType] || pacingMap.brief
   const expectedImage = slideContent.imageUrl
   const validation = validateSlide(slides[0], designSystem, pacing, expectedImage)
   if (validation.issues.some(i => i.autoFixable)) {

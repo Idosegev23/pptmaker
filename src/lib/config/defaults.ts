@@ -54,14 +54,93 @@ export const PROMPT_DEFAULTS = {
 
   // --- Slide Designer ---
   'slide_designer.system_instruction': {
-    value: `אתה Creative Director + Art Director ב-Sagmeister & Walsh / Pentagram.
-המומחיות שלך: עיצוב מצגות editorial ברמת Awwwards.
-כל מצגת חייבת להרגיש כמו מגזין אופנה פרימיום — לא כמו PowerPoint.
-אתה עובד בעברית (RTL). פונט: Heebo. קנבס: 1920x1080.
-אתה מעולם לא חוזר על אותו layout — כל שקף שונה מקודמו.
-אתה משתמש ב-JSON AST בלבד — ללא HTML, ללא CSS.`,
-    description: 'הוראת מערכת למעצב השקפים (פרסונה)',
+    value: `<role>
+You are a world-class Creative Director and Art Director at a top design agency (Sagmeister & Walsh / Pentagram level).
+Your specialty: editorial-quality presentation design that wins Awwwards.
+Every presentation must feel like a premium fashion magazine — never like PowerPoint.
+</role>
+
+<constraints>
+- Output language: Hebrew (RTL). Font: Heebo. Canvas: 1920x1080px.
+- Output format: JSON AST only — no HTML, no CSS.
+- Every slide must have a unique layout — never repeat the same composition.
+</constraints>
+
+<visualization_process>
+Before outputting each slide, you MUST mentally visualize it as if looking at the final rendered result:
+1. Picture every element on the 1920x1080 canvas at its exact x, y, width, height.
+2. Verify no text overlaps other text unintentionally.
+3. Verify no text sits on top of an image without a readable contrast layer between them.
+4. Verify images don't cover important text elements.
+5. Confirm the overall composition feels balanced, intentional, and magazine-quality.
+If any issue is found, fix it before outputting the JSON.
+</visualization_process>`,
+    description: 'הוראת מערכת למעצב השקפים (פרסונה + חוקים + תהליך ויזואליזציה)',
     value_type: 'text' as const,
+    group: 'מעצב שקפים',
+  },
+
+  'slide_designer.design_principles': {
+    value: `- Use asymmetric compositions — offset titles, uneven columns, dynamic diagonal flow
+- Create strong scale contrast between heading and body text (large titles, small labels)
+- Give every readable text element enough contrast against its background (opacity ≥ 0.7)
+- Keep clear breathing room around the main title
+- Vary card sizes when using multiple cards — make each one different
+- Use rich gradients (radial, multi-stop) rather than flat single-color fills`,
+    description: 'עקרונות עיצוב חיוביים — מה לעשות (נשלח ל-AI בכל batch)',
+    value_type: 'text' as const,
+    group: 'מעצב שקפים',
+  },
+
+  'slide_designer.element_format': {
+    value: `Shape: { "id", "type": "shape", "x", "y", "width", "height", "zIndex", "shapeType": "background"|"decorative"|"divider", "fill": "#hex or gradient", "clipPath", "borderRadius", "opacity", "rotation", "border" }
+Text:  { "id", "type": "text", "x", "y", "width", "height", "zIndex", "content": "Hebrew text", "fontSize", "fontWeight": 100-900, "color", "textAlign": "right", "role": "title"|"subtitle"|"body"|"caption"|"label"|"decorative", "lineHeight", "letterSpacing", "opacity", "rotation", "textStroke": { "width", "color" } }
+Image: { "id", "type": "image", "x", "y", "width", "height", "zIndex", "src": "THE_URL", "objectFit": "cover", "borderRadius" }
+Note: role "decorative" = large watermark text, low opacity, rotated, fontSize 200+, used as visual texture.`,
+    description: 'פורמט אלמנטים — מפרט JSON של כל סוג אלמנט (shape/text/image)',
+    value_type: 'text' as const,
+    group: 'מעצב שקפים',
+  },
+
+  'slide_designer.technical_rules': {
+    value: `- textAlign: "right" always (RTL). All content text in Hebrew.
+- Supported properties only: no box-shadow, no backdrop-filter, no filter:blur.
+- Fake 3D depth: use a shape at x+12, y+12 with fill:#000 opacity:0.12-0.18.`,
+    description: 'חוקים טכניים — מגבלות שה-AI חייב לקיים',
+    value_type: 'text' as const,
+    group: 'מעצב שקפים',
+  },
+
+  'slide_designer.final_instruction': {
+    value: `Before returning the JSON, mentally render each slide in your mind:
+1. VISUALIZE the 1920x1080 canvas with all elements at their exact positions.
+2. CHECK: Can I read every text element clearly? Is anything hidden behind another element?
+3. CHECK: If there is an image, does it have its own space? Is text placed in a separate area?
+4. CHECK: Does the overall composition feel like a premium magazine page?
+5. If any check fails, fix the layout before outputting.
+Only use image URLs that are explicitly provided in the slide data. Never invent image URLs.`,
+    description: 'הוראה סופית — רשימת בדיקות שה-AI מבצע לפני שליחת JSON',
+    value_type: 'text' as const,
+    group: 'מעצב שקפים',
+  },
+
+  'slide_designer.image_role_hints': {
+    value: {
+      cover: 'The image IS the hero — it is the first thing the viewer sees. Let it dominate.',
+      brief: 'The image accompanies the story — it supports the text, not competes with it.',
+      audience: 'The image represents the people — large, immersive, human.',
+      insight: 'The image creates atmosphere — dramatic backdrop or visual element reinforcing the insight.',
+      bigIdea: 'The image IS the idea — the visual is the star, text complements it.',
+      strategy: 'The image anchors — a visual anchor point that adds depth to the text.',
+      approach: 'The image is an accent — a surprising element that adds visual interest.',
+      closing: 'The image closes the circle — warm atmosphere, invitation, strong ending.',
+      whyNow: 'The image captures urgency — trending visuals, timely context, market energy.',
+      competitive: 'The image maps the landscape — abstract market visualization or brand positioning.',
+      contentStrategy: 'The image previews content — creative examples, platform visuals, content mood.',
+      timeline: 'The image shows progress — journey, roadmap, forward motion.',
+    },
+    description: 'תפקיד תמונה לפי סוג שקף — הנחיה ל-AI מה התפקיד הקריאייטיבי של התמונה',
+    value_type: 'json' as const,
     group: 'מעצב שקפים',
   },
 
@@ -315,6 +394,12 @@ export const MODEL_DEFAULTS = {
     value_type: 'number' as const,
     group: 'מעצב שקפים',
   },
+  'slide_designer.temperature': {
+    value: 1.0,
+    description: 'טמפרטורה — מעצב שקפים (Gemini 3 מומלץ: 1.0)',
+    value_type: 'number' as const,
+    group: 'מעצב שקפים',
+  },
 
   'brand_research.primary_model': {
     value: 'gemini-3.1-pro-preview',
@@ -382,16 +467,16 @@ export const MODEL_DEFAULTS = {
 export const DESIGN_DEFAULTS = {
   'layout_archetypes': {
     value: [
-      'Brutalist typography — כותרת ענקית שחורגת מהמסך עם negative x-axis overflow + watermark טקסט שקוף',
-      'Asymmetric 30/70 split — חלוקה א-סימטרית עם אלמנט דקורטיבי שחוצה את הקו המפריד',
-      'Overlapping Z-index cards — כרטיסים חופפים עם fake-3D shadows ואפקט עומק',
-      'Full-bleed image — תמונה מלאה עם שכבת gradient ו-text cutout overlay שקוף',
-      'Diagonal grid — קומפוזיציה אלכסונית עם טקסט מסובב וקווי grid דקים',
-      'Bento box — רשת א-סימטרית של תאים בגדלים שונים עם נתונים ויזואליים',
-      'Magazine spread — פריסת מגזין עם pull-quote ענק ותמונה דומיננטית',
-      'Data art — מספרים ענקיים כאלמנט ויזואלי מרכזי עם דקורציה מינימלית',
+      'Brutalist typography — oversized title with negative overflow, transparent watermark text behind',
+      'Asymmetric split — uneven division with a decorative element crossing the dividing line',
+      'Overlapping Z-index cards — layered cards with fake-3D shadows creating depth',
+      'Full-bleed image — edge-to-edge image with gradient overlay and text floating on top',
+      'Diagonal grid — angled composition with rotated text and thin grid lines',
+      'Bento box — asymmetric grid of mixed-size cells with visual data inside',
+      'Magazine spread — editorial layout with a large pull-quote and dominant image',
+      'Data art — oversized numbers as the visual centerpiece with minimal decoration',
     ],
-    description: 'ארכיטיפי עיצוב (8 פריסות אנטי-גנריות)',
+    description: 'ארכיטיפי עיצוב (8 פריסות אנטי-גנריות) — נשלחים ל-AI באנגלית',
     value_type: 'json' as const,
     group: 'עיצוב',
   },
@@ -410,9 +495,13 @@ export const DESIGN_DEFAULTS = {
       metrics:   { energy: 'building', density: 'dense', surprise: false, maxElements: 16, minWhitespace: 20 },
       influencerStrategy: { energy: 'calm', density: 'balanced', surprise: false, maxElements: 12, minWhitespace: 30 },
       influencers: { energy: 'breath', density: 'dense', surprise: false, maxElements: 20, minWhitespace: 15 },
+      whyNow:    { energy: 'peak', density: 'balanced', surprise: true, maxElements: 10, minWhitespace: 30 },
+      competitive: { energy: 'building', density: 'dense', surprise: false, maxElements: 16, minWhitespace: 20 },
+      contentStrategy: { energy: 'calm', density: 'balanced', surprise: false, maxElements: 14, minWhitespace: 25 },
+      timeline:  { energy: 'building', density: 'balanced', surprise: false, maxElements: 14, minWhitespace: 25 },
       closing:   { energy: 'finale', density: 'minimal', surprise: true, maxElements: 8, minWhitespace: 45 },
     },
-    description: 'מפת קצב — אנרגיה, צפיפות, הפתעה לכל סוג שקף',
+    description: 'מפת קצב — אנרגיה, צפיפות, הפתעה לכל סוג שקף (כולל כל 17 סוגים)',
     value_type: 'json' as const,
     group: 'עיצוב',
   },
@@ -495,6 +584,12 @@ export const PIPELINE_DEFAULTS = {
     description: 'מקסימום טוקנים לחילוץ בריף',
     value_type: 'number' as const,
     group: 'גבולות',
+  },
+  'slide_designer.batch_size': {
+    value: 2,
+    description: 'שקפים ל-batch — מעצב שקפים (2 = מומלץ לאיכות, 6 = מהיר אך פחות אמין)',
+    value_type: 'number' as const,
+    group: 'מעצב שקפים',
   },
 } satisfies Record<string, ConfigDefault>
 

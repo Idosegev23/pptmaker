@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
       // Collect all slides from batch results
       const allSlides: Slide[] = pipeline.batchResults.flatMap(r => r.slides)
 
-      const presentation = pipelineFinalize(pipeline.foundation, allSlides)
+      const presentation = await pipelineFinalize(pipeline.foundation, allSlides)
 
       // Save final presentation + clean up pipeline data
       const { _pipeline, ...cleanData } = documentData as Record<string, unknown> & { _pipeline?: unknown }
