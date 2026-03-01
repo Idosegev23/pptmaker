@@ -9,6 +9,7 @@ import type { KeyInsightStepData, AiVersionEntry } from '@/types/wizard'
 import AiVersionNavigator from '../ai-version-navigator'
 import BriefQuotePanel from '../brief-quote-panel'
 import { extractBriefExcerpt } from '../brief-excerpt-utils'
+import ResearchContext from '../research-context'
 
 interface StepKeyInsightProps {
   data: Partial<KeyInsightStepData>
@@ -17,6 +18,7 @@ interface StepKeyInsightProps {
   errors: Record<string, string> | null
   briefContext?: string
   rawBriefText?: string
+  brandResearch?: Record<string, unknown> | null
   aiVersionHistory?: Record<string, { versions: AiVersionEntry[]; currentIndex: number }>
   onPushVersion?: (key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') => void
   onNavigateVersion?: (key: string, direction: 'prev' | 'next') => void
@@ -29,6 +31,7 @@ export default function StepKeyInsight({
   errors,
   briefContext,
   rawBriefText,
+  brandResearch,
   aiVersionHistory,
   onPushVersion,
   onNavigateVersion,
@@ -198,6 +201,19 @@ export default function StepKeyInsight({
         error={errors?.insightData}
         className="min-h-[100px]"
       />
+
+      {/* ── Research Context ── */}
+      {brandResearch && (
+        <ResearchContext
+          title="הקשר שוק ומחקר"
+          items={[
+            { label: 'הקשר שוק ישראלי', value: brandResearch.israeliMarketContext as string },
+            { label: 'טרנדים בתעשייה', value: brandResearch.industryTrends as string[] },
+            { label: 'פער תחרותי', value: brandResearch.competitiveGap as string },
+            { label: 'למה עכשיו?', value: brandResearch.whyNowTrigger as string },
+          ]}
+        />
+      )}
     </div>
   )
 }

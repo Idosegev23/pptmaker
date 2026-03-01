@@ -8,6 +8,7 @@ import type { StrategyStepData, AiVersionEntry } from '@/types/wizard'
 import AiVersionNavigator from '../ai-version-navigator'
 import BriefQuotePanel from '../brief-quote-panel'
 import { extractBriefExcerpt } from '../brief-excerpt-utils'
+import ResearchContext from '../research-context'
 
 interface StepStrategyProps {
   data: Partial<StrategyStepData>
@@ -16,12 +17,13 @@ interface StepStrategyProps {
   errors: Record<string, string> | null
   briefContext?: string
   rawBriefText?: string
+  brandResearch?: Record<string, unknown> | null
   aiVersionHistory?: Record<string, { versions: AiVersionEntry[]; currentIndex: number }>
   onPushVersion?: (key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') => void
   onNavigateVersion?: (key: string, direction: 'prev' | 'next') => void
 }
 
-export default function StepStrategy({ data, extractedData, onChange, errors, briefContext, rawBriefText, aiVersionHistory, onPushVersion, onNavigateVersion }: StepStrategyProps) {
+export default function StepStrategy({ data, extractedData, onChange, errors, briefContext, rawBriefText, brandResearch, aiVersionHistory, onPushVersion, onNavigateVersion }: StepStrategyProps) {
   const strategyHeadline = data.strategyHeadline ?? ''
   const strategyDescription = data.strategyDescription ?? ''
   const strategyPillars = data.strategyPillars ?? []
@@ -296,6 +298,23 @@ export default function StepStrategy({ data, extractedData, onChange, errors, br
           </div>
         ))}
       </div>
+
+      {/* ── Research Context ── */}
+      {brandResearch && (
+        <ResearchContext
+          title="ממצאי מחקר אסטרטגיים"
+          items={(() => {
+            const competitors = brandResearch.competitors as { name: string; description?: string }[] | undefined
+            return [
+              { label: 'מיצוב שוק', value: brandResearch.marketPosition as string },
+              { label: 'יתרונות תחרותיים', value: brandResearch.competitiveAdvantages as string[] },
+              { label: 'מתחרים מרכזיים', value: competitors?.map(c => c.description ? `${c.name} — ${c.description}` : c.name) },
+              { label: 'גישה מומלצת', value: brandResearch.suggestedApproach as string },
+              { label: 'הקשר שוק ישראלי', value: brandResearch.israeliMarketContext as string },
+            ]
+          })()}
+        />
+      )}
 
       {/* Strategy Flow Visualization */}
       <div className="space-y-4">

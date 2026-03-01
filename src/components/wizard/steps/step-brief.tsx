@@ -8,6 +8,7 @@ import type { BriefStepData } from '@/types/wizard'
 import BriefQuotePanel from '../brief-quote-panel'
 import DualFieldSection from '../dual-field-section'
 import { extractBriefExcerpt } from '../brief-excerpt-utils'
+import ResearchContext from '../research-context'
 
 interface StepBriefProps {
   data: Partial<BriefStepData>
@@ -16,6 +17,7 @@ interface StepBriefProps {
   errors: Record<string, string> | null
   rawBriefText?: string
   rawKickoffText?: string
+  brandResearch?: Record<string, unknown> | null
 }
 
 function DocumentIcon() {
@@ -26,7 +28,7 @@ function DocumentIcon() {
   )
 }
 
-export default function StepBrief({ data, extractedData, onChange, errors, rawBriefText, rawKickoffText }: StepBriefProps) {
+export default function StepBrief({ data, extractedData, onChange, errors, rawBriefText, rawKickoffText, brandResearch }: StepBriefProps) {
   const brandName = data.brandName ?? ''
   const brandBrief = data.brandBrief ?? ''
   const brandPainPoints = data.brandPainPoints ?? []
@@ -384,6 +386,21 @@ export default function StepBrief({ data, extractedData, onChange, errors, rawBr
             ))}
           </ul>
         </div>
+      )}
+
+      {/* ── Research Context ── */}
+      {brandResearch && (
+        <ResearchContext
+          title="ממצאי מחקר מותג"
+          items={[
+            { label: 'תיאור החברה', value: brandResearch.companyDescription as string },
+            { label: 'תעשייה', value: [brandResearch.industry as string, brandResearch.subIndustry as string].filter(Boolean).join(' / ') || undefined },
+            { label: 'ערכי מותג', value: brandResearch.brandValues as string[] },
+            { label: 'הבטחת המותג', value: brandResearch.brandPromise as string },
+            { label: 'למה עכשיו?', value: brandResearch.whyNowTrigger as string },
+            { label: 'אישיות המותג', value: brandResearch.brandPersonality as string[] },
+          ]}
+        />
       )}
     </div>
   )

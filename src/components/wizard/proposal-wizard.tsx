@@ -172,6 +172,16 @@ export default function ProposalWizard({
     [initialData._kickoffText]
   )
 
+  // Research data — read-only, displayed as context in steps
+  const brandResearch = useMemo(
+    () => (initialData._brandResearch as Record<string, unknown>) || null,
+    [initialData._brandResearch]
+  )
+  const influencerStrategy = useMemo(
+    () => (initialData._influencerStrategy as Record<string, unknown>) || null,
+    [initialData._influencerStrategy]
+  )
+
   const [isSaving, setIsSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [stepErrors, setStepErrors] = useState<Record<string, string> | null>(
@@ -552,6 +562,8 @@ export default function ProposalWizard({
                 rawKickoffText={rawKickoffText}
                 successMetrics={state.stepData.brief?.successMetrics}
                 aiVersionHistory={state.aiVersionHistory}
+                brandResearch={brandResearch}
+                influencerStrategy={influencerStrategy}
                 onPushVersion={(key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') =>
                   dispatch({ type: 'PUSH_AI_VERSION', key, data, source })
                 }

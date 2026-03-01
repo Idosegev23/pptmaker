@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { InfluencersStepData, InfluencerProfile } from '@/types/wizard'
+import ResearchContext from '../research-context'
 
 interface StepInfluencersProps {
   data: Partial<InfluencersStepData>
   extractedData: Partial<InfluencersStepData>
   onChange: (data: Partial<InfluencersStepData>) => void
   errors: Record<string, string> | null
+  influencerStrategy?: Record<string, unknown> | null
 }
 
 function createEmptyInfluencer(): InfluencerProfile {
@@ -32,6 +34,7 @@ export default function StepInfluencers({
   extractedData,
   onChange,
   errors,
+  influencerStrategy: influencerResearch,
 }: StepInfluencersProps) {
   const influencers = data.influencers ?? []
   const influencerStrategy = data.influencerStrategy ?? ''
@@ -593,6 +596,24 @@ export default function StepInfluencers({
         error={errors?.influencerNote}
         className="min-h-[80px]"
       />
+
+      {/* ── Research Context ── */}
+      {influencerResearch && (
+        <ResearchContext
+          title="ממצאי מחקר משפיענים"
+          items={(() => {
+            const tiers = influencerResearch.tiers as { name: string; description?: string; count?: number; budgetPercent?: number }[] | undefined
+            const kpis = influencerResearch.expectedKPIs as { metric: string; target?: string; rationale?: string }[] | undefined
+            const timeline = influencerResearch.suggestedTimeline as { phase: string; description?: string }[] | undefined
+            return [
+              { label: 'פלטפורמה דומיננטית', value: influencerResearch.dominantPlatformInIsrael as string },
+              { label: 'שכבות משפיענים', value: tiers?.map(t => `${t.name}${t.description ? ` — ${t.description}` : ''}${t.count ? ` (${t.count})` : ''}`) },
+              { label: 'KPIs צפויים', value: kpis?.map(k => `${k.metric}${k.target ? `: ${k.target}` : ''}`) },
+              { label: 'ציר זמן מוצע', value: timeline?.map(t => `${t.phase}${t.description ? ` — ${t.description}` : ''}`) },
+            ]
+          })()}
+        />
+      )}
     </div>
   )
 }

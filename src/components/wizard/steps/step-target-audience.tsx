@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import type { TargetAudienceStepData } from '@/types/wizard'
 import BriefQuotePanel from '../brief-quote-panel'
 import { extractBriefExcerpt } from '../brief-excerpt-utils'
+import ResearchContext from '../research-context'
 
 interface AudienceInsight {
   text: string
@@ -25,6 +26,7 @@ interface StepTargetAudienceProps {
   errors: Record<string, string> | null
   briefContext?: string
   rawBriefText?: string
+  brandResearch?: Record<string, unknown> | null
 }
 
 const GENDER_OPTIONS = [
@@ -41,6 +43,7 @@ export default function StepTargetAudience({
   errors,
   briefContext,
   rawBriefText,
+  brandResearch,
 }: StepTargetAudienceProps) {
   const targetGender = data.targetGender ?? ''
   const targetAgeRange = data.targetAgeRange ?? ''
@@ -344,6 +347,23 @@ export default function StepTargetAudience({
           </div>
         )}
       </div>
+
+      {/* ── Research Context ── */}
+      {brandResearch && (
+        <ResearchContext
+          title="ממצאי מחקר קהל יעד"
+          items={(() => {
+            const td = brandResearch.targetDemographics as { primaryAudience?: { socioeconomic?: string; lifestyle?: string; aspirations?: string[]; interests?: string[] }; purchaseDrivers?: string[] } | undefined
+            return [
+              { label: 'רמה סוציו-אקונומית', value: td?.primaryAudience?.socioeconomic as string },
+              { label: 'אורח חיים', value: td?.primaryAudience?.lifestyle as string },
+              { label: 'שאיפות', value: td?.primaryAudience?.aspirations as string[] },
+              { label: 'תחומי עניין', value: td?.primaryAudience?.interests as string[] },
+              { label: 'מניעי רכישה', value: td?.purchaseDrivers as string[] },
+            ]
+          })()}
+        />
+      )}
     </div>
   )
 }

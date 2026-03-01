@@ -1549,8 +1549,10 @@ function buildSlideBatches(
     subheadline: `נשמח להתחיל לעבוד עם ${data.brandName}`,
   }) })
 
-  // ── Split into balanced batches of max 6 ──
-  return chunkByMax(allSlides, 6)
+  // ── Split into small batches of max 2 for quality ──
+  // Gemini struggles with 6 slides per batch (returns 1 instead of 6).
+  // 2 slides per batch = reliable output with full element detail.
+  return chunkByMax(allSlides, 2)
 }
 
 // ═══════════════════════════════════════════════════════════
