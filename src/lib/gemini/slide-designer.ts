@@ -89,6 +89,10 @@ async function getThinkingLevel(): Promise<string> {
   return getConfig('ai_models', 'slide_designer.thinking_level', MODEL_DEFAULTS['slide_designer.thinking_level'].value as string)
 }
 
+async function getBatchThinkingLevel(): Promise<string> {
+  return getConfig('ai_models', 'slide_designer.batch_thinking_level', MODEL_DEFAULTS['slide_designer.batch_thinking_level'].value as string)
+}
+
 async function getMaxOutputTokens(): Promise<number> {
   return getConfig('ai_models', 'slide_designer.max_output_tokens', MODEL_DEFAULTS['slide_designer.max_output_tokens'].value as number)
 }
@@ -687,7 +691,7 @@ async function generateSlidesBatchAST(
   ] = await Promise.all([
     getPacingMap(), getLayoutArchetypes(), getImageRoleHints(),
     getDesignPrinciples(), getDepthLayers(), getElementFormat(), getTechnicalRules(), getFinalInstruction(),
-    getThinkingLevel(), getMaxOutputTokens(), getTemperature(),
+    getBatchThinkingLevel(), getMaxOutputTokens(), getTemperature(),
   ])
 
   const resolvedThinking = thinkingLevel === 'HIGH' ? ThinkingLevel.HIGH
@@ -817,27 +821,52 @@ ${technicalRules}
 ${finalInstruction}
 </final_instruction>`
 
-  // Flash first (fast + cheap), Pro fallback with exponential backoff
+  // ── 3-tier retry: configured thinking → LOW thinking → fallback slides ──
+  const BATCH_TIMEOUT_MS = 240_000 // 4 minutes per Gemini call
   const batchSysInstruction = await getSystemInstruction()
   const batchModels = await getSlideDesignerModels()
-  for (let attempt = 0; attempt < batchModels.length; attempt++) {
-    const model = batchModels[attempt]
+
+  // Build attempt list: [model, thinkingLevel] pairs
+  // Tier 1: primary model + configured thinking
+  // Tier 2: primary model + LOW thinking (faster)
+  // Tier 3: fallback model + LOW thinking
+  const attempts: Array<{ model: string; thinking: ThinkingLevel; label: string }> = [
+    { model: batchModels[0], thinking: resolvedThinking, label: `${batchModels[0]} (${thinkingLevel})` },
+    ...(resolvedThinking !== ThinkingLevel.LOW
+      ? [{ model: batchModels[0], thinking: ThinkingLevel.LOW, label: `${batchModels[0]} (LOW fallback)` }]
+      : []),
+    ...(batchModels[1] !== batchModels[0]
+      ? [{ model: batchModels[1], thinking: ThinkingLevel.LOW, label: `${batchModels[1]} (LOW fallback)` }]
+      : []),
+  ]
+
+  for (let attempt = 0; attempt < attempts.length; attempt++) {
+    const { model, thinking, label } = attempts[attempt]
     try {
-      console.log(`[SlideDesigner][${requestId}] Calling ${model} for batch (attempt ${attempt + 1}/${batchModels.length})...`)
+      console.log(`[SlideDesigner][${requestId}] Calling ${label} for batch (attempt ${attempt + 1}/${attempts.length})...`)
       console.log(`[SlideDesigner][${requestId}] PROMPT LENGTH: ${prompt.length} chars`)
-      console.log(`[SlideDesigner][${requestId}] PROMPT PREVIEW:\n${prompt.slice(0, 2000)}${prompt.length > 2000 ? '\n... [truncated]' : ''}`)
-      const response = await ai.models.generateContent({
+      if (attempt === 0) {
+        console.log(`[SlideDesigner][${requestId}] PROMPT PREVIEW:\n${prompt.slice(0, 2000)}${prompt.length > 2000 ? '\n... [truncated]' : ''}`)
+      }
+
+      // Per-call timeout via Promise.race
+      const geminiCall = ai.models.generateContent({
         model,
         contents: prompt,
         config: {
           systemInstruction: batchSysInstruction,
           responseMimeType: 'application/json',
           responseSchema: SLIDE_BATCH_SCHEMA,
-          thinkingConfig: { thinkingLevel: resolvedThinking },
+          thinkingConfig: { thinkingLevel: thinking },
           maxOutputTokens,
           temperature,
+          httpOptions: { timeout: BATCH_TIMEOUT_MS },
         },
       })
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('BATCH_TIMEOUT')), BATCH_TIMEOUT_MS)
+      )
+      const response = await Promise.race([geminiCall, timeoutPromise])
 
       // With responseSchema, JSON.parse should always succeed. Dynamic fallback for safety.
       let parsed: { slides: Slide[] }
@@ -852,7 +881,7 @@ ${finalInstruction}
       }
 
       if (parsed?.slides?.length > 0) {
-        console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} AST slides (model: ${model})`)
+        console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} AST slides (${label})`)
         // ── DEBUG: Log raw response and parsed details ──
         const rawText = response.text || ''
         console.log(`[SlideDesigner][${requestId}] RAW RESPONSE (${rawText.length} chars):\n${rawText.slice(0, 3000)}${rawText.length > 3000 ? '\n... [truncated]' : ''}`)
@@ -862,7 +891,7 @@ ${finalInstruction}
           const typeStr = Object.entries(elTypes).map(([t, c]) => `${t} x${c}`).join(', ')
           console.log(`[SlideDesigner][${requestId}]   PARSED Slide ${idx + 1} (${s.slideType}): ${s.elements?.length || 0} elements [${typeStr}], bg: ${s.background?.type}=${s.background?.value?.slice(0, 60)}`)
         })
-        if (attempt > 0) console.log(`[SlideDesigner][${requestId}] ✅ Batch succeeded with fallback (${model})`)
+        if (attempt > 0) console.log(`[SlideDesigner][${requestId}] ✅ Batch succeeded with fallback (${label})`)
 
         return parsed.slides.map((slide, i) => ({
           id: slide.id || `slide-${batchContext.slideIndex + i}`,
@@ -878,17 +907,60 @@ ${finalInstruction}
 
       throw new Error('No slides in AST response')
     } catch (error) {
+      const isTimeout = error instanceof Error && (
+        error.message === 'BATCH_TIMEOUT' ||
+        error.message.includes('timeout') ||
+        error.message.includes('DEADLINE_EXCEEDED')
+      )
       const msg = error instanceof Error ? error.message : String(error)
-      console.error(`[SlideDesigner][${requestId}] Batch attempt ${attempt + 1}/${batchModels.length} failed (${model}): ${msg}`)
-      if (attempt < batchModels.length - 1) {
-        console.log(`[SlideDesigner][${requestId}] ⚡ Falling back to ${batchModels[attempt + 1]}...`)
-        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+      console.error(`[SlideDesigner][${requestId}] Batch attempt ${attempt + 1}/${attempts.length} failed (${label}): ${isTimeout ? 'TIMEOUT' : msg}`)
+      if (attempt < attempts.length - 1) {
+        console.log(`[SlideDesigner][${requestId}] ⚡ Retrying with ${attempts[attempt + 1].label}...`)
+        await new Promise(r => setTimeout(r, 1500))
       } else {
-        throw error
+        // All attempts failed — generate fallback placeholder slides
+        console.warn(`[SlideDesigner][${requestId}] ⚠️ All ${attempts.length} attempts failed. Generating fallback slides.`)
+        return slides.map((slide, i) => buildFallbackSlide(slide, i, batchContext, colors))
       }
     }
   }
   throw new Error('All slide generation attempts failed')
+}
+
+/** Generate a minimal but valid placeholder slide when AI fails */
+function buildFallbackSlide(
+  slide: SlideContentInput,
+  index: number,
+  ctx: BatchContext,
+  colors: PremiumDesignSystem['colors'],
+): Slide {
+  const globalIndex = ctx.slideIndex + index
+  return {
+    id: `slide-${globalIndex}`,
+    slideType: slide.slideType as SlideType,
+    label: slide.title || `שקף ${globalIndex + 1}`,
+    background: { type: 'solid' as const, value: colors.background },
+    elements: [
+      {
+        id: `el-${globalIndex}-0`, type: 'shape' as const, x: 0, y: 0, width: 1920, height: 1080,
+        zIndex: 0, shapeType: 'background' as const,
+        fill: `linear-gradient(135deg, ${colors.primary}30 0%, ${colors.background} 60%, ${colors.accent}20 100%)`,
+        opacity: 1,
+      },
+      {
+        id: `el-${globalIndex}-1`, type: 'text' as const, x: 120, y: 400, width: 1680, height: 120,
+        zIndex: 10, content: slide.title || `שקף ${globalIndex + 1}`,
+        fontSize: 64, fontWeight: 800 as FontWeight, color: colors.text,
+        textAlign: 'right' as const, role: 'title' as const, lineHeight: 1.1,
+      },
+      {
+        id: `el-${globalIndex}-2`, type: 'text' as const, x: 120, y: 560, width: 1680, height: 300,
+        zIndex: 8, content: String(slide.content?.subtitle || slide.content?.description || slide.content?.text || ''),
+        fontSize: 24, fontWeight: 300 as FontWeight, color: colors.text + '90',
+        textAlign: 'right' as const, role: 'body' as const, lineHeight: 1.6,
+      },
+    ] as SlideElement[],
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

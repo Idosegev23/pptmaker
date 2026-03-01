@@ -384,7 +384,13 @@ export const MODEL_DEFAULTS = {
   },
   'slide_designer.thinking_level': {
     value: 'HIGH',
-    description: 'רמת חשיבה — מעצב שקפים',
+    description: 'רמת חשיבה — Design System (foundation)',
+    value_type: 'text' as const,
+    group: 'מעצב שקפים',
+  },
+  'slide_designer.batch_thinking_level': {
+    value: 'MEDIUM',
+    description: 'רמת חשיבה — יצירת שקפים (batches). MEDIUM = מהיר יותר, HIGH = איכות מקסימלית',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
@@ -586,8 +592,8 @@ export const PIPELINE_DEFAULTS = {
     group: 'גבולות',
   },
   'slide_designer.batch_size': {
-    value: 2,
-    description: 'שקפים ל-batch — מעצב שקפים (2 = מומלץ לאיכות, 6 = מהיר אך פחות אמין)',
+    value: 4,
+    description: 'שקפים ל-batch — מעצב שקפים (4 = מאוזן, 2 = איכות מקסימלית, 6 = מהיר)',
     value_type: 'number' as const,
     group: 'מעצב שקפים',
   },
