@@ -7,13 +7,13 @@ import {
   pipelineFinalize,
 } from '@/lib/gemini/slide-designer'
 import type { PipelineFoundation, BatchResult } from '@/lib/gemini/slide-designer'
-export const maxDuration = 900
+export const maxDuration = 800
 
 /**
  * POST /api/generate-background
  *
  * Fire-and-forget slide generation. The client can navigate away
- * and the function keeps running (Vercel Pro: up to 900s).
+ * and the function keeps running (Vercel Pro: up to 800s).
  * Progress is saved to DB and visible in the dashboard.
  */
 export async function POST(request: NextRequest) {
