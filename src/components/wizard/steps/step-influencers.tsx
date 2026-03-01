@@ -77,8 +77,9 @@ export default function StepInfluencers({
       const trimmed = category.trim()
       if (!trimmed) return
       const inf = influencers[index]
-      if (inf.categories.includes(trimmed)) return
-      updateInfluencer(index, { categories: [...inf.categories, trimmed] })
+      const cats = inf.categories || []
+      if (cats.includes(trimmed)) return
+      updateInfluencer(index, { categories: [...cats, trimmed] })
     },
     [influencers, updateInfluencer]
   )
@@ -87,7 +88,7 @@ export default function StepInfluencers({
     (infIndex: number, catIndex: number) => {
       const inf = influencers[infIndex]
       updateInfluencer(infIndex, {
-        categories: inf.categories.filter((_, i) => i !== catIndex),
+        categories: (inf.categories || []).filter((_, i) => i !== catIndex),
       })
     },
     [influencers, updateInfluencer]
@@ -285,7 +286,7 @@ export default function StepInfluencers({
                   <div className="space-y-2">
                     <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">קטגוריות</label>
                     <div className="flex flex-wrap gap-2">
-                      {inf.categories.map((cat, catIndex) => (
+                      {(inf.categories || []).map((cat, catIndex) => (
                         <span
                           key={catIndex}
                           className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-brand-gold/10 text-sm text-brand-primary"
