@@ -822,7 +822,11 @@ ${finalInstruction}
 </final_instruction>`
 
   // ── 3-tier retry: configured thinking → LOW thinking → fallback slides ──
-  const BATCH_TIMEOUT_MS = 240_000 // 4 minutes per Gemini call
+  // Per-call timeouts descend so total stays well within Vercel 600s limit
+  // Tier 1: 180s, Tier 2: 120s, Tier 3: 90s → worst case 390s total
+  const TIER_TIMEOUTS = [180_000, 120_000, 90_000]
+  const TOTAL_BUDGET_MS = 480_000 // hard cap — leave 120s buffer for Vercel
+  const functionStartTime = Date.now()
   const batchSysInstruction = await getSystemInstruction()
   const batchModels = await getSlideDesignerModels()
 
@@ -841,9 +845,17 @@ ${finalInstruction}
   ]
 
   for (let attempt = 0; attempt < attempts.length; attempt++) {
+    // Check total time budget before each attempt
+    const elapsedTotal = Date.now() - functionStartTime
+    if (elapsedTotal > TOTAL_BUDGET_MS) {
+      console.warn(`[SlideDesigner][${requestId}] ⚠️ Total budget exceeded (${Math.round(elapsedTotal / 1000)}s). Generating fallback slides.`)
+      return slides.map((slide, i) => buildFallbackSlide(slide, i, batchContext, colors))
+    }
+
     const { model, thinking, label } = attempts[attempt]
+    const callTimeout = Math.min(TIER_TIMEOUTS[attempt] || 90_000, TOTAL_BUDGET_MS - elapsedTotal)
     try {
-      console.log(`[SlideDesigner][${requestId}] Calling ${label} for batch (attempt ${attempt + 1}/${attempts.length})...`)
+      console.log(`[SlideDesigner][${requestId}] Calling ${label} for batch (attempt ${attempt + 1}/${attempts.length}, timeout ${Math.round(callTimeout / 1000)}s)...`)
       console.log(`[SlideDesigner][${requestId}] PROMPT LENGTH: ${prompt.length} chars`)
       if (attempt === 0) {
         console.log(`[SlideDesigner][${requestId}] PROMPT PREVIEW:\n${prompt.slice(0, 2000)}${prompt.length > 2000 ? '\n... [truncated]' : ''}`)
@@ -860,11 +872,11 @@ ${finalInstruction}
           thinkingConfig: { thinkingLevel: thinking },
           maxOutputTokens,
           temperature,
-          httpOptions: { timeout: BATCH_TIMEOUT_MS },
+          httpOptions: { timeout: callTimeout },
         },
       })
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('BATCH_TIMEOUT')), BATCH_TIMEOUT_MS)
+        setTimeout(() => reject(new Error('BATCH_TIMEOUT')), callTimeout)
       )
       const response = await Promise.race([geminiCall, timeoutPromise])
 

@@ -305,7 +305,8 @@ export default function GeneratePage() {
       animateProgressTo(getPhaseStart('foundation') + PHASE_WEIGHTS.foundation)
       console.log(`[Generate] Foundation complete: ${bc} batches, ${ts} slides`)
 
-      // 5b: Batches
+      // 5b: Batches (with client-side retry)
+      const MAX_BATCH_RETRIES = 2
       let accumulated = 0
       const perBatch = PHASE_WEIGHTS.batches / bc
 
@@ -314,23 +315,51 @@ export default function GeneratePage() {
         setBatchIndex(b)
 
         const batchStart = PHASE_WEIGHTS.research + PHASE_WEIGHTS.visuals + PHASE_WEIGHTS.foundation + perBatch * b
-        animateProgressTo(batchStart + perBatch * 0.15) // small initial progress
-        console.log(`[Generate] Running batch ${b + 1}/${bc}...`)
+        animateProgressTo(batchStart + perBatch * 0.15)
 
-        const batchRes = await fetch('/api/generate-slides-stage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ documentId, stage: 'batch', batchIndex: b }),
-        })
+        let batchSucceeded = false
+        for (let retry = 0; retry <= MAX_BATCH_RETRIES; retry++) {
+          if (retry > 0) {
+            console.log(`[Generate] Retrying batch ${b + 1}/${bc} (attempt ${retry + 1}/${MAX_BATCH_RETRIES + 1})...`)
+            await new Promise(r => setTimeout(r, 2000))
+          } else {
+            console.log(`[Generate] Running batch ${b + 1}/${bc}...`)
+          }
 
-        const { ok: batchOk, data: batchData } = await safeJson(batchRes)
-        if (!batchOk) {
-          throw new Error((batchData.details || batchData.error || `Batch ${b + 1} failed`) as string)
+          try {
+            const batchRes = await fetch('/api/generate-slides-stage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ documentId, stage: 'batch', batchIndex: b }),
+            })
+
+            const { ok: batchOk, data: batchData } = await safeJson(batchRes)
+            if (!batchOk) {
+              const errMsg = (batchData.details || batchData.error || `Batch ${b + 1} failed`) as string
+              if (retry < MAX_BATCH_RETRIES) {
+                console.warn(`[Generate] Batch ${b + 1} failed (will retry): ${errMsg}`)
+                continue
+              }
+              throw new Error(errMsg)
+            }
+            accumulated = (batchData.totalSlidesAccumulated as number) || (accumulated + (bs[b] || 0))
+            setSlidesDone(accumulated)
+            animateProgressTo(batchStart + perBatch)
+            console.log(`[Generate] Batch ${b + 1} done: ${batchData.slidesGenerated} slides (total: ${accumulated})${retry > 0 ? ` [after ${retry} retries]` : ''}`)
+            batchSucceeded = true
+            break
+          } catch (fetchErr) {
+            // Network error (ERR_CONNECTION_CLOSED, Failed to fetch, etc.)
+            if (retry < MAX_BATCH_RETRIES) {
+              console.warn(`[Generate] Batch ${b + 1} network error (will retry): ${fetchErr}`)
+              continue
+            }
+            throw fetchErr
+          }
         }
-        accumulated = (batchData.totalSlidesAccumulated as number) || (accumulated + (bs[b] || 0))
-        setSlidesDone(accumulated)
-        animateProgressTo(batchStart + perBatch)
-        console.log(`[Generate] Batch ${b + 1} done: ${batchData.slidesGenerated} slides (total: ${accumulated})`)
+        if (!batchSucceeded) {
+          throw new Error(`Batch ${b + 1} failed after ${MAX_BATCH_RETRIES + 1} attempts`)
+        }
       }
 
       // 5c: Finalize
