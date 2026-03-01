@@ -54,6 +54,9 @@ export default function PresentationEditorPage() {
   const [snapToGrid, setSnapToGrid] = useState(false)
   const [isPresentationMode, setIsPresentationMode] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [clipboardElement, setClipboardElement] = useState<SlideElement | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const dragSrcIndex = useRef<number | null>(null)
 
   const editor = usePresentationEditor(EMPTY_PRESENTATION)
   const slideContainerRef = useRef<HTMLDivElement>(null)
@@ -175,29 +178,69 @@ export default function PresentationEditorPage() {
     }
   }, [editor.selectedSlideIndex])
 
-  // ─── Keyboard shortcuts (undo/redo, grid toggle) ─────
+  // ─── Keyboard shortcuts ─────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName
+      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable
+
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault()
-        if (e.shiftKey) {
-          editor.redo()
-        } else {
-          editor.undo()
+        if (e.shiftKey) { editor.redo() } else { editor.undo() }
+      }
+      // Ctrl+C — copy element
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && !isTyping && editor.selectedElement) {
+        e.preventDefault()
+        setClipboardElement(structuredClone(editor.selectedElement))
+      }
+      // Ctrl+V — paste element
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !isTyping && clipboardElement) {
+        e.preventDefault()
+        const pasted = structuredClone(clipboardElement)
+        pasted.id = `el-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        pasted.x += 30
+        pasted.y += 30
+        editor.addElement(pasted)
+      }
+      // Ctrl+D — duplicate element
+      if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !isTyping && editor.selectedElementId) {
+        e.preventDefault()
+        editor.duplicateElement(editor.selectedElementId)
+      }
+      // Ctrl+= / Ctrl+- — zoom
+      if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+') && !isTyping) {
+        e.preventDefault()
+        setSlideScale(prev => Math.min(prev + 0.1, 1.5))
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '-' && !isTyping) {
+        e.preventDefault()
+        setSlideScale(prev => Math.max(prev - 0.1, 0.2))
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '0' && !isTyping) {
+        e.preventDefault()
+        // Reset zoom to auto-fit
+        const container = slideContainerRef.current
+        if (container) {
+          const rect = container.getBoundingClientRect()
+          const scaleX = (rect.width - 40) / 1920
+          const scaleY = (rect.height - 40) / 1080
+          setSlideScale(Math.min(scaleX, scaleY, 1))
         }
       }
-      // G — toggle grid (only when not typing in an input)
-      if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const tag = (e.target as HTMLElement)?.tagName
-        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !(e.target as HTMLElement)?.isContentEditable) {
-          e.preventDefault()
-          setGridVisible(prev => !prev)
-        }
+      // G — toggle grid
+      if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping) {
+        e.preventDefault()
+        setGridVisible(prev => !prev)
+      }
+      // Delete / Backspace — delete selected element
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isTyping && editor.selectedElementId) {
+        e.preventDefault()
+        editor.deleteElement(editor.selectedElementId)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editor])
+  }, [editor, clipboardElement])
 
   // ─── Download PDF ────────────────────────────────────
   const downloadPdf = useCallback(async () => {
@@ -554,6 +597,26 @@ export default function PresentationEditorPage() {
                 </button>
               </div>
 
+              <div className="flex items-center gap-0.5 px-2 py-1 bg-white/5 rounded-lg">
+                <button
+                  onClick={() => setSlideScale(prev => Math.max(prev - 0.1, 0.2))}
+                  className="text-gray-400 hover:text-white transition-colors p-0.5"
+                  title="הקטן (Ctrl+-)"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                </button>
+                <span className="text-white/60 text-[10px] font-medium tabular-nums min-w-[36px] text-center">
+                  {Math.round(slideScale * 100)}%
+                </span>
+                <button
+                  onClick={() => setSlideScale(prev => Math.min(prev + 0.1, 1.5))}
+                  className="text-gray-400 hover:text-white transition-colors p-0.5"
+                  title="הגדל (Ctrl++)"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                </button>
+              </div>
+
               <button onClick={() => setShowProperties(p => !p)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${showProperties ? 'text-white bg-white/20 ring-1 ring-white/30' : 'text-gray-400 bg-white/5 hover:bg-white/10 hover:text-white'}`}>
                 {showProperties ? 'סגור פאנל' : 'פאנל עריכה'}
               </button>
@@ -616,7 +679,25 @@ export default function PresentationEditorPage() {
         >
           <div ref={thumbnailsRef} className="flex-1">
             {slides.map((slide, index) => (
-              <div key={slide.id} className="relative group mb-2">
+              <div
+                key={slide.id}
+                className={`relative group mb-2 ${dragOverIndex === index ? 'pt-6' : ''}`}
+                draggable
+                onDragStart={() => { dragSrcIndex.current = index }}
+                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(index) }}
+                onDragLeave={() => setDragOverIndex(null)}
+                onDrop={() => {
+                  if (dragSrcIndex.current !== null && dragSrcIndex.current !== index) {
+                    editor.reorderSlides(dragSrcIndex.current, index)
+                  }
+                  dragSrcIndex.current = null
+                  setDragOverIndex(null)
+                }}
+                onDragEnd={() => { dragSrcIndex.current = null; setDragOverIndex(null) }}
+              >
+                {dragOverIndex === index && (
+                  <div className="absolute top-0 left-2 right-2 h-1 bg-white/60 rounded-full" />
+                )}
                 <button
                   onClick={() => editor.selectSlide(index)}
                   className={`w-full rounded-lg overflow-hidden transition-all ${
@@ -624,8 +705,8 @@ export default function PresentationEditorPage() {
                       ? 'ring-2 ring-white/80 ring-offset-1 ring-offset-[#0a0a0f] shadow-lg shadow-white/5'
                       : 'opacity-50 hover:opacity-80'
                   }`}
-                  style={{ aspectRatio: '16/9', position: 'relative' }}
-                  title={`${slide.label} (${index + 1})`}
+                  style={{ aspectRatio: '16/9', position: 'relative', cursor: 'grab' }}
+                  title={`${slide.label} (${index + 1}) — גרור לשינוי סדר`}
                 >
                   <div style={{ position: 'absolute', top: 0, left: 0 }}>
                     <SlideViewer slide={slide} designSystem={designSystem} scale={thumbScale} />

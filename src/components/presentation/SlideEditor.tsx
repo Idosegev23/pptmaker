@@ -38,6 +38,53 @@ function getBackgroundStyle(bg: Slide['background']): React.CSSProperties {
   }
 }
 
+const GUIDE_SNAP_THRESHOLD = 8
+
+interface GuideLine { pos: number; axis: 'x' | 'y' }
+
+function computeGuides(
+  dragged: { x: number; y: number; width: number; height: number },
+  others: SlideElement[],
+): GuideLine[] {
+  const guides: GuideLine[] = []
+  const dCx = dragged.x + dragged.width / 2
+  const dCy = dragged.y + dragged.height / 2
+
+  // Canvas center guides
+  if (Math.abs(dCx - CANVAS_WIDTH / 2) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: CANVAS_WIDTH / 2, axis: 'x' })
+  if (Math.abs(dCy - CANVAS_HEIGHT / 2) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: CANVAS_HEIGHT / 2, axis: 'y' })
+
+  for (const el of others) {
+    const eCx = el.x + el.width / 2
+    const eCy = el.y + el.height / 2
+
+    // Left/right edge alignment
+    if (Math.abs(dragged.x - el.x) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: el.x, axis: 'x' })
+    if (Math.abs(dragged.x + dragged.width - (el.x + el.width)) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: el.x + el.width, axis: 'x' })
+    if (Math.abs(dragged.x - (el.x + el.width)) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: el.x + el.width, axis: 'x' })
+    if (Math.abs(dragged.x + dragged.width - el.x) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: el.x, axis: 'x' })
+
+    // Center alignment
+    if (Math.abs(dCx - eCx) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: eCx, axis: 'x' })
+    if (Math.abs(dCy - eCy) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: eCy, axis: 'y' })
+
+    // Top/bottom edge alignment
+    if (Math.abs(dragged.y - el.y) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: el.y, axis: 'y' })
+    if (Math.abs(dragged.y + dragged.height - (el.y + el.height)) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: el.y + el.height, axis: 'y' })
+    if (Math.abs(dragged.y - (el.y + el.height)) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: el.y + el.height, axis: 'y' })
+    if (Math.abs(dragged.y + dragged.height - el.y) < GUIDE_SNAP_THRESHOLD) guides.push({ pos: el.y, axis: 'y' })
+  }
+
+  // Deduplicate
+  const seen = new Set<string>()
+  return guides.filter(g => {
+    const key = `${g.axis}-${g.pos}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export default function SlideEditor({
   slide,
   designSystem,
@@ -52,6 +99,7 @@ export default function SlideEditor({
   gridVisible = false,
 }: SlideEditorProps) {
   const [editingTextId, setEditingTextId] = useState<string | null>(null)
+  const [activeGuides, setActiveGuides] = useState<GuideLine[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
 
   const sortedElements = [...slide.elements].sort((a, b) => a.zIndex - b.zIndex)
@@ -158,6 +206,25 @@ export default function SlideEditor({
         }}
       >
         <GridOverlay gridSize={gridSize} visible={gridVisible} />
+
+        {/* Alignment guides */}
+        {activeGuides.map((guide, i) => (
+          <div
+            key={`guide-${i}`}
+            style={{
+              position: 'absolute',
+              [guide.axis === 'x' ? 'left' : 'top']: guide.pos,
+              [guide.axis === 'x' ? 'top' : 'left']: 0,
+              [guide.axis === 'x' ? 'width' : 'height']: 1,
+              [guide.axis === 'x' ? 'height' : 'width']: guide.axis === 'x' ? CANVAS_HEIGHT : CANVAS_WIDTH,
+              background: '#f43f5e',
+              opacity: 0.7,
+              zIndex: 9998,
+              pointerEvents: 'none' as const,
+            }}
+          />
+        ))}
+
         {sortedElements.map((element) => {
           const isSelected = selectedElementId === element.id
           const isEditingText = editingTextId === element.id
@@ -171,7 +238,16 @@ export default function SlideEditor({
               scale={scale}
               disableDragging={isLocked || isEditingText}
               enableResizing={!isLocked && !isEditingText && isSelected}
+              onDrag={(_e, d) => {
+                const others = slide.elements.filter(el => el.id !== element.id)
+                const guides = computeGuides(
+                  { x: Math.round(d.x), y: Math.round(d.y), width: element.width, height: element.height },
+                  others,
+                )
+                setActiveGuides(guides)
+              }}
               onDragStop={(_e, d) => {
+                setActiveGuides([])
                 const x = snapToGrid ? snapValue(Math.round(d.x), gridSize) : Math.round(d.x)
                 const y = snapToGrid ? snapValue(Math.round(d.y), gridSize) : Math.round(d.y)
                 onElementUpdate(element.id, { x, y } as Partial<SlideElement>)
