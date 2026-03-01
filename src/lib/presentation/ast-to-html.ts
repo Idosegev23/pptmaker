@@ -26,6 +26,15 @@ function escapeHtml(text: string): string {
     .replace(/\n/g, '<br/>')
 }
 
+function sanitizeUrl(url: string): string {
+  if (!url) return ''
+  const lower = url.trim().toLowerCase()
+  if (lower.startsWith('javascript:') || lower.startsWith('data:text/html') || lower.startsWith('vbscript:')) {
+    return ''
+  }
+  return url
+}
+
 function renderBackground(bg: Slide['background']): string {
   switch (bg.type) {
     case 'solid':
@@ -33,7 +42,7 @@ function renderBackground(bg: Slide['background']): string {
     case 'gradient':
       return `background: ${bg.value};`
     case 'image':
-      return `background: url('${bg.value}') center/cover no-repeat;`
+      return `background: url('${sanitizeUrl(bg.value)}') center/cover no-repeat;`
     default:
       return 'background: #1a1a2e;'
   }
@@ -107,7 +116,7 @@ function renderImageElement(el: ImageElement): string {
     `display: block`,
   ]
 
-  return `<div style="${containerStyles.join('; ')}"><img src="${el.src}" alt="${el.alt || ''}" style="${imgStyles.join('; ')}" onerror="this.style.display='none'" /></div>`
+  return `<div style="${containerStyles.join('; ')}"><img src="${sanitizeUrl(el.src)}" alt="${escapeHtml(el.alt || '')}" style="${imgStyles.join('; ')}" onerror="this.style.display='none'" /></div>`
 }
 
 function renderShapeElement(el: ShapeElement): string {

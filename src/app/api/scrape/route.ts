@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchScrape } from '@/lib/apify/fetch-scraper'
+import { validateExternalUrl } from '@/lib/utils/url-validator'
+import { getAuthenticatedUser } from '@/lib/auth/api-auth'
 
 export const maxDuration = 600
 
 export async function POST(request: NextRequest) {
+  const user = await getAuthenticatedUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const body = await request.json()
     const { url } = body
@@ -15,10 +22,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`[API Scrape] Scraping ${url}`)
+    // SSRF protection — block internal/private URLs
+    let validatedUrl: string
+    try {
+      validatedUrl = validateExternalUrl(url)
+    } catch {
+      return NextResponse.json({ error: 'Invalid or blocked URL' }, { status: 400 })
+    }
+
+    console.log(`[API Scrape] Scraping ${validatedUrl}`)
 
     try {
-      const scrapedData = await fetchScrape(url)
+      const scrapedData = await fetchScrape(validatedUrl)
       console.log(`[API Scrape] Done - logo=${!!scrapedData.logoUrl}, ${scrapedData.allImages.length} images, ${scrapedData.colorPalette.length} colors`)
 
       return NextResponse.json({

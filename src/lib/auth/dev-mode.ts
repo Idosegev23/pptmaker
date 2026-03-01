@@ -1,6 +1,16 @@
 // Development mode utilities for bypassing authentication
 
-export const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === 'true'
+const rawDevMode = process.env.NEXT_PUBLIC_DEV_MODE === 'true'
+
+// SAFETY: Never allow dev mode in production — auth would be completely bypassed
+export const isDevMode = rawDevMode && process.env.NODE_ENV !== 'production'
+
+if (rawDevMode && process.env.NODE_ENV === 'production') {
+  console.error(
+    '[CRITICAL] NEXT_PUBLIC_DEV_MODE=true in production! Auth bypass BLOCKED. ' +
+    'Remove this env var immediately.'
+  )
+}
 
 export const DEV_USER = {
   id: 'dev-user-id',

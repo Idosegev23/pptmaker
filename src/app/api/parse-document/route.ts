@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { parseDocument, parseGoogleDoc } from '@/lib/parsers'
+import { getAuthenticatedUser } from '@/lib/auth/api-auth'
 
 export const maxDuration = 600
 
 export async function POST(request: NextRequest) {
   const requestId = `parse-${Date.now()}`
   const startTime = Date.now()
+
+  const user = await getAuthenticatedUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   console.log(`\n${'='.repeat(60)}`)
   console.log(`[${requestId}] 📄 PARSE DOCUMENT - START`)
   console.log(`${'='.repeat(60)}`)

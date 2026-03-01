@@ -4,6 +4,8 @@
  * Uses plain fetch + regex HTML parsing — no external dependencies.
  */
 
+import { validateExternalUrl } from '@/lib/utils/url-validator'
+
 export interface EnhancedScrapeResult {
   url: string
   title: string
@@ -40,11 +42,9 @@ export interface EnhancedScrapeResult {
  * Returns the same shape as enhancedScrape for drop-in compatibility.
  */
 export async function fetchScrape(url: string): Promise<EnhancedScrapeResult> {
+  // SSRF protection — validate before fetching
+  url = validateExternalUrl(url)
   console.log(`[Fetch Scraper] Scraping ${url}`)
-
-  if (!url.startsWith('http')) {
-    url = `https://${url}`
-  }
 
   let html = ''
   let finalUrl = url

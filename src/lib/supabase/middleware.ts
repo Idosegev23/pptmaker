@@ -7,8 +7,8 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions }
 const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === 'true'
 
 export async function updateSession(request: NextRequest) {
-  // In dev mode, allow all routes without authentication
-  if (isDevMode) {
+  // In dev mode, allow all routes without authentication (blocked in production by dev-mode.ts)
+  if (isDevMode && process.env.NODE_ENV !== 'production') {
     return NextResponse.next({ request })
   }
 
@@ -57,7 +57,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Protected routes
-  const protectedPaths = ['/dashboard', '/admin', '/create', '/documents', '/preview', '/create-proposal', '/wizard']
+  const protectedPaths = ['/dashboard', '/admin', '/create', '/documents', '/preview', '/create-proposal', '/wizard', '/research', '/generate', '/edit']
   const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )

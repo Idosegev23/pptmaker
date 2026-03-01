@@ -3,6 +3,7 @@ import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '@/lib/utils/json-cleanup'
 import { getConfig } from '@/lib/config/admin-config'
 import { PROMPT_DEFAULTS, MODEL_DEFAULTS } from '@/lib/config/defaults'
+import { getAuthenticatedUser } from '@/lib/auth/api-auth'
 
 export const maxDuration = 60
 
@@ -21,6 +22,11 @@ type AiAssistAction =
   | 'reprocess_field'
 
 export async function POST(request: NextRequest) {
+  const user = await getAuthenticatedUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const requestId = `ai-assist-${Date.now()}`
   const startTime = Date.now()
 

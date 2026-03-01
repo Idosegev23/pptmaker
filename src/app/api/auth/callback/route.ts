@@ -3,8 +3,11 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
-// Emails containing these keywords auto-receive admin role
-const ADMIN_EMAIL_KEYWORDS = ['cto', 'yoav']
+// Explicit admin emails from environment variable
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean)
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions }
 
@@ -41,7 +44,7 @@ export async function GET(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
         if (user?.email) {
           const emailLower = user.email.toLowerCase()
-          const isAdmin = ADMIN_EMAIL_KEYWORDS.some(kw => emailLower.includes(kw))
+          const isAdmin = ADMIN_EMAILS.includes(emailLower)
           if (isAdmin) {
             const serviceClient = createClient(
               process.env.NEXT_PUBLIC_SUPABASE_URL!,
