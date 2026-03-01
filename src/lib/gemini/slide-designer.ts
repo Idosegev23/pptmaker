@@ -41,6 +41,29 @@ import {
 const PRO_MODEL_DEFAULT = 'gemini-3.1-pro-preview'
 const FLASH_MODEL_DEFAULT = 'gemini-3-flash-preview'
 
+/** Extract detailed error info including nested cause chain (Node fetch errors hide details in .cause) */
+function detailedError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error)
+  const parts: string[] = [error.message]
+  // Node.js fetch errors have a .cause with the real reason
+  let current: unknown = (error as Error & { cause?: unknown }).cause
+  let depth = 0
+  while (current && depth < 3) {
+    if (current instanceof Error) {
+      parts.push(`cause: ${current.message}`)
+      current = (current as Error & { cause?: unknown }).cause
+    } else {
+      parts.push(`cause: ${String(current)}`)
+      break
+    }
+    depth++
+  }
+  // Include error code if present (e.g., ECONNRESET, ETIMEDOUT)
+  const code = (error as Error & { code?: string }).code
+  if (code) parts.push(`code: ${code}`)
+  return parts.join(' → ')
+}
+
 async function getSlideDesignerModels(): Promise<string[]> {
   const primary = await getConfig('ai_models', 'slide_designer.primary_model', PRO_MODEL_DEFAULT)
   const fallback = await getConfig('ai_models', 'slide_designer.fallback_model', FLASH_MODEL_DEFAULT)
@@ -639,8 +662,8 @@ async function generateDesignSystem(
         error.message.includes('timeout') ||
         error.message.includes('fetch failed')
       )
-      const msg = error instanceof Error ? error.message : String(error)
-      console.error(`[SlideDesigner][${requestId}] Design system attempt ${attempt + 1}/${models.length} failed (${model}): ${isTimeout ? 'TIMEOUT' : msg}`)
+      const msg = detailedError(error)
+      console.error(`[SlideDesigner][${requestId}] Design system attempt ${attempt + 1}/${models.length} failed (${model}): ${isTimeout ? 'TIMEOUT — ' : ''}${msg}`)
       if (attempt < models.length - 1) {
         console.log(`[SlideDesigner][${requestId}] ⚡ Falling back to ${models[attempt + 1]}...`)
         await new Promise(r => setTimeout(r, 1500))
@@ -933,10 +956,11 @@ ${finalInstruction}
       const isTimeout = error instanceof Error && (
         error.message === 'BATCH_TIMEOUT' ||
         error.message.includes('timeout') ||
-        error.message.includes('DEADLINE_EXCEEDED')
+        error.message.includes('DEADLINE_EXCEEDED') ||
+        error.message.includes('fetch failed')
       )
-      const msg = error instanceof Error ? error.message : String(error)
-      console.error(`[SlideDesigner][${requestId}] Batch attempt ${attempt + 1}/${attempts.length} failed (${label}): ${isTimeout ? 'TIMEOUT' : msg}`)
+      const msg = detailedError(error)
+      console.error(`[SlideDesigner][${requestId}] Batch attempt ${attempt + 1}/${attempts.length} failed (${label}): ${isTimeout ? 'TIMEOUT — ' : ''}${msg}`)
       if (attempt < attempts.length - 1) {
         console.log(`[SlideDesigner][${requestId}] ⚡ Retrying with ${attempts[attempt + 1].label}...`)
         await new Promise(r => setTimeout(r, 1500))
