@@ -43,18 +43,6 @@ export const MODEL_REGISTRY: ModelDefinition[] = [
     label: 'Gemini 3 Flash (Preview)',
     capabilities: { googleSearch: true, responseSchema: true, maxOutputTokens: 65536 },
   },
-  {
-    id: 'gemini-2.5-pro-preview-05-06',
-    provider: 'gemini',
-    label: 'Gemini 2.5 Pro',
-    capabilities: { googleSearch: true, responseSchema: true, maxOutputTokens: 65536 },
-  },
-  {
-    id: 'gemini-2.5-flash-preview-04-17',
-    provider: 'gemini',
-    label: 'Gemini 2.5 Flash',
-    capabilities: { googleSearch: true, responseSchema: true, maxOutputTokens: 65536 },
-  },
   // OpenAI
   {
     id: 'gpt-5.2-pro-2025-12-11',
@@ -106,10 +94,16 @@ export function getProviderForModel(modelId: string): AIProvider {
 let _useFallback = false
 let _switchedAt: number | null = null
 
-const geminiClient = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 },
-})
+let _geminiClient: GoogleGenAI | null = null
+function getGeminiClient(): GoogleGenAI {
+  if (!_geminiClient) {
+    _geminiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY || '',
+      httpOptions: { timeout: 540_000 },
+    })
+  }
+  return _geminiClient
+}
 
 let _anthropicClient: Anthropic | null = null
 function getAnthropicClient(): Anthropic {
@@ -329,7 +323,8 @@ async function callGeminiDirect(options: AICallOptions): Promise<AICallResult> {
 
   console.log(`[${callerId}] 🟢 Calling Gemini ${model}`)
 
-  const response = await geminiClient.models.generateContent({
+  const client = getGeminiClient()
+  const response = await client.models.generateContent({
     model,
     contents: prompt,
     config: {
@@ -366,30 +361,29 @@ async function callOpenAIModel(options: AICallOptions, openaiModel: string): Pro
   const modelDef = getModelDefinition(openaiModel)
   const maxTokens = Math.min(maxOutputTokens, modelDef?.capabilities.maxOutputTokens || 100000)
 
-  console.log(`[${callerId}] 🟠 Calling OpenAI ${openaiModel} (reasoning_effort: ${effort})`)
+  // GPT-5.2 Pro minimum effort is 'medium'; supports medium/high/xhigh
+  const isProModel = openaiModel.includes('-pro')
+  const clampedEffort = (isProModel && effort === 'low') ? 'medium' : effort
 
-  // Build messages
-  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = []
+  console.log(`[${callerId}] 🟠 Calling OpenAI ${openaiModel} via Responses API (reasoning_effort: ${clampedEffort})`)
 
-  let system = systemPrompt || ''
+  // Build instructions (system prompt + schema hint)
+  let instructions = systemPrompt || ''
   if (responseSchema) {
-    system += `\n\nIMPORTANT: You MUST return your response as valid JSON matching this schema:\n${JSON.stringify(responseSchema, null, 2)}\n\nReturn ONLY the JSON, no extra text or markdown.`
+    instructions += `\n\nIMPORTANT: You MUST return your response as valid JSON matching this schema:\n${JSON.stringify(responseSchema, null, 2)}\n\nReturn ONLY the JSON, no extra text or markdown.`
   }
-  if (system) {
-    messages.push({ role: 'system', content: system })
-  }
-  messages.push({ role: 'user', content: prompt })
 
   try {
-    const completion = await client.chat.completions.create({
+    const response = await (client.responses as any).create({
       model: openaiModel,
-      messages,
-      max_completion_tokens: maxTokens,
-      reasoning_effort: effort,
-      stream: false,
-    } as Parameters<typeof client.chat.completions.create>[0]) as OpenAI.Chat.ChatCompletion
+      instructions: instructions || undefined,
+      input: prompt,
+      max_output_tokens: maxTokens,
+      reasoning: { effort: clampedEffort },
+      store: false,
+    })
 
-    const text = completion.choices[0]?.message?.content || ''
+    const text = response.output_text || ''
     console.log(`[${callerId}] 🟠 OpenAI response: ${text.length} chars`)
 
     return { text, provider: 'openai', model: openaiModel }

@@ -396,7 +396,7 @@ export const MODEL_DEFAULTS = {
     group: 'גלובלי',
   },
   'global.override_agents': {
-    value: true,
+    value: false,
     description: 'דריסה גלובלית — כשפעיל, כל הסוכנים משתמשים במודל הגלובלי',
     value_type: 'boolean' as const,
     group: 'גלובלי',
@@ -404,8 +404,8 @@ export const MODEL_DEFAULTS = {
 
   // --- Proposal Agent ---
   'proposal_agent.primary_model': {
-    value: 'gemini-3.1-pro-preview',
-    description: 'מודל ראשי — סוכן הצעות',
+    value: 'claude-opus-4-6',
+    description: 'מודל ראשי — סוכן הצעות (חילוץ + עיבוד מטרות)',
     value_type: 'text' as const,
     group: 'סוכן הצעות',
   },
@@ -429,7 +429,7 @@ export const MODEL_DEFAULTS = {
     group: 'מעצב שקפים',
   },
   'slide_designer.fallback_model': {
-    value: 'gemini-3-flash-preview',
+    value: 'gpt-5.2-pro-2025-12-11',
     description: 'מודל גיבוי — Design System (foundation)',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
@@ -441,7 +441,7 @@ export const MODEL_DEFAULTS = {
     group: 'מעצב שקפים',
   },
   'slide_designer.batch_fallback_model': {
-    value: 'gemini-3-flash-preview',
+    value: 'gpt-5.2-pro-2025-12-11',
     description: 'מודל גיבוי — יצירת שקפים (batches)',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
@@ -472,8 +472,8 @@ export const MODEL_DEFAULTS = {
   },
 
   'brand_research.primary_model': {
-    value: 'gemini-3.1-pro-preview',
-    description: 'מודל ראשי — מחקר מותג',
+    value: 'gemini-3-flash-preview',
+    description: 'מודל ראשי — מחקר מותג (מהיר + Google Search)',
     value_type: 'text' as const,
     group: 'מחקר מותג',
   },
@@ -491,8 +491,8 @@ export const MODEL_DEFAULTS = {
   },
 
   'influencer_research.primary_model': {
-    value: 'gemini-3.1-pro-preview',
-    description: 'מודל ראשי — מחקר משפיענים',
+    value: 'gemini-3-flash-preview',
+    description: 'מודל ראשי — מחקר משפיענים (מהיר + Google Search)',
     value_type: 'text' as const,
     group: 'מחקר משפיענים',
   },

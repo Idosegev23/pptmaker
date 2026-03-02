@@ -11,8 +11,6 @@ const MODELS_BY_PROVIDER: Record<string, { value: string; label: string }[]> = {
   gemini: [
     { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Preview)' },
     { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)' },
-    { value: 'gemini-2.5-pro-preview-05-06', label: 'Gemini 2.5 Pro' },
-    { value: 'gemini-2.5-flash-preview-04-17', label: 'Gemini 2.5 Flash' },
   ],
   claude: [
     { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },

@@ -183,7 +183,7 @@ async function generateDesignSystem(
 
 פונט: Heebo.`
 
-  const DS_TIMEOUT_MS = 150_000
+  const DS_TIMEOUT_MS = 300_000
   const sysInstruction = await getSystemInstruction()
   const models = await getDesignSystemModels()
   const [dsThinkingLevel, dsMaxOutputTokens] = await Promise.all([getThinkingLevel(), getMaxOutputTokens()])
@@ -370,8 +370,8 @@ ${contentBlock}
   const prompt = buildBatchPrompt(brandName, cd, colors, typo, effects, motif, designSystem, designPrinciples, depthLayers, elementFormat, technicalRules, finalInstruction, batchContext, slidesDescription, slides.length)
 
   // 3-tier retry
-  const TIER_TIMEOUTS = [180_000, 120_000, 90_000]
-  const TOTAL_BUDGET_MS = 480_000
+  const TIER_TIMEOUTS = [300_000, 300_000, 300_000]
+  const TOTAL_BUDGET_MS = 960_000
   const functionStartTime = Date.now()
   const batchSysInstruction = await getSystemInstruction()
   const batchModels = await getBatchModels()
@@ -567,7 +567,7 @@ async function generateSingleSlide(
   const prompt = buildSingleSlidePrompt(brandName, cd, colors, typo, effects, motif, designSystem, designPrinciples, depthLayers, elementFormat, technicalRules, finalInstruction, storyLines, previousSlidesBlock, slideIndex, context.totalSlides, slide.slideType, pacing, archetype, imageTag, emotionNote, contentBlock, colorTemp, hasTension)
 
   // Call Gemini with retry
-  const CALL_TIMEOUT = 60_000
+  const CALL_TIMEOUT = 300_000
   const batchSysInstruction = await getSystemInstruction()
   const batchModels = await getBatchModels()
 
