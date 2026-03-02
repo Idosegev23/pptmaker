@@ -447,13 +447,13 @@ export const MODEL_DEFAULTS = {
     group: 'מעצב שקפים',
   },
   'slide_designer.thinking_level': {
-    value: 'HIGH',
+    value: 'MEDIUM',
     description: 'רמת חשיבה — Design System (foundation)',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
   'slide_designer.batch_thinking_level': {
-    value: 'HIGH',
+    value: 'MEDIUM',
     description: 'רמת חשיבה — יצירת שקפים (batches). MEDIUM = מהיר יותר, HIGH = איכות מקסימלית',
     value_type: 'text' as const,
     group: 'מעצב שקפים',

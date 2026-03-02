@@ -7,7 +7,7 @@ import type {
   InfluencerResearchData,
   PremiumProposalData,
 } from './types'
-import { getBatchSize } from './config-loaders'
+// getBatchSize no longer used — we use fixed 3-group batching
 
 /** Remove empty/null/undefined/[] fields so the AI prompt isn't cluttered */
 export function cleanContent(content: Record<string, unknown>): Record<string, unknown> {
@@ -36,13 +36,13 @@ export function formatNum(n?: number): string {
   return n.toString()
 }
 
-export async function buildSlideBatches(
+export function buildSlideBatches(
   data: PremiumProposalData,
   config: {
     images?: { coverImage?: string; brandImage?: string; audienceImage?: string; activityImage?: string }
     extraImages?: { id: string; url: string; placement: string }[]
   } = {},
-): Promise<SlideContentInput[][]> {
+): SlideContentInput[][] {
   const currency = data.currency === 'USD' ? '$' : data.currency === 'EUR' ? '€' : '₪'
   const br = data._brandResearch || {}
   const ir = data._influencerStrategy || data.influencerResearch || {} as InfluencerResearchData
@@ -240,6 +240,23 @@ export async function buildSlideBatches(
     subheadline: `נשמח להתחיל לעבוד עם ${data.brandName}`,
   }) })
 
-  const batchSize = await getBatchSize()
-  return chunkByMax(allSlides, batchSize)
+  return splitIntoThreeBatches(allSlides)
+}
+
+/** Split slides into 3 logical groups for parallel generation */
+function splitIntoThreeBatches(allSlides: SlideContentInput[]): SlideContentInput[][] {
+  const GROUP1 = new Set(['cover', 'brief', 'goals', 'audience', 'insight'])
+  const GROUP2 = new Set(['whyNow', 'strategy', 'competitive', 'bigIdea', 'approach'])
+
+  const batch1: SlideContentInput[] = []
+  const batch2: SlideContentInput[] = []
+  const batch3: SlideContentInput[] = []
+
+  for (const slide of allSlides) {
+    if (GROUP1.has(slide.slideType)) batch1.push(slide)
+    else if (GROUP2.has(slide.slideType)) batch2.push(slide)
+    else batch3.push(slide)
+  }
+
+  return [batch1, batch2, batch3].filter(b => b.length > 0)
 }

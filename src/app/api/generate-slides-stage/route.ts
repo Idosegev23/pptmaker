@@ -126,15 +126,14 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // ═══ STAGE: BATCH (sequential — 1 slide per call) ════
+    // ═══ STAGE: BATCH (~5 slides per batch, 3 batches total) ════
     if (stage === 'batch') {
       const idx = typeof batchIndex === 'number' ? batchIndex : 0
-      console.log(`[${requestId}] Running sequential slide ${idx}...`)
+      console.log(`[${requestId}] Running batch ${idx + 1}...`)
 
       const pipeline = documentData._pipeline as {
         foundation: PipelineFoundation
         batchResults: BatchResult[]
-        lastGeneratedSlides?: Slide[]
         status: string
       } | undefined
 
@@ -142,19 +141,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Foundation not found. Run foundation stage first.' }, { status: 400 })
       }
 
-      // Build previous context with last 2 slides for sequential memory
-      const previousContext: BatchResult | null = pipeline.lastGeneratedSlides?.length
-        ? {
-            slides: [],
-            visualSummary: '',
-            slideIndex: idx,
-            generatedSlides: pipeline.lastGeneratedSlides,
-          }
-        : null
+      const result = await pipelineBatch(pipeline.foundation, idx, null)
 
-      const result = await pipelineBatch(pipeline.foundation, idx, previousContext)
-
-      // Accumulate slide results and keep last 2 slides for next call
       const updatedBatchResults = [...(pipeline.batchResults || []), result]
 
       await supabase
@@ -165,15 +153,14 @@ export async function POST(request: NextRequest) {
             _pipeline: {
               ...pipeline,
               batchResults: updatedBatchResults,
-              lastGeneratedSlides: result.generatedSlides || [],
-              status: `slide_${idx}_complete`,
+              status: `batch_${idx}_complete`,
             },
           },
         })
         .eq('id', documentId)
 
       const totalAccumulated = updatedBatchResults.reduce((sum, r) => sum + r.slides.length, 0)
-      console.log(`[${requestId}] Slide ${idx + 1} cached. Total accumulated: ${totalAccumulated}`)
+      console.log(`[${requestId}] Batch ${idx + 1} cached (${result.slides.length} slides). Total accumulated: ${totalAccumulated}`)
 
       return NextResponse.json({
         success: true,

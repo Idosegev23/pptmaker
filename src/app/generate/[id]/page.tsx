@@ -11,7 +11,7 @@ const PHASE_WEIGHTS = {
   research: 8,
   visuals: 8,
   foundation: 12,
-  batches: 65, // sequential — 1 slide per call, ~15 calls
+  batches: 65, // 3 parallel batches, ~5 slides each
   finalize: 7,
 }
 
@@ -337,71 +337,71 @@ export default function GeneratePage() {
       if (!foundationOk) {
         throw new Error((foundationData.details || foundationData.error || 'Foundation failed') as string)
       }
-      // In sequential mode: batchCount = totalSlides (1 slide per call)
       const ts = (foundationData.totalSlides as number) || 12
-      const bc = ts // 1 slide per call
+      const bc = (foundationData.batchCount as number) || 3
+      const sizes = (foundationData.batchSizes as number[]) || [5, 5, 5]
 
       setBatchCount(bc)
       setTotalSlides(ts)
-      setBatchSizes(Array(ts).fill(1))
+      setBatchSizes(sizes)
       setSlidesDone(0)
       animateProgressTo(getPhaseStart('foundation') + PHASE_WEIGHTS.foundation)
-      console.log(`[Generate] Foundation complete: ${ts} slides (sequential mode)`)
+      console.log(`[Generate] Foundation complete: ${ts} slides in ${bc} batches (${sizes.join(', ')})`)
 
-      // 5b: Sequential slide generation (1 per call, with retry)
+      // 5b: Batch generation (3 batches, ~5 slides each, with retry)
       const MAX_RETRY = 2
       let accumulated = 0
-      const perSlide = PHASE_WEIGHTS.batches / ts
+      const perBatch = PHASE_WEIGHTS.batches / bc
       const batchesStart = PHASE_WEIGHTS.research + PHASE_WEIGHTS.visuals + PHASE_WEIGHTS.foundation
 
-      for (let s = 0; s < ts; s++) {
+      for (let b = 0; b < bc; b++) {
         setStage('batch')
-        setBatchIndex(s)
+        setBatchIndex(b)
 
-        const slideProgressStart = batchesStart + perSlide * s
-        animateProgressTo(slideProgressStart + perSlide * 0.15)
+        const batchProgressStart = batchesStart + perBatch * b
+        animateProgressTo(batchProgressStart + perBatch * 0.15)
 
-        let slideSucceeded = false
+        let batchSucceeded = false
         for (let retry = 0; retry <= MAX_RETRY; retry++) {
           if (retry > 0) {
-            console.log(`[Generate] Retrying slide ${s + 1}/${ts} (attempt ${retry + 1}/${MAX_RETRY + 1})...`)
+            console.log(`[Generate] Retrying batch ${b + 1}/${bc} (attempt ${retry + 1}/${MAX_RETRY + 1})...`)
             await new Promise(r => setTimeout(r, 2000))
           } else {
-            console.log(`[Generate] Generating slide ${s + 1}/${ts}...`)
+            console.log(`[Generate] Generating batch ${b + 1}/${bc} (${sizes[b] || '?'} slides)...`)
           }
 
           try {
             const batchRes = await fetch('/api/generate-slides-stage', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ documentId, stage: 'batch', batchIndex: s }),
+              body: JSON.stringify({ documentId, stage: 'batch', batchIndex: b }),
             })
 
             const { ok: batchOk, data: batchData } = await safeJson(batchRes)
             if (!batchOk) {
-              const errMsg = (batchData.details || batchData.error || `Slide ${s + 1} failed`) as string
+              const errMsg = (batchData.details || batchData.error || `Batch ${b + 1} failed`) as string
               if (retry < MAX_RETRY) {
-                console.warn(`[Generate] Slide ${s + 1} failed (will retry): ${errMsg}`)
+                console.warn(`[Generate] Batch ${b + 1} failed (will retry): ${errMsg}`)
                 continue
               }
               throw new Error(errMsg)
             }
-            accumulated = (batchData.totalSlidesAccumulated as number) || (accumulated + 1)
+            accumulated = (batchData.totalSlidesAccumulated as number) || (accumulated + (sizes[b] || 5))
             setSlidesDone(accumulated)
-            animateProgressTo(slideProgressStart + perSlide)
-            console.log(`[Generate] Slide ${s + 1}/${ts} done (total: ${accumulated})${retry > 0 ? ` [after ${retry} retries]` : ''}`)
-            slideSucceeded = true
+            animateProgressTo(batchProgressStart + perBatch)
+            console.log(`[Generate] Batch ${b + 1}/${bc} done (total slides: ${accumulated})${retry > 0 ? ` [after ${retry} retries]` : ''}`)
+            batchSucceeded = true
             break
           } catch (fetchErr) {
             if (retry < MAX_RETRY) {
-              console.warn(`[Generate] Slide ${s + 1} network error (will retry): ${fetchErr}`)
+              console.warn(`[Generate] Batch ${b + 1} network error (will retry): ${fetchErr}`)
               continue
             }
             throw fetchErr
           }
         }
-        if (!slideSucceeded) {
-          throw new Error(`Slide ${s + 1} failed after ${MAX_RETRY + 1} attempts`)
+        if (!batchSucceeded) {
+          throw new Error(`Batch ${b + 1} failed after ${MAX_RETRY + 1} attempts`)
         }
       }
 
@@ -459,18 +459,15 @@ export default function GeneratePage() {
     { key: 'foundation', label: 'מערכת עיצוב' },
   ]
 
-  if (totalSlides > 0) {
-    // Group slides into ~4-5 visual chunks for the progress bar
-    const chunkSize = Math.max(1, Math.ceil(totalSlides / 4))
-    for (let start = 0; start < totalSlides; start += chunkSize) {
-      const end = Math.min(start + chunkSize, totalSlides)
+  if (batchCount > 0) {
+    for (let b = 0; b < batchCount; b++) {
       progressSteps.push({
-        key: `slides_${start}`,
-        label: `שקפים ${start + 1}-${end}`,
+        key: `batch_${b}`,
+        label: `באצ׳ ${b + 1}`,
       })
     }
   } else {
-    progressSteps.push({ key: 'slides_0', label: 'עיצוב שקפים' })
+    progressSteps.push({ key: 'batch_0', label: 'עיצוב שקפים' })
   }
 
   progressSteps.push({ key: 'finalize', label: 'בדיקות' })
@@ -478,22 +475,17 @@ export default function GeneratePage() {
   // ── Step status logic ──
   function getStepStatus(stepKey: string): 'pending' | 'active' | 'done' {
     const order = ['research', 'visuals', 'foundation']
-    if (totalSlides > 0) {
-      const chunkSize = Math.max(1, Math.ceil(totalSlides / 4))
-      for (let start = 0; start < totalSlides; start += chunkSize) {
-        order.push(`slides_${start}`)
-      }
+    if (batchCount > 0) {
+      for (let b = 0; b < batchCount; b++) order.push(`batch_${b}`)
     } else {
-      order.push('slides_0')
+      order.push('batch_0')
     }
     order.push('finalize', 'done')
 
     // Map current stage to a key
     let currentKey = stage
-    if (stage === 'batch' && batchIndex >= 0 && totalSlides > 0) {
-      const chunkSize = Math.max(1, Math.ceil(totalSlides / 4))
-      const chunkStart = Math.floor(batchIndex / chunkSize) * chunkSize
-      currentKey = `slides_${chunkStart}`
+    if (stage === 'batch' && batchIndex >= 0) {
+      currentKey = `batch_${batchIndex}`
     }
 
     const stepIdx = order.indexOf(stepKey)
@@ -512,7 +504,7 @@ export default function GeneratePage() {
     if (stage === 'visuals') return 'יצירת שפה ויזואלית ותמונות'
     if (stage === 'foundation') return 'בניית כיוון קריאייטיבי ומערכת עיצוב'
     if (stage === 'batch' && batchIndex >= 0) {
-      return `מעצב שקף ${batchIndex + 1} מתוך ${totalSlides}`
+      return `מעצב באצ׳ ${batchIndex + 1} מתוך ${batchCount} (${batchSizes[batchIndex] || '?'} שקפים)`
     }
     if (stage === 'finalize') return 'בדיקת איכות והרכבה סופית'
     if (stage === 'done') return 'המצגת מוכנה!'
@@ -526,7 +518,7 @@ export default function GeneratePage() {
     if (stage === 'visuals') return 'מנתח שפה ויזואלית, לוגו, צבעים ותמונות מהאתר'
     if (stage === 'foundation') return 'ארט דיירקטור AI בונה מערכת עיצוב, טיפוגרפיה ואפקטים'
     if (stage === 'batch' && batchIndex >= 0) {
-      return `כל שקף מעוצב לפי הנרטיב והשקפים הקודמים — שקף ${batchIndex + 1} מתוך ${totalSlides}`
+      return `כל באצ׳ מעוצב במקביל — באצ׳ ${batchIndex + 1} מתוך ${batchCount}`
     }
     if (stage === 'finalize') return 'מוודא ניגודיות, היררכיה, איזון ויזואלי ועקביות'
     if (stage === 'done') return 'מנווט לתצוגת מצגת...'
@@ -602,7 +594,7 @@ export default function GeneratePage() {
                   {totalSlides > 0 && (
                     <div className="flex justify-between text-xs text-white/40 font-medium px-0.5">
                       <span>{slidesDone}/{totalSlides} שקפים הושלמו</span>
-                      <span>עיצוב סדרתי</span>
+                      <span>{batchCount} באצ׳ים במקביל</span>
                     </div>
                   )}
                 </div>

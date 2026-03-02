@@ -124,6 +124,7 @@ export interface BoundingBox { x: number; y: number; width: number; height: numb
 
 export interface PipelineFoundation {
   designSystem: PremiumDesignSystem
+  /** 3 batch groups (not single-slide arrays) */
   batches: SlideContentInput[][]
   curatedBatches?: CuratedSlideContent[][]
   /** Flat list of all curated slides for full-story context */
@@ -134,15 +135,16 @@ export interface PipelineFoundation {
   clientLogo: string
   leadersLogo: string
   totalSlides: number
+  /** Number of batches (typically 3) */
+  batchCount?: number
+  /** Slide count per batch */
+  batchSizes?: number[]
 }
 
 export interface BatchResult {
   slides: Slide[]
-  /** @deprecated — kept for backwards compat but no longer used for context */
   visualSummary: string
   slideIndex: number
-  /** Full JSON of generated slides for sequential context passing */
-  generatedSlides?: Slide[]
 }
 
 // ─── Data Types ───────────────────────────────────────

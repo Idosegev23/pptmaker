@@ -180,31 +180,30 @@ export async function POST(request: NextRequest) {
         },
       }).eq('id', documentId)
 
-      // ── Step 4: Sequential slide generation ──
-      console.log(`[${requestId}] Generating ${foundation.totalSlides} slides sequentially...`)
-      let previousContext: BatchResult | null = null
+      // ── Step 4: Parallel batch generation (3 batches) ──
+      const batchCount = foundation.batches.length
+      console.log(`[${requestId}] Generating ${foundation.totalSlides} slides in ${batchCount} batches...`)
       const batchResults: BatchResult[] = []
 
-      for (let i = 0; i < foundation.totalSlides; i++) {
-        console.log(`[${requestId}] Slide ${i + 1}/${foundation.totalSlides}...`)
-        const result = await pipelineBatch(foundation, i, previousContext)
+      for (let i = 0; i < batchCount; i++) {
+        console.log(`[${requestId}] Batch ${i + 1}/${batchCount} (${foundation.batches[i].length} slides)...`)
+        const result = await pipelineBatch(foundation, i, null)
         batchResults.push(result)
-        previousContext = result
 
-        const progress = 15 + Math.round((i + 1) / foundation.totalSlides * 75)
+        const progress = 15 + Math.round((i + 1) / batchCount * 75)
 
-        // Save progress after each slide
+        // Save progress after each batch
         await supabase.from('documents').update({
           data: {
             ...documentData,
             _pipeline: {
               foundation,
               batchResults,
-              lastGeneratedSlides: result.generatedSlides || [],
               status: 'generating',
               mode: 'background',
               progress,
-              currentSlide: i + 1,
+              currentBatch: i + 1,
+              totalBatches: batchCount,
               totalSlides: foundation.totalSlides,
             },
           },

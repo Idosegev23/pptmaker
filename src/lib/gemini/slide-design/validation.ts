@@ -128,6 +128,32 @@ export function validateSlide(
     }
   }
 
+  // Text-text overlap detection
+  for (let a = 0; a < contentTexts.length; a++) {
+    for (let b = a + 1; b < contentTexts.length; b++) {
+      const elA = contentTexts[a], elB = contentTexts[b]
+      const boxA: BoundingBox = { x: elA.x || 0, y: elA.y || 0, width: elA.width || 0, height: elA.height || 0 }
+      const boxB: BoundingBox = { x: elB.x || 0, y: elB.y || 0, width: elB.width || 0, height: elB.height || 0 }
+      if (boxesOverlap(boxA, boxB)) {
+        const overlapX = Math.min(boxA.x + boxA.width, boxB.x + boxB.width) - Math.max(boxA.x, boxB.x)
+        const overlapY = Math.min(boxA.y + boxA.height, boxB.y + boxB.height) - Math.max(boxA.y, boxB.y)
+        const overlapArea = overlapX * overlapY
+        const smallerArea = Math.min(boxA.width * boxA.height, boxB.width * boxB.height)
+        const overlapRatio = smallerArea > 0 ? overlapArea / smallerArea : 0
+        if (overlapRatio > 0.15) {
+          issues.push({
+            severity: overlapRatio > 0.5 ? 'critical' : 'warning',
+            category: 'text-text-overlap',
+            message: `Text "${elA.id}" overlaps "${elB.id}" (${Math.round(overlapRatio * 100)}%)`,
+            elementId: elB.id,
+            autoFixable: true,
+          })
+          score -= overlapRatio > 0.5 ? 15 : 8
+        }
+      }
+    }
+  }
+
   // Balance
   const balance = computeBalanceScore(allBoxes)
   if (balance < 0.3) {
@@ -239,6 +265,32 @@ export function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSyst
             updated.x = 80
           } else {
             updated.x = 1920 - updated.width - 80
+          }
+        }
+        fixed.elements[elIndex] = updated
+      }
+    }
+
+    if (issue.category === 'text-text-overlap') {
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el)) {
+        const updated: TextElement = { ...el }
+        const otherTexts = fixed.elements.filter(
+          (e, idx) => idx !== elIndex && isTextElement(e) && e.role !== 'decorative'
+        ) as TextElement[]
+        for (const other of otherTexts) {
+          const myBox: BoundingBox = { x: updated.x, y: updated.y, width: updated.width, height: updated.height }
+          const otherBox: BoundingBox = { x: other.x, y: other.y, width: other.width, height: other.height }
+          if (boxesOverlap(myBox, otherBox)) {
+            updated.y = other.y + other.height + 20
+            if (updated.y + updated.height > 1020) {
+              updated.y = other.y
+              updated.x = other.x + other.width + 40
+              if (updated.x + updated.width > 1860) {
+                updated.x = other.x - updated.width - 40
+              }
+            }
+            break
           }
         }
         fixed.elements[elIndex] = updated
