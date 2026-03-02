@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import * as fs from 'fs'
 import * as path from 'path'
 
+export const dynamic = 'force-dynamic'
+
 // One-time setup to upload logos to Supabase Storage
 export async function GET() {
   try {
