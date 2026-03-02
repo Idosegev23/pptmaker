@@ -144,7 +144,7 @@ export async function generateProposal(
         prompt,
         systemPrompt: 'אתה מנהל קריאייטיב ואסטרטג ראשי. החזר JSON בלבד.',
         geminiConfig: { responseMimeType: 'application/json' },
-        thinkingLevel: 'HIGH',
+        thinkingLevel: 'MEDIUM',
         maxOutputTokens: 32000,
         callerId: agentId,
       })
