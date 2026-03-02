@@ -42,6 +42,18 @@ export const MODEL_REGISTRY: ModelDefinition[] = [
     capabilities: { googleSearch: true, responseSchema: true, maxOutputTokens: 65536 },
   },
   {
+    id: 'gemini-2.5-pro-preview-05-06',
+    provider: 'gemini',
+    label: 'Gemini 2.5 Pro',
+    capabilities: { googleSearch: true, responseSchema: true, maxOutputTokens: 65536 },
+  },
+  {
+    id: 'gemini-2.5-flash-preview-04-17',
+    provider: 'gemini',
+    label: 'Gemini 2.5 Flash',
+    capabilities: { googleSearch: true, responseSchema: true, maxOutputTokens: 65536 },
+  },
+  {
     id: 'claude-opus-4-6',
     provider: 'claude',
     label: 'Claude Opus 4.6',
@@ -129,11 +141,14 @@ function isRetryableError(err: unknown): boolean {
   return (
     msg.includes('503') ||
     msg.includes('504') ||
+    msg.includes('429') ||
     lower.includes('overloaded') ||
     lower.includes('high demand') ||
     lower.includes('service unavailable') ||
     lower.includes('deadline_exceeded') ||
     lower.includes('deadline expired') ||
+    lower.includes('rate_limit') ||
+    lower.includes('rate limit') ||
     msg === 'SERVICE_OVERLOADED'
   )
 }
@@ -164,8 +179,8 @@ export async function resolveModels(
   const globalOverride = await getConfig('ai_models', 'global.override_agents', true)
 
   if (globalOverride) {
-    const primary = await getConfig('ai_models', 'global.primary_model', 'gemini-3.1-pro-preview')
-    const fallback = await getConfig('ai_models', 'global.fallback_model', 'claude-opus-4-6')
+    const primary = await getConfig('ai_models', 'global.primary_model', 'gemini-2.5-pro-preview-05-06')
+    const fallback = await getConfig('ai_models', 'global.fallback_model', 'gemini-2.5-flash-preview-04-17')
     return [primary, fallback]
   }
 
@@ -217,7 +232,7 @@ export async function callAI(options: AICallOptions): Promise<AICallResult> {
 
   // If global fallback is active (e.g., previous 503), use fallback model
   if (_useFallback) {
-    const fallbackModel = await getConfig('ai_models', 'global.fallback_model', 'claude-opus-4-6')
+    const fallbackModel = await getConfig('ai_models', 'global.fallback_model', 'gemini-2.5-flash-preview-04-17')
     const fallbackProvider = getProviderForModel(fallbackModel)
     console.log(`[${callerId}] 🔄 Using fallback ${fallbackModel} (global fallback active)`)
     if (fallbackProvider === 'claude') {
@@ -246,7 +261,7 @@ async function callGeminiPrimary(options: AICallOptions): Promise<AICallResult> 
     if (!isRetryableError(err)) throw err
 
     // 503 — try fallback
-    const fallbackModel = await getConfig('ai_models', 'global.fallback_model', 'claude-opus-4-6')
+    const fallbackModel = await getConfig('ai_models', 'global.fallback_model', 'gemini-2.5-flash-preview-04-17')
     const fallbackProvider = getProviderForModel(fallbackModel)
 
     if (fallbackProvider === 'claude' && !process.env.ANTHROPIC_API_KEY) {
@@ -276,7 +291,7 @@ async function callClaudePrimary(options: AICallOptions): Promise<AICallResult> 
     return await callClaudeModel(options, model)
   } catch (err) {
     // Try fallback
-    const fallbackModel = await getConfig('ai_models', 'global.fallback_model', 'claude-opus-4-6')
+    const fallbackModel = await getConfig('ai_models', 'global.fallback_model', 'gemini-2.5-flash-preview-04-17')
     const fallbackProvider = getProviderForModel(fallbackModel)
 
     // Don't fallback to the same model

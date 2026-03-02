@@ -384,13 +384,13 @@ If you can't find the logo, return logoUrl as empty string.`,
 export const MODEL_DEFAULTS = {
   // --- Global Override ---
   'global.primary_model': {
-    value: 'gemini-3.1-pro-preview',
+    value: 'gemini-2.5-pro-preview-05-06',
     description: 'מודל AI ראשי — חל על כל הסוכנים כשדריסה גלובלית פעילה',
     value_type: 'text' as const,
     group: 'גלובלי',
   },
   'global.fallback_model': {
-    value: 'claude-opus-4-6',
+    value: 'gemini-2.5-flash-preview-04-17',
     description: 'מודל AI גיבוי — משמש כשהמודל הראשי נכשל',
     value_type: 'text' as const,
     group: 'גלובלי',
