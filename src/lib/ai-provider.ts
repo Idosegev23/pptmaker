@@ -91,9 +91,6 @@ export function getProviderForModel(modelId: string): AIProvider {
 
 // ─── Singleton clients ────────────────────────────────────────────
 
-let _useFallback = false
-let _switchedAt: number | null = null
-
 let _geminiClient: GoogleGenAI | null = null
 function getGeminiClient(): GoogleGenAI {
   if (!_geminiClient) {
@@ -127,35 +124,9 @@ function getOpenAIClient(): OpenAI {
 
 // ─── Public API ───────────────────────────────────────────────────
 
-export function isUsingFallback(): boolean {
-  return _useFallback
-}
-
-/** @deprecated Use isUsingFallback() */
-export const isUsingClaude = isUsingFallback
-
 export function getProviderStatus(): { provider: string; switchedAt: number | null } {
-  return { provider: _useFallback ? 'fallback' : 'primary', switchedAt: _switchedAt }
+  return { provider: 'per-call', switchedAt: null }
 }
-
-export function switchToFallback(reason: string): void {
-  if (_useFallback) return
-  _useFallback = true
-  _switchedAt = Date.now()
-  console.warn(`🔄 [AI-PROVIDER] Switching ALL calls to fallback model. Reason: ${reason}`)
-}
-
-/** @deprecated Use switchToFallback() */
-export const switchToClaude = switchToFallback
-
-export function resetProvider(): void {
-  _useFallback = false
-  _switchedAt = null
-  console.log('🔄 [AI-PROVIDER] Reset to configured primary provider')
-}
-
-/** @deprecated Use resetProvider() */
-export const resetToGemini = resetProvider
 
 function isRetryableError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
@@ -244,15 +215,7 @@ export interface AICallResult {
 export async function callAI(options: AICallOptions): Promise<AICallResult> {
   const { model, callerId = 'unknown' } = options
 
-  // If global fallback is active, use fallback model
-  if (_useFallback) {
-    const fallbackModel = await getConfig('ai_models', 'global.fallback_model', 'gpt-5.2-2025-12-11')
-    const fallbackProvider = getProviderForModel(fallbackModel)
-    console.log(`[${callerId}] 🔄 Using fallback ${fallbackModel} (global fallback active)`)
-    return callByProvider(options, fallbackModel, fallbackProvider)
-  }
-
-  // Route based on model provider
+  // Route based on model provider — try primary, fall back per-call if retryable error
   const provider = getProviderForModel(model)
   return callWithFallback(options, model, provider)
 }
@@ -281,8 +244,7 @@ async function callWithFallback(
     if (fallbackProvider === 'openai' && !process.env.OPENAI_API_KEY) throw err
     if (fallbackProvider === 'gemini' && !process.env.GEMINI_API_KEY) throw err
 
-    console.warn(`[${callerId}] ⚠️ ${provider}/${model} failed (retryable)! Switching to fallback: ${fallbackModel}`)
-    switchToFallback(`${provider} error from ${model} in ${callerId}`)
+    console.warn(`[${callerId}] ⚠️ ${provider}/${model} failed (retryable)! Trying fallback: ${fallbackModel}`)
 
     const result = await callByProvider(options, fallbackModel, fallbackProvider)
     return { ...result, switched: true }

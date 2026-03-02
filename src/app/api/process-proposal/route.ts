@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractFromBrief } from '@/lib/gemini/proposal-agent'
-import { resetToGemini, getProviderStatus } from '@/lib/ai-provider'
+import { getProviderStatus } from '@/lib/ai-provider'
 
 export const maxDuration = 300
 
@@ -8,9 +8,6 @@ export async function POST(request: NextRequest) {
   const requestId = `process-${Date.now()}`
   const startTime = Date.now()
   console.log(`[${requestId}] 🔍 PROCESS PROPOSAL (extract only) - START`)
-
-  // Reset provider to Gemini at the start of each new pipeline run
-  resetToGemini()
 
   try {
     const { clientBriefText, kickoffText } = await request.json()
