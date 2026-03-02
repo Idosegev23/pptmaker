@@ -2,6 +2,7 @@
 
 import { useAdminConfig } from '@/components/admin/use-admin-config'
 import PromptEditor from '@/components/admin/prompt-editor'
+import GlobalModelSelector from '@/components/admin/global-model-selector'
 import { Spinner } from '@/components/ui/spinner'
 
 export default function ModelsPage() {
@@ -10,10 +11,11 @@ export default function ModelsPage() {
   if (loading) return <div className="flex justify-center py-20"><Spinner /></div>
   if (error) return <div className="text-destructive text-sm py-8">{error}</div>
 
-  // Group by agent
+  // Group by agent — skip 'גלובלי' (handled by GlobalModelSelector)
   const groups = new Map<string, typeof configs>()
   for (const config of configs) {
     const group = config.group || 'כללי'
+    if (group === 'גלובלי') continue
     if (!groups.has(group)) groups.set(group, [])
     groups.get(group)!.push(config)
   }
@@ -30,6 +32,16 @@ export default function ModelsPage() {
             {saveMessage}
           </span>
         )}
+      </div>
+
+      {/* Global Model Selector */}
+      <GlobalModelSelector />
+
+      {/* Per-agent configs */}
+      <div className="border-t border-wizard-border pt-6">
+        <p className="text-xs text-muted-foreground mb-4">
+          הגדרות לפי סוכן — נדרסות ע״י ההגדרה הגלובלית כשדריסה פעילה
+        </p>
       </div>
 
       {Array.from(groups.entries()).map(([groupName, groupConfigs]) => (
@@ -49,7 +61,6 @@ export default function ModelsPage() {
                 isOverridden={config.isOverridden}
                 updatedAt={config.updatedAt}
                 onSave={async (key, val) => {
-                  // Try parsing as number for token limits
                   const num = Number(val)
                   await saveConfig(key, isNaN(num) ? val : num)
                 }}

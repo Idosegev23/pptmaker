@@ -382,6 +382,27 @@ If you can't find the logo, return logoUrl as empty string.`,
 // ═══════════════════════════════════════════════════════════
 
 export const MODEL_DEFAULTS = {
+  // --- Global Override ---
+  'global.primary_model': {
+    value: 'gemini-3.1-pro-preview',
+    description: 'מודל AI ראשי — חל על כל הסוכנים כשדריסה גלובלית פעילה',
+    value_type: 'text' as const,
+    group: 'גלובלי',
+  },
+  'global.fallback_model': {
+    value: 'claude-opus-4-6',
+    description: 'מודל AI גיבוי — משמש כשהמודל הראשי נכשל',
+    value_type: 'text' as const,
+    group: 'גלובלי',
+  },
+  'global.override_agents': {
+    value: true,
+    description: 'דריסה גלובלית — כשפעיל, כל הסוכנים משתמשים במודל הגלובלי',
+    value_type: 'boolean' as const,
+    group: 'גלובלי',
+  },
+
+  // --- Proposal Agent ---
   'proposal_agent.primary_model': {
     value: 'gemini-3.1-pro-preview',
     description: 'מודל ראשי — סוכן הצעות',

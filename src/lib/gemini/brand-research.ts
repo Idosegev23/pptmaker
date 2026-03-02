@@ -3,7 +3,7 @@
  * Multi-Agent approach: Targeted Google Searches -> Context Synthesis -> JSON Output
  */
 
-import { callAI } from '@/lib/ai-provider'
+import { callAI, resolveModels } from '@/lib/ai-provider'
 import { parseGeminiJson } from '../utils/json-cleanup'
 import { getConfig } from '../config/admin-config'
 import { PROMPT_DEFAULTS, MODEL_DEFAULTS } from '../config/defaults'
@@ -12,9 +12,12 @@ const PRO_MODEL_DEFAULT = MODEL_DEFAULTS['brand_research.primary_model'].value a
 const FLASH_MODEL_DEFAULT = MODEL_DEFAULTS['brand_research.fallback_model'].value as string
 
 async function getBrandResearchModels(): Promise<string[]> {
-  const primary = await getConfig('ai_models', 'brand_research.primary_model', PRO_MODEL_DEFAULT)
-  const fallback = await getConfig('ai_models', 'brand_research.fallback_model', FLASH_MODEL_DEFAULT)
-  return [primary, fallback]
+  return resolveModels(
+    'brand_research.primary_model',
+    'brand_research.fallback_model',
+    PRO_MODEL_DEFAULT,
+    FLASH_MODEL_DEFAULT,
+  )
 }
 
 export interface BrandResearch {

@@ -11,14 +11,17 @@
 import { parseGeminiJson } from '../utils/json-cleanup'
 import { getConfig } from '@/lib/config/admin-config'
 import { MODEL_DEFAULTS } from '@/lib/config/defaults'
-import { callAI } from '@/lib/ai-provider'
+import { callAI, resolveModels } from '@/lib/ai-provider'
 import type { ExtractedBriefData } from '@/types/brief'
 import type { WizardStepDataMap } from '@/types/wizard'
 
 async function getProposalModels() {
-  const primary = await getConfig('ai_models', 'proposal_agent.primary_model', MODEL_DEFAULTS['proposal_agent.primary_model'].value as string)
-  const fallback = await getConfig('ai_models', 'proposal_agent.fallback_model', MODEL_DEFAULTS['proposal_agent.fallback_model'].value as string)
-  return [primary, fallback]
+  return resolveModels(
+    'proposal_agent.primary_model',
+    'proposal_agent.fallback_model',
+    MODEL_DEFAULTS['proposal_agent.primary_model'].value as string,
+    MODEL_DEFAULTS['proposal_agent.fallback_model'].value as string,
+  )
 }
 
 export interface ProposalOutput {

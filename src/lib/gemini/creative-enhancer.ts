@@ -4,9 +4,8 @@
  * and enriches it with competitive intelligence from brand research.
  */
 
-import { callAI } from '@/lib/ai-provider'
+import { callAI, resolveModels } from '@/lib/ai-provider'
 import { parseGeminiJson } from '../utils/json-cleanup'
-import { getConfig } from '../config/admin-config'
 import { MODEL_DEFAULTS } from '../config/defaults'
 import type { BrandResearch } from './brand-research'
 import type { CreativeStepData } from '@/types/wizard'
@@ -14,9 +13,12 @@ const PRO_MODEL_DEFAULT = MODEL_DEFAULTS['creative_enhancer.primary_model'].valu
 const FLASH_MODEL_DEFAULT = MODEL_DEFAULTS['creative_enhancer.fallback_model'].value as string
 
 async function getCreativeModels(): Promise<string[]> {
-  const primary = await getConfig('ai_models', 'creative_enhancer.primary_model', PRO_MODEL_DEFAULT)
-  const fallback = await getConfig('ai_models', 'creative_enhancer.fallback_model', FLASH_MODEL_DEFAULT)
-  return [primary, fallback]
+  return resolveModels(
+    'creative_enhancer.primary_model',
+    'creative_enhancer.fallback_model',
+    PRO_MODEL_DEFAULT,
+    FLASH_MODEL_DEFAULT,
+  )
 }
 
 /**

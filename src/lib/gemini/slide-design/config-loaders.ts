@@ -4,6 +4,7 @@
  */
 
 import { getConfig } from '@/lib/config/admin-config'
+import { resolveModels } from '@/lib/ai-provider'
 import {
   PROMPT_DEFAULTS,
   DESIGN_DEFAULTS,
@@ -14,18 +15,24 @@ import type { PacingDirective } from './types'
 
 // ─── Model Loaders ────────────────────────────────────
 
-/** Models for Design System (foundation) — Pro first for quality */
+/** Models for Design System (foundation) — respects global override */
 export async function getDesignSystemModels(): Promise<string[]> {
-  const primary = await getConfig('ai_models', 'slide_designer.primary_model', MODEL_DEFAULTS['slide_designer.primary_model'].value as string)
-  const fallback = await getConfig('ai_models', 'slide_designer.fallback_model', MODEL_DEFAULTS['slide_designer.fallback_model'].value as string)
-  return [primary, fallback]
+  return resolveModels(
+    'slide_designer.primary_model',
+    'slide_designer.fallback_model',
+    MODEL_DEFAULTS['slide_designer.primary_model'].value as string,
+    MODEL_DEFAULTS['slide_designer.fallback_model'].value as string,
+  )
 }
 
-/** Models for Batch slide generation — Flash first for speed + reliability */
+/** Models for Batch slide generation — respects global override */
 export async function getBatchModels(): Promise<string[]> {
-  const primary = await getConfig('ai_models', 'slide_designer.batch_primary_model', MODEL_DEFAULTS['slide_designer.batch_primary_model'].value as string)
-  const fallback = await getConfig('ai_models', 'slide_designer.batch_fallback_model', MODEL_DEFAULTS['slide_designer.batch_fallback_model'].value as string)
-  return [primary, fallback]
+  return resolveModels(
+    'slide_designer.batch_primary_model',
+    'slide_designer.batch_fallback_model',
+    MODEL_DEFAULTS['slide_designer.batch_primary_model'].value as string,
+    MODEL_DEFAULTS['slide_designer.batch_fallback_model'].value as string,
+  )
 }
 
 // ─── Prompt Loaders ───────────────────────────────────

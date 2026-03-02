@@ -3,7 +3,7 @@
  * Uses Gemini to recommend relevant, real influencers for a brand grounded in Google Search
  */
 
-import { callAI } from '@/lib/ai-provider'
+import { callAI, resolveModels } from '@/lib/ai-provider'
 import type { BrandResearch } from './brand-research'
 import { parseGeminiJson } from '../utils/json-cleanup'
 import { getConfig } from '../config/admin-config'
@@ -13,9 +13,12 @@ const PRO_MODEL_DEFAULT = MODEL_DEFAULTS['influencer_research.primary_model'].va
 const FLASH_MODEL_DEFAULT = MODEL_DEFAULTS['influencer_research.fallback_model'].value as string
 
 async function getInfluencerModels(): Promise<string[]> {
-  const primary = await getConfig('ai_models', 'influencer_research.primary_model', PRO_MODEL_DEFAULT)
-  const fallback = await getConfig('ai_models', 'influencer_research.fallback_model', FLASH_MODEL_DEFAULT)
-  return [primary, fallback]
+  return resolveModels(
+    'influencer_research.primary_model',
+    'influencer_research.fallback_model',
+    PRO_MODEL_DEFAULT,
+    FLASH_MODEL_DEFAULT,
+  )
 }
 
 export interface InfluencerRecommendation {
