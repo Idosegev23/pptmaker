@@ -414,13 +414,13 @@ export const MODEL_DEFAULTS = {
     group: 'מעצב שקפים',
   },
   'slide_designer.batch_primary_model': {
-    value: 'gemini-3-flash-preview',
-    description: 'מודל ראשי — יצירת שקפים (batches). Flash מומלץ למהירות ואמינות',
+    value: 'gemini-3.1-pro-preview',
+    description: 'מודל ראשי — יצירת שקפים (batches). Pro לאיכות מקסימלית',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
   'slide_designer.batch_fallback_model': {
-    value: 'gemini-3.1-pro-preview',
+    value: 'gemini-3-flash-preview',
     description: 'מודל גיבוי — יצירת שקפים (batches)',
     value_type: 'text' as const,
     group: 'מעצב שקפים',

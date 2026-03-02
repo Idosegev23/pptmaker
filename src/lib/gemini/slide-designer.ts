@@ -632,69 +632,169 @@ function buildBatchPrompt(
   brandName: string, cd: PremiumDesignSystem['creativeDirection'],
   colors: PremiumDesignSystem['colors'], typo: PremiumDesignSystem['typography'],
   effects: PremiumDesignSystem['effects'], motif: PremiumDesignSystem['motif'],
-  designSystem: PremiumDesignSystem, designPrinciples: string, depthLayers: string,
-  elementFormat: string, technicalRules: string, finalInstruction: string,
+  designSystem: PremiumDesignSystem, _designPrinciples: string, _depthLayers: string,
+  _elementFormat: string, _technicalRules: string, _finalInstruction: string,
   batchContext: BatchContext, slidesDescription: string, slideCount: number,
 ): string {
-  return `<task>
-Design ${slideCount} premium presentation slides for "${brandName}".
-Canvas: 1920×1080px | RTL Hebrew | Font: Heebo | textAlign: "right" always.
-Each slide MUST have a unique layout — never repeat a composition.
-</task>
+  return `אתה ארט דיירקטור גאון ברמת Awwwards / Pentagram / Sagmeister & Walsh.
+המצגת חייבת להיראות כמו **מגזין אופנה פרימיום / editorial design** — לא כמו PowerPoint!
 
-<creative_brief>
-${cd ? `Visual Metaphor: ${cd.visualMetaphor}\nVisual Tension: ${cd.visualTension}\nMaster Rule (EVERY slide must obey): ${cd.oneRule}\nColor Story: ${cd.colorStory}\nTypography Voice: ${cd.typographyVoice}\nEmotional Arc: ${cd.emotionalArc}` : `Think like a Creative Director — what is the visual metaphor for "${brandName}"?`}
-</creative_brief>
+עצב ${slideCount} שקפים למותג "${brandName}".
 
-<design_system>
-Colors: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
-Background: ${colors.background} | Text: ${colors.text} | Cards: ${colors.cardBg}
-Muted: ${colors.muted} | Highlight: ${colors.highlight}
+══════════════════════════════════
+🧠 THE CREATIVE BRIEF
+══════════════════════════════════
+${cd ? `
+**מטאפורה ויזואלית:** ${cd.visualMetaphor}
+**מתח ויזואלי:** ${cd.visualTension}
+**חוק-על (כל שקף חייב לקיים):** ${cd.oneRule}
+**סיפור צבע:** ${cd.colorStory}
+**קול טיפוגרפי:** ${cd.typographyVoice}
+**מסע רגשי:** ${cd.emotionalArc}
+` : `חשוב כמו Creative Director — מה המטאפורה הויזואלית של "${brandName}"? מה המתח? מה מפתיע?`}
+
+══════════════════════════════════
+🎨 DESIGN SYSTEM
+══════════════════════════════════
+Canvas: 1920×1080px | RTL (עברית) | פונט: Heebo
+
+צבעים: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
+רקע: ${colors.background} | טקסט: ${colors.text} | כרטיסים: ${colors.cardBg}
+מושתק: ${colors.muted} | highlight: ${colors.highlight}
 Aurora: ${effects.auroraGradient}
 
-Typography: display ${typo.displaySize}px | heading ${typo.headingSize}px | sub ${typo.subheadingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
-Spacing: tight ${typo.letterSpacingTight} | wide ${typo.letterSpacingWide} | Weights: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
+טיפוגרפיה: display ${typo.displaySize}px | heading ${typo.headingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
+Spacing tight: ${typo.letterSpacingTight} | wide: ${typo.letterSpacingWide}
+Weight pairs: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
 Line height: tight ${typo.lineHeightTight} | relaxed ${typo.lineHeightRelaxed}
 
-Cards: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
-Style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle} | Motif: ${motif.type} @ ${motif.opacity}
-</design_system>
+Card: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
+Decorative style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle}
 
-<design_principles>
-${designPrinciples}
-DEPTH LAYERS: ${depthLayers}
-ANTI-PATTERNS: Centered text in middle | 3 identical cards | All fonts same size | Simple linear gradient | Rotation on body text | Opacity < 0.7 on readable text
-</design_principles>
+Motif: ${motif.type} (opacity: ${motif.opacity}, color: ${motif.color})
+${motif.implementation}
 
-<typography_rules>
-- Headlines (60px+): letterSpacing ${typo.letterSpacingTight}, lineHeight ${typo.lineHeightTight}, weight ${typo.weightPairs[0]?.[0] || 900}
-- Body/labels: letterSpacing ${typo.letterSpacingWide}, weight ${typo.weightPairs[0]?.[1] || 300}
-- Giant numbers: weight 900, letterSpacing -4, fontSize 80-140px
-- Watermark: role "decorative", fontSize 200-400, opacity 0.03-0.08, rotation -5° to -15°, textStroke: { width: 2, color: "#ffffff" }
-</typography_rules>
+══════════════════════════════════
+📐 COMPOSITION & QUALITY RULES
+══════════════════════════════════
 
-<element_format>
-${elementFormat}
-</element_format>
+## חוקי קומפוזיציה (Composition Rules):
 
-<technical_rules>
-${technicalRules}
-- Create depth through layered shapes with subtle offset shadows
-- For full-bleed images: image at zIndex 1, gradient overlay at zIndex 2, text at zIndex 8+
-- Key numbers: fontSize 80-140px, fontWeight 900, accent color
-- Images with URL: MUST include element type "image" with src=URL, size ≥40% of slide
-</technical_rules>
+### Rule of Thirds:
+נקודות העניין הויזואליות חייבות לשבת על אחד מ-4 צמתי ⅓:
+- נקודה A: x=640, y=360
+- נקודה B: x=1280, y=360
+- נקודה C: x=640, y=720
+- נקודה D: x=1280, y=720
+הכותרת הראשית תמיד על נקודה A או B (צד ימין — RTL).
 
-<visualization_checklist>
-BEFORE outputting each slide, mentally render it at 1920×1080:
-1. Can I read every text? 2. No overlapping without contrast layer? 3. Asymmetric composition? 4. ONE dominant element? 5. Key number feels like hero? 6. Enough white space? 7. Different from previous?
-If ANY check fails → fix before outputting.
-</visualization_checklist>
+### Diagonal Dominance:
+אלמנטים צריכים ליצור קו אלכסוני מנחה דינמי (מימין-למעלה לשמאל-למטה) — לא ישר ולא סטטי.
 
-<reference_examples>
-These examples show the QUALITY LEVEL expected. Create COMPLETELY DIFFERENT designs — these are structure references only.
+### Focal Point Triangle:
+ב-3 האלמנטים הראשיים (title, visual, supporting) — מקמם אותם כמשולש שמקיף את מרכז העניין.
 
-Example 1 — Cover (Typographic Brutalism):
+### Scale Contrast (חובה):
+היחס בין הפונט הגדול ביותר לפונט הקטן ביותר בשקף חייב להיות לפחות 5:1.
+למשל: אם הכותרת 96px, caption צריך להיות 18px או פחות.
+שקפי peak (cover, insight, bigIdea, closing): יחס 10:1 לפחות (למשל 300px ו-18px).
+
+## שכבות עומק (Depth Layers) — כל אלמנט חייב לשבת בשכבה אחת:
+- Layer 0 (zIndex: 0-1):    BACKGROUND — aurora, gradient, texture, full-bleed color
+- Layer 1 (zIndex: 2-3):    DECORATIVE — watermark text, geometric shapes, motif patterns, thin architectural lines
+- Layer 2 (zIndex: 4-5):    STRUCTURE — cards, containers, dividers, image frames
+- Layer 3 (zIndex: 6-8):    CONTENT — body text, data, images, influencer cards
+- Layer 4 (zIndex: 9-10):   HERO — main title, key number, focal element, brand name
+
+חוק: אלמנטים מאותה שכבה לא חופפים (אלא אם אחד מהם decorative עם opacity < 0.3).
+
+## ❌ דפוסים אסורים (Anti-Patterns) — הפרה = פסילה:
+1. ❌ טקסט ממורכז בדיוק באמצע המסך (x:960, y:540) — BORING
+2. ❌ כל האלמנטים מיושרים לאותו קו אנכי — שטוח ומת
+3. ❌ 3 כרטיסים זהים ברוחב שווה בשורה — PowerPoint גנרי
+4. ❌ gradient ליניארי פשוט (שמאל→ימין או למעלה→למטה) — 2015
+5. ❌ עיגול מאחורי טקסט כ"הדגשה" — קלישאה
+6. ❌ borderRadius: 8 על הכל — זה UI, לא editorial design
+7. ❌ אייקונים קטנים ליד כל bullet point — PowerPoint vibes
+8. ❌ כל הטקסטים באותו fontSize (למשל הכל 24px) — אין היררכיה
+9. ❌ יותר מ-3 צבעים שונים לטקסט באותו שקף — בלגן
+10. ❌ אלמנטים שממוקמים "בערך" — כל מיקום חייב להיות מכוון ומדויק
+11. ❌ opacity: 0.5 על טקסט קריא — חייב להיות readable
+12. ❌ rotation על body text — רק על דקורטיבי/watermark
+
+## Micro-Typography:
+- כותרות ענקיות (60px+): letterSpacing: ${typo.letterSpacingTight} (tight!) + lineHeight: ${typo.lineHeightTight}
+- Labels/subtitles: letterSpacing: ${typo.letterSpacingWide} (spaced out!) + fontWeight: ${typo.weightPairs[0]?.[1] || 300}
+- כותרות: fontWeight: ${typo.weightPairs[0]?.[0] || 900} | גוף: fontWeight: ${typo.weightPairs[0]?.[1] || 300}
+- מספרים ענקים (metrics/budget): fontWeight 900, letterSpacing: -4, fontSize 80-140px
+
+## White Space:
+רווח לבן הוא אלמנט עיצובי פעיל. הכותרת הראשית חייבת מרחק של 80px+ מכל אלמנט אחר.
+
+## Visual Anchor:
+כל שקף חייב anchor ויזואלי — האלמנט הראשון שהעין רואה. סדר: anchor → title → details.
+
+## Frozen Motion:
+אלמנטים דקורטיביים שנראים "באמצע תנועה": rotation 3-8°, x קרוב לקצה, clipPath שחותך.
+
+## Layout Techniques (בחר אחת לכל שקף):
+1. Typographic Brutalism
+2. Editorial Bleed
+3. Bento Box
+4. Swiss Grid
+5. Deconstructed Collage
+6. Cinematic Widescreen
+7. Kinetic Typography (frozen)
+8. Data Art
+9. Negative Space Dominance
+10. Split Screen Asymmetry
+11. Overlay Chaos (controlled)
+12. Magazine Spread
+13. Architectural Grid
+14. Poster Style (single focal)
+אסור לחזור על אותה טכניקה יותר מפעמיים! שקפי peak (cover/insight/bigIdea/closing) = הטכניקות הכי דרמטיות.
+
+══════════════════════════════════
+🛠️ EDITORIAL DESIGN RULES (THE WOW FACTOR!)
+══════════════════════════════════
+
+1. **שבור את התבנית:** אף שקף לא נראה כמו PowerPoint עם כותרת ובולטים. לייאוט א-סימטרי!
+2. **Watermarks ענקיים:** בכל שקף — טקסט רקע עצום (200-400px) עם opacity 0.03-0.08, rotation -5 עד -15. זה נותן עומק!
+3. **clip-path / shapes דינמיים:** אל תעשה רק ריבועים. shapes בזווית, עיגולים שגולשים מחוץ למסך, קווים אלכסוניים
+4. **טיפוגרפיה אדירה:** כותרות שחותכות את המסך. textStroke (קו מתאר) לטקסט דקורטיבי. ניגוד חד בין weight 900 ל-300
+5. **מספרים = drama:** נתון של "500K" מקבל fontSize: 120+, accent color, ושטח ענק. הטקסט שמתחתיו קטן ומגזיני
+6. **Gradient overlays:** גרדיאנטים מעל תמונות (linear-gradient to top) כדי שטקסט יבלוט
+7. **קווים ומפרידים אלגנטיים:** קווים דקים (1-2px) ב-accent color, מפרידים בין אזורים, מסגרות חלקיות
+8. **כרטיסים = לא סתם ריבועים:** offset borders, רקעים מדורגים, fake-3d shadow (shape ב-+12px offset)
+
+══════════════════════════════════
+📦 ELEMENT TYPES (JSON FORMAT)
+══════════════════════════════════
+
+### Shape:
+{ "id": "el-X", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
+  "shapeType": "background"|"decorative"|"divider", "fill": "#hex or gradient", "clipPath": "...",
+  "borderRadius": px, "opacity": 0-1, "rotation": degrees, "border": "1px solid rgba(...)" }
+
+### Text:
+{ "id": "el-X", "type": "text", "x": 80, "y": 120, "width": 800, "height": 80, "zIndex": 10,
+  "content": "טקסט", "fontSize": px, "fontWeight": 100-900, "color": "#hex", "textAlign": "right",
+  "role": "title"|"subtitle"|"body"|"caption"|"label"|"decorative", "lineHeight": 0.9-1.6,
+  "letterSpacing": px, "opacity": 0-1, "rotation": degrees,
+  "textStroke": { "width": 2, "color": "#hex" } }
+  *** role "decorative" = watermark text ענק, opacity נמוך, rotation, fontSize 200+ ***
+
+### Image:
+{ "id": "el-X", "type": "image", "x": 960, "y": 0, "width": 960, "height": 1080, "zIndex": 5,
+  "src": "THE_URL", "objectFit": "cover", "borderRadius": px, "clipPath": "..." }
+
+**תמונות קריטי**: אם יש imageUrl לשקף → חובה element מסוג "image" עם src=URL, גודל ≥40% מהשקף
+
+══════════════════════════════════
+🖼️ REFERENCE EXAMPLES (THIS IS WHAT WOW LOOKS LIKE)
+══════════════════════════════════
+
+### דוגמה 1 — שקף שער (Typographic Brutalism):
 \`\`\`json
 {
   "id": "slide-1", "slideType": "cover", "label": "שער",
@@ -711,7 +811,7 @@ Example 1 — Cover (Typographic Brutalism):
 }
 \`\`\`
 
-Example 2 — Metrics (Bento Box + Data Art):
+### דוגמה 2 — שקף מדדים (Bento Box + Data Art):
 \`\`\`json
 {
   "id": "slide-10", "slideType": "metrics", "label": "מדדים",
@@ -733,141 +833,172 @@ Example 2 — Metrics (Bento Box + Data Art):
 }
 \`\`\`
 
-⚠️ Design slides that are DIFFERENT from these examples — use them only for quality/structure reference.
-</reference_examples>
+⚠️ צור עיצוב **שונה לחלוטין** מהדוגמאות — הן רק ברמת האיכות, לא בסגנון.
 
-<previous_slides>
-${batchContext.previousSlidesVisualSummary ? `Already designed:\n${batchContext.previousSlidesVisualSummary}` : 'First batch — no previous slides.'}
-</previous_slides>
+══════════════════════════════════
+📝 CONTEXT FROM PREVIOUS SLIDES
+══════════════════════════════════
+${batchContext.previousSlidesVisualSummary || 'זה הבאצ׳ הראשון — אין הקשר קודם.'}
 
-<slides_to_design>
+══════════════════════════════════
+📋 SLIDES TO CREATE
+══════════════════════════════════
 ${slidesDescription}
-</slides_to_design>
 
-<final_instruction>
-${finalInstruction}
-</final_instruction>`
+══════════════════════════════════
+⚙️ TECHNICAL RULES
+══════════════════════════════════
+- textAlign: "right" תמיד (RTL). כל הטקסט בעברית
+- zIndex layering: 0-1 רקע, 2-3 דקורציה, 4-5 מבנה, 6-8 תוכן, 9-10 hero
+- 🚫 אסור: box-shadow, backdrop-filter, filter: blur
+- ✅ Fake 3D: shape ב-x+12,y+12 fill:#000 opacity:0.12-0.18
+- לתמונות full-bleed: image ב-zIndex 1, gradient overlay ב-zIndex 2, טקסט ב-zIndex 8+
+- מספרים מרכזיים: fontSize 80-140px, fontWeight 900, accent color
+- תמונות עם URL: חובה element מסוג "image" עם src=URL, גודל ≥40% מהשקף
+
+לפני שליחת ה-JSON, דמיין כל שקף מנטלית ב-1920×1080:
+1. האם אני קורא כל טקסט בבירור?
+2. שום דבר לא מוסתר מאחורי אלמנט אחר?
+3. אם יש תמונה — יש לה מקום משלה? טקסט לא עולה עליה ישירות?
+4. הקומפוזיציה מרגישה כמו עמוד מגזין פרימיום?
+5. אם בדיקה נכשלת — תקן את הלייאוט לפני שליחת ה-JSON.
+רק תמונות עם URL שסופק בתוכן. לעולם אל תמציא URL.
+
+החזר JSON: { "slides": [{ "id": "slide-N", "slideType": "TYPE", "label": "שם בעברית", "background": { "type": "solid"|"gradient", "value": "..." }, "elements": [...] }] }`
 }
 
 function buildSingleSlidePrompt(
   brandName: string, cd: PremiumDesignSystem['creativeDirection'],
   colors: PremiumDesignSystem['colors'], typo: PremiumDesignSystem['typography'],
   effects: PremiumDesignSystem['effects'], motif: PremiumDesignSystem['motif'],
-  designSystem: PremiumDesignSystem, designPrinciples: string, depthLayers: string,
-  elementFormat: string, technicalRules: string, finalInstruction: string,
+  designSystem: PremiumDesignSystem, _designPrinciples: string, _depthLayers: string,
+  _elementFormat: string, _technicalRules: string, _finalInstruction: string,
   storyLines: string, previousSlidesBlock: string,
   slideIndex: number, totalSlides: number, slideType: string,
   pacing: PacingDirective, archetype: string, imageTag: string,
   emotionNote: string, contentBlock: string,
   temperature?: string, hasTension?: boolean,
 ): string {
-  return `<task>
-Design exactly 1 premium presentation slide for "${brandName}".
-Canvas: 1920×1080px | RTL Hebrew | Font: Heebo | textAlign: "right" always.
-This must look like a premium fashion magazine / editorial design — NOT PowerPoint!
-</task>
+  return `אתה ארט דיירקטור גאון ברמת Awwwards / Pentagram / Sagmeister & Walsh.
+עצב שקף אחד למותג "${brandName}". חייב להיראות כמו **מגזין אופנה פרימיום** — לא כמו PowerPoint!
 
-<creative_brief>
-${cd ? `Visual Metaphor: ${cd.visualMetaphor}\nVisual Tension: ${cd.visualTension}\nMaster Rule (EVERY slide must obey): ${cd.oneRule}\nColor Story: ${cd.colorStory}\nTypography Voice: ${cd.typographyVoice}\nEmotional Arc: ${cd.emotionalArc}` : `Think like a Creative Director for "${brandName}".`}
-</creative_brief>
+══════════════════════════════════
+🧠 THE CREATIVE BRIEF
+══════════════════════════════════
+${cd ? `
+**מטאפורה ויזואלית:** ${cd.visualMetaphor}
+**מתח ויזואלי:** ${cd.visualTension}
+**חוק-על (כל שקף חייב לקיים):** ${cd.oneRule}
+**סיפור צבע:** ${cd.colorStory}
+**קול טיפוגרפי:** ${cd.typographyVoice}
+**מסע רגשי:** ${cd.emotionalArc}
+` : `חשוב כמו Creative Director — מה המטאפורה הויזואלית של "${brandName}"?`}
 
-<design_system>
-Colors: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
-Background: ${colors.background} | Text: ${colors.text} | Cards: ${colors.cardBg}
-Muted: ${colors.muted} | Highlight: ${colors.highlight}
+══════════════════════════════════
+🎨 DESIGN SYSTEM
+══════════════════════════════════
+Canvas: 1920×1080px | RTL (עברית) | פונט: Heebo
+
+צבעים: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
+רקע: ${colors.background} | טקסט: ${colors.text} | כרטיסים: ${colors.cardBg}
+מושתק: ${colors.muted} | highlight: ${colors.highlight}
 Aurora: ${effects.auroraGradient}
 
-Typography: display ${typo.displaySize}px | heading ${typo.headingSize}px | sub ${typo.subheadingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
-Spacing: tight ${typo.letterSpacingTight} | wide ${typo.letterSpacingWide} | Weights: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
+טיפוגרפיה: display ${typo.displaySize}px | heading ${typo.headingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
+Spacing tight: ${typo.letterSpacingTight} | wide: ${typo.letterSpacingWide}
+Weight pairs: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
 Line height: tight ${typo.lineHeightTight} | relaxed ${typo.lineHeightRelaxed}
 
-Cards: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
-Style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle} | Motif: ${motif.type} @ ${motif.opacity}
-</design_system>
+Card: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
+Decorative style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle}
+Motif: ${motif.type} (opacity: ${motif.opacity}, color: ${motif.color})
 
-<full_presentation_story>
+══════════════════════════════════
+📖 FULL PRESENTATION STORY
+══════════════════════════════════
 ${storyLines}
-</full_presentation_story>
 
-<previous_slide_designs>
+══════════════════════════════════
+📝 PREVIOUS SLIDE DESIGNS
+══════════════════════════════════
 ${previousSlidesBlock}
-</previous_slide_designs>
 
-<slide_to_design index="${slideIndex + 1}" total="${totalSlides}" type="${slideType}">
-<temperature>${temperature || 'neutral'}</temperature>
-<energy>${pacing.energy}</energy>
-<density>${pacing.density}</density>
-<max_elements>${pacing.maxElements}</max_elements>
-<min_whitespace>${pacing.minWhitespace}%</min_whitespace>
-<layout_inspiration>${archetype}</layout_inspiration>
-${hasTension ? '<tension>TENSION POINT — חובה נקודת מתח ויזואלית אחת בשקף הזה!</tension>' : ''}
+══════════════════════════════════
+📋 SLIDE TO DESIGN
+══════════════════════════════════
+שקף ${slideIndex + 1}/${totalSlides}: סוג "${slideType}"
+🌡️ Temperature: ${temperature || 'neutral'} | ⚡ Energy: ${pacing.energy} | 📊 Density: ${pacing.density}
+📐 מקסימום ${pacing.maxElements} אלמנטים | לפחות ${pacing.minWhitespace}% רווח לבן
+🎨 Layout inspiration: ${archetype}
+${hasTension ? '🔥 TENSION POINT — חובה נקודת מתח ויזואלית אחת בשקף הזה!' : ''}
 ${imageTag}${emotionNote}
-${cd?.oneRule ? `<master_rule>${cd.oneRule}</master_rule>` : ''}
-<content>
+${cd?.oneRule ? `🔑 חוק-על: ${cd.oneRule}` : ''}
+
+תוכן:
 ${contentBlock}
-</content>
-</slide_to_design>
 
-<design_principles>
-${designPrinciples}
-DEPTH LAYERS: ${depthLayers}
-ANTI-PATTERNS: Centered text | 3 identical cards | All fonts same size | Simple gradient | Rotation on body text | Opacity < 0.7 on readable text
-</design_principles>
+══════════════════════════════════
+📐 COMPOSITION & QUALITY RULES
+══════════════════════════════════
 
-<typography_rules>
-- Headlines (60px+): letterSpacing ${typo.letterSpacingTight}, lineHeight ${typo.lineHeightTight}, weight ${typo.weightPairs[0]?.[0] || 900}
-- Body/labels: letterSpacing ${typo.letterSpacingWide}, weight ${typo.weightPairs[0]?.[1] || 300}
-- Giant numbers: weight 900, letterSpacing -4, fontSize 80-140px
-- Watermark: role "decorative", fontSize 200-400, opacity 0.03-0.08, rotation -5° to -15°, textStroke: { width: 2, color: "#ffffff" }
-</typography_rules>
+### Rule of Thirds:
+נקודות העניין: A(640,360), B(1280,360), C(640,720), D(1280,720). כותרת על A או B (RTL).
 
-<element_format>
-${elementFormat}
-</element_format>
+### Scale Contrast (חובה):
+יחס פונט גדול/קטן ≥ 5:1. שקפי peak ≥ 10:1.
 
-<technical_rules>
-${technicalRules}
-- Create depth through layered shapes with subtle offset shadows
-- For full-bleed images: image at zIndex 1, gradient overlay at zIndex 2, text at zIndex 8+
-- Key numbers: fontSize 80-140px, fontWeight 900, accent color
-- Images with URL: MUST include element type "image" with src=URL, size ≥40% of slide
-</technical_rules>
+### Diagonal Dominance:
+אלמנטים יוצרים קו אלכסוני דינמי (מימין-למעלה לשמאל-למטה).
 
-<image_placement>
-When an image URL is provided:
-- You MUST include an image element. YOU decide size, position, cropping.
-- Consider: full-bleed, half-split, corner accent, centered hero, asymmetric panel.
-- If full-bleed: add gradient overlay for text readability.
-NEVER use default positions. Every image placement must be a creative decision.
-</image_placement>
+## שכבות עומק:
+- zIndex 0-1: BACKGROUND | 2-3: DECORATIVE | 4-5: STRUCTURE | 6-8: CONTENT | 9-10: HERO
 
-<reference_examples>
-Quality/structure reference — create YOUR OWN design, different from these:
+## ❌ Anti-Patterns (הפרה = פסילה):
+1. ❌ טקסט ממורכז באמצע (x:960, y:540)
+2. ❌ כל האלמנטים על אותו קו אנכי
+3. ❌ 3 כרטיסים זהים ברוחב שווה
+4. ❌ gradient ליניארי פשוט
+5. ❌ כל הטקסטים באותו fontSize
+6. ❌ opacity < 0.7 על טקסט קריא
+7. ❌ rotation על body text
 
-Cover example (structure only):
-\`\`\`json
-{
-  "id": "slide-1", "slideType": "cover", "label": "שער",
-  "background": { "type": "solid", "value": "${colors.background}" },
-  "elements": [
-    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 20% 30%, ${colors.primary}50 0%, transparent 50%)", "opacity": 0.7 },
-    { "id": "watermark", "type": "text", "x": -150, "y": 180, "width": 2200, "height": 500, "zIndex": 2, "content": "BRAND", "fontSize": 380, "fontWeight": 900, "color": "transparent", "textAlign": "center", "lineHeight": 0.9, "letterSpacing": -8, "opacity": 0.12, "rotation": -8, "textStroke": { "width": 2, "color": "#ffffff" }, "role": "decorative" },
-    { "id": "title", "type": "text", "x": 120, "y": 380, "width": 900, "height": 200, "zIndex": 10, "content": "שם המותג", "fontSize": ${typo.displaySize}, "fontWeight": 900, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.0, "letterSpacing": -4, "role": "title" },
-    { "id": "subtitle", "type": "text", "x": 120, "y": 610, "width": 600, "height": 50, "zIndex": 8, "content": "הצעת שיתוף פעולה", "fontSize": 22, "fontWeight": 300, "color": "${colors.text}70", "textAlign": "right", "letterSpacing": 6, "role": "subtitle" }
-  ]
-}
-\`\`\`
-</reference_examples>
+══════════════════════════════════
+🛠️ EDITORIAL DESIGN RULES (THE WOW FACTOR!)
+══════════════════════════════════
+1. **שבור את התבנית:** לייאוט א-סימטרי! לא PowerPoint
+2. **Watermarks ענקיים:** טקסט רקע 200-400px, opacity 0.03-0.08, rotation -5 עד -15
+3. **clip-path / shapes דינמיים:** shapes בזווית, עיגולים גולשים, קווים אלכסוניים
+4. **טיפוגרפיה אדירה:** כותרות חותכות מסך, textStroke דקורטיבי, ניגוד 900 vs 300
+5. **מספרים = drama:** "500K" → fontSize 120+, accent color, שטח ענק
+6. **Gradient overlays:** גרדיאנטים מעל תמונות לטקסט קריא
+7. **קווים אלגנטיים:** 1-2px ב-accent, מפרידים בין אזורים
+8. **כרטיסים יצירתיים:** offset borders, fake-3d shadow (+12px offset)
 
-<visualization_checklist>
-BEFORE outputting, mentally render at 1920×1080:
-1. Can I read every text? 2. No overlapping without contrast layer? 3. Asymmetric? 4. ONE dominant element? 5. Key number = hero? 6. Enough white space? 7. Different from previous?
-If ANY check fails → fix before outputting.
-</visualization_checklist>
+══════════════════════════════════
+📦 ELEMENT FORMAT
+══════════════════════════════════
 
-<final_instruction>
-${finalInstruction}
-</final_instruction>`
+Shape: { "id", "type": "shape", "x", "y", "width", "height", "zIndex", "shapeType": "background"|"decorative"|"divider", "fill": "#hex or gradient", "clipPath", "borderRadius", "opacity", "rotation", "border" }
+Text: { "id", "type": "text", "x", "y", "width", "height", "zIndex", "content": "עברית", "fontSize", "fontWeight": 100-900, "color", "textAlign": "right", "role": "title"|"subtitle"|"body"|"caption"|"label"|"decorative", "lineHeight", "letterSpacing", "opacity", "rotation", "textStroke": { "width", "color" } }
+  *** role "decorative" = watermark ענק, opacity נמוך, rotation, fontSize 200+ ***
+Image: { "id", "type": "image", "x", "y", "width", "height", "zIndex", "src": "THE_URL", "objectFit": "cover", "borderRadius", "clipPath" }
+
+**תמונות קריטי**: אם יש imageUrl → חובה element "image" עם src=URL, גודל ≥40% מהשקף
+
+══════════════════════════════════
+⚙️ TECHNICAL RULES
+══════════════════════════════════
+- textAlign: "right" תמיד (RTL). כל הטקסט בעברית
+- 🚫 אסור: box-shadow, backdrop-filter, filter: blur
+- ✅ Fake 3D: shape ב-x+12,y+12 fill:#000 opacity:0.12-0.18
+- לתמונות full-bleed: image ב-zIndex 1, gradient overlay ב-zIndex 2, טקסט ב-zIndex 8+
+- רווח לבן הוא אלמנט עיצובי פעיל. כותרת ראשית חייבת 80px+ מכל אלמנט אחר
+
+לפני שליחת ה-JSON, דמיין את השקף ב-1920×1080:
+1. כל טקסט קריא? 2. שום דבר לא מוסתר? 3. תמונה לא מכסה טקסט? 4. קומפוזיציה מגזינית?
+רק תמונות עם URL שסופק. לעולם אל תמציא URL.
+
+החזר JSON: { "slides": [{ "id": "slide-${slideIndex}", "slideType": "${slideType}", "label": "שם בעברית", "background": { "type": "solid", "value": "..." }, "elements": [...] }] }`
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -263,23 +263,23 @@ export function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDe
 
   if (allTitles.length < 3) return slides
 
-  const skipTypes = new Set(['cover', 'closing', 'bigIdea', 'insight'])
-  const regularTitles = allTitles.filter(t => {
-    const st = slides[t.slideIndex]?.slideType
-    return !skipTypes.has(st)
-  })
+  const regularTitles = allTitles.filter(t =>
+    slides[t.slideIndex]?.slideType !== 'cover' && slides[t.slideIndex]?.slideType !== 'closing'
+  )
 
   if (regularTitles.length > 0) {
+    // Align title Y positions to median (60px threshold — tight consistency)
     const medianY = regularTitles.map(t => t.y).sort((a, b) => a - b)[Math.floor(regularTitles.length / 2)]
     for (const t of regularTitles) {
-      if (Math.abs(t.y - medianY) > 100) t.element.y = medianY
+      if (Math.abs(t.y - medianY) > 60) t.element.y = medianY
     }
 
+    // Normalize heading font sizes (6-30px range — catch drifts but allow intentional variance)
     const headingSizes = regularTitles.map(t => t.element.fontSize || 48)
     const medianSize = headingSizes.sort((a, b) => a - b)[Math.floor(headingSizes.length / 2)]
     for (const t of regularTitles) {
       const diff = Math.abs(t.fontSize - medianSize)
-      if (diff > 6 && diff < 15) {
+      if (diff > 6 && diff < 30) {
         t.element.fontSize = medianSize
       }
     }
