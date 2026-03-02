@@ -74,21 +74,32 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
   "_meta": { "confidence": "high", "warnings": [], "hasKickoff": ${!!kickoffText} }
 }`
 
-  try {
-    const response = await ai.models.generateContent({
-      model: PRO_MODEL,
-      contents: prompt,
-      config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 32000 },
-    })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const extracted = parseGeminiJson<any>(response.text || '{}')
-    console.log(`[${agentId}] ✅ Extraction done (Pro). Brand: ${extracted?.brand?.name || 'N/A'}`)
-    return extracted
-  } catch (err) {
-    console.error(`[${agentId}] ❌ Extraction failed:`, err)
-    // Return minimal fallback so the flow doesn't break
-    return { brand: { name: '', industry: '' }, budget: { amount: 0, currency: '₪' }, campaignGoals: [], targetAudience: { primary: { gender: '', ageRange: '', interests: [], painPoints: [] } }, _meta: { confidence: 'low', warnings: ['Extraction failed'] } }
+  const models = await getProposalModels()
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
+    try {
+      console.log(`[${agentId}] Calling ${model} (attempt ${attempt + 1}/${models.length})`)
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 32000, httpOptions: { timeout: 60_000 } },
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const extracted = parseGeminiJson<any>(response.text || '{}')
+      console.log(`[${agentId}] ✅ Extraction done (${model}). Brand: ${extracted?.brand?.name || 'N/A'}`)
+      return extracted
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      console.error(`[${agentId}] ❌ Attempt ${attempt + 1}/${models.length} failed (${model}): ${errMsg}`)
+      if (attempt < models.length - 1) {
+        console.log(`[${agentId}] ⚡ Retrying with ${models[attempt + 1]}...`)
+        await new Promise(r => setTimeout(r, 1500))
+      }
+    }
   }
+
+  console.error(`[${agentId}] ❌ All extraction attempts failed, returning minimal fallback`)
+  return { brand: { name: '', industry: '' }, budget: { amount: 0, currency: '₪' }, campaignGoals: [], targetAudience: { primary: { gender: '', ageRange: '', interests: [], painPoints: [] } }, _meta: { confidence: 'low', warnings: ['Extraction failed — all models returned 503'] } }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
