@@ -4,6 +4,10 @@ import { useState, useEffect, useMemo } from 'react'
 import { useAdminConfig } from './use-admin-config'
 
 const MODELS_BY_PROVIDER: Record<string, { value: string; label: string }[]> = {
+  openai: [
+    { value: 'gpt-5.2-pro-2025-12-11', label: 'GPT-5.2 Pro' },
+    { value: 'gpt-5.2-2025-12-11', label: 'GPT-5.2' },
+  ],
   gemini: [
     { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Preview)' },
     { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (Preview)' },
@@ -18,13 +22,14 @@ const MODELS_BY_PROVIDER: Record<string, { value: string; label: string }[]> = {
 }
 
 function getProviderFromModel(modelId: string): string {
-  return modelId.startsWith('claude') ? 'claude' : 'gemini'
+  if (modelId.startsWith('gpt') || modelId.startsWith('o1') || modelId.startsWith('o3')) return 'openai'
+  if (modelId.startsWith('claude')) return 'claude'
+  return 'gemini'
 }
 
 export default function GlobalModelSelector() {
   const { configs, loading, saveConfig, saveMessage } = useAdminConfig('ai_models')
 
-  // Extract global config values
   const globalConfigs = useMemo(() => {
     const map: Record<string, unknown> = {}
     for (const c of configs) {
@@ -39,11 +44,10 @@ export default function GlobalModelSelector() {
   const [fallbackModel, setFallbackModel] = useState('')
   const [overrideAgents, setOverrideAgents] = useState(true)
 
-  // Sync from loaded configs
   useEffect(() => {
     if (configs.length === 0) return
-    setPrimaryModel(String(globalConfigs['global.primary_model'] || 'gemini-3.1-pro-preview'))
-    setFallbackModel(String(globalConfigs['global.fallback_model'] || 'claude-opus-4-6'))
+    setPrimaryModel(String(globalConfigs['global.primary_model'] || 'gpt-5.2-pro-2025-12-11'))
+    setFallbackModel(String(globalConfigs['global.fallback_model'] || 'gpt-5.2-2025-12-11'))
     setOverrideAgents(globalConfigs['global.override_agents'] !== false)
   }, [configs, globalConfigs])
 
@@ -68,7 +72,7 @@ export default function GlobalModelSelector() {
 
   if (loading) return null
 
-  const claudeIsPrimary = primaryProvider === 'claude'
+  const noGoogleSearch = primaryProvider !== 'gemini'
 
   return (
     <div className="rounded-2xl border border-wizard-border bg-gradient-to-br from-white to-brand-pearl/30 p-6 space-y-5">
@@ -101,6 +105,7 @@ export default function GlobalModelSelector() {
             }}
             className="h-10 rounded-xl border border-wizard-border bg-white px-3 text-sm appearance-none cursor-pointer hover:border-primary/20 transition-colors min-w-[140px]"
           >
+            <option value="openai">OpenAI</option>
             <option value="gemini">Google Gemini</option>
             <option value="claude">Anthropic Claude</option>
           </select>
@@ -131,6 +136,7 @@ export default function GlobalModelSelector() {
             }}
             className="h-10 rounded-xl border border-wizard-border bg-white px-3 text-sm appearance-none cursor-pointer hover:border-primary/20 transition-colors min-w-[140px]"
           >
+            <option value="openai">OpenAI</option>
             <option value="gemini">Google Gemini</option>
             <option value="claude">Anthropic Claude</option>
           </select>
@@ -166,12 +172,11 @@ export default function GlobalModelSelector() {
       </div>
 
       {/* Capability warnings */}
-      {claudeIsPrimary && (
+      {noGoogleSearch && (
         <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 space-y-1">
-          <p className="font-semibold">שים לב — מגבלות Claude:</p>
+          <p className="font-semibold">שים לב — מגבלות {primaryProvider === 'claude' ? 'Claude' : 'OpenAI'}:</p>
           <ul className="list-disc list-inside space-y-0.5 mr-1">
             <li>חיפוש Google לא זמין — מחקר מותג ומשפיענים יתבסס על ידע קיים בלבד</li>
-            <li>JSON Schema מועבר כהוראה טקסטואלית (לא native) — ייתכנו הבדלים בפורמט</li>
           </ul>
         </div>
       )}
