@@ -6,7 +6,7 @@ import { generatePremiumProposalSlides } from '@/templates/quote/premium-proposa
 import { generateAISlides } from '@/lib/gemini/slide-designer'
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 
-export const maxDuration = 300
+export const maxDuration = 600
 
 export async function POST(request: NextRequest) {
   const requestId = `pptx-${Date.now()}`

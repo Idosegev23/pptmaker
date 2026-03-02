@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { researchBrand } from '@/lib/gemini/brand-research'
 import { extractColorsFromLogo, analyzeColorPalette, extractColorsByBrandName } from '@/lib/gemini/color-extractor'
 
-export const maxDuration = 300
+export const maxDuration = 600
 
 export async function POST(request: NextRequest) {
   try {

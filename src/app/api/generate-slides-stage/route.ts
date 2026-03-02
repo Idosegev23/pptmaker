@@ -9,7 +9,7 @@ import {
 import type { PipelineFoundation, BatchResult } from '@/lib/gemini/slide-designer'
 import type { Slide } from '@/types/presentation'
 
-export const maxDuration = 300
+export const maxDuration = 600
 
 /**
  * POST /api/generate-slides-stage

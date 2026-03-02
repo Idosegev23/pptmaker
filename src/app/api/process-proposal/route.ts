@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { extractFromBrief } from '@/lib/gemini/proposal-agent'
 import { getProviderStatus } from '@/lib/ai-provider'
 
-export const maxDuration = 300
+export const maxDuration = 600
 
 export async function POST(request: NextRequest) {
   const requestId = `process-${Date.now()}`

@@ -9,7 +9,7 @@ import { GoogleGenAI } from '@google/genai'
 // Initialize the Google GenAI client
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 300_000 },
+  httpOptions: { timeout: 600_000 },
 })
 
 // Models setup

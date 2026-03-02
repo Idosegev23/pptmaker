@@ -6,7 +6,7 @@ import { generateAISlides, generateAIPresentation } from '@/lib/gemini/slide-des
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 import type { Presentation } from '@/types/presentation'
 
-export const maxDuration = 300
+export const maxDuration = 600
 
 /**
  * POST /api/preview-slides

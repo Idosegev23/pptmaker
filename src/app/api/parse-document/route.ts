@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { parseDocument, parseGoogleDoc } from '@/lib/parsers'
 import { getAuthenticatedUser } from '@/lib/auth/api-auth'
 
-export const maxDuration = 300
+export const maxDuration = 600
 
 export async function POST(request: NextRequest) {
   const requestId = `parse-${Date.now()}`

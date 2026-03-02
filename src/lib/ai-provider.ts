@@ -96,7 +96,7 @@ function getGeminiClient(): GoogleGenAI {
   if (!_geminiClient) {
     _geminiClient = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY || '',
-      httpOptions: { timeout: 300_000 },
+      httpOptions: { timeout: 600_000 },
     })
   }
   return _geminiClient
@@ -159,23 +159,13 @@ function mapThinkingToEffort(thinkingLevel?: string): 'low' | 'medium' | 'high' 
 
 // ─── Model resolution ─────────────────────────────────────────────
 
-export async function resolveModels(
-  agentPrimaryKey: string,
-  agentFallbackKey: string,
+export function resolveModels(
+  _agentPrimaryKey: string,
+  _agentFallbackKey: string,
   agentPrimaryDefault: string = 'gemini-3.1-pro-preview',
   agentFallbackDefault: string = 'gemini-3-flash-preview',
-): Promise<[string, string]> {
-  const globalOverride = await getConfig('ai_models', 'global.override_agents', true)
-
-  if (globalOverride) {
-    const primary = await getConfig('ai_models', 'global.primary_model', 'gpt-5.2-pro-2025-12-11')
-    const fallback = await getConfig('ai_models', 'global.fallback_model', 'gpt-5.2-2025-12-11')
-    return [primary, fallback]
-  }
-
-  const primary = await getConfig('ai_models', agentPrimaryKey, agentPrimaryDefault)
-  const fallback = await getConfig('ai_models', agentFallbackKey, agentFallbackDefault)
-  return [primary, fallback]
+): [string, string] {
+  return [agentPrimaryDefault, agentFallbackDefault]
 }
 
 // ─── Call options & result ─────────────────────────────────────────
@@ -232,7 +222,7 @@ async function callWithFallback(
   } catch (err) {
     if (!isRetryableError(err)) throw err
 
-    const fallbackModel = await getConfig('ai_models', 'global.fallback_model', 'gpt-5.2-2025-12-11')
+    const fallbackModel = await getConfig('ai_models', 'global.fallback_model', 'gemini-3-flash-preview')
     const fallbackProvider = getProviderForModel(fallbackModel)
 
     if (fallbackModel === model) throw err // same model, can't help

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenAI } from '@google/genai'
 
-export const maxDuration = 300
+export const maxDuration = 600
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 300_000 },
+  httpOptions: { timeout: 600_000 },
 })
 
 const FLASH_MODEL = 'gemini-3-flash-preview'

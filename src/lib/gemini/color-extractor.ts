@@ -10,7 +10,7 @@ import { callAI } from '@/lib/ai-provider'
 // so extractColorsFromLogo & analyzeDesignStyle still need direct Gemini access.
 const visionClient = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 300_000 },
+  httpOptions: { timeout: 600_000 },
 })
 
 const MODEL = 'gemini-3-flash-preview' // Color extraction doesn't need Pro reasoning
