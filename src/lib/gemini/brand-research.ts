@@ -3,15 +3,10 @@
  * Multi-Agent approach: Targeted Google Searches -> Context Synthesis -> JSON Output
  */
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai'
+import { callAI } from '@/lib/ai-provider'
 import { parseGeminiJson } from '../utils/json-cleanup'
 import { getConfig } from '../config/admin-config'
 import { PROMPT_DEFAULTS, MODEL_DEFAULTS } from '../config/defaults'
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
-})
 
 const PRO_MODEL_DEFAULT = MODEL_DEFAULTS['brand_research.primary_model'].value as string
 const FLASH_MODEL_DEFAULT = MODEL_DEFAULTS['brand_research.fallback_model'].value as string
@@ -253,16 +248,19 @@ export async function runSingleAgent(
   const prompt = agentTemplate.replace(/\{brandName\}/g, brandName).replace(/\{angleDescription\}/g, configDescription)
 
   const callAgent = async (model: string) => {
-    const response = await ai.models.generateContent({
+    const result = await callAI({
       model,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      prompt,
+      geminiConfig: {
+        thinkingConfig: { thinkingLevel: 'LOW' as any },
         maxOutputTokens: 4000,
       },
+      thinkingLevel: 'LOW',
+      maxOutputTokens: 4000,
+      useGoogleSearch: true,
+      callerId: `brand-research-agent-${angleName}`,
     })
-    return response.text || `לא נאסף מידע עבור: ${angleName}`
+    return result.text || `לא נאסף מידע עבור: ${angleName}`
   }
 
   // Primary model first, fallback if it fails
@@ -409,16 +407,19 @@ ${websiteContext}
   for (let attempt = 0; attempt < synthModels.length; attempt++) {
     const model = synthModels[attempt]
     try {
-      const response = await ai.models.generateContent({
+      const result = await callAI({
         model,
-        contents: synthesisPrompt,
-        config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        prompt: synthesisPrompt,
+        geminiConfig: {
+          thinkingConfig: { thinkingLevel: 'LOW' as any },
           maxOutputTokens: 8000,
-        }
+        },
+        thinkingLevel: 'LOW',
+        maxOutputTokens: 8000,
+        callerId: `brand-research-synthesis`,
       })
 
-      const text = response.text || ''
+      const text = result.text || ''
       console.log(`[Gemini Deep Research] Parsing synthesis JSON (model: ${model})...`)
 
       const research = parseGeminiJson<BrandResearch>(text)
@@ -561,15 +562,14 @@ export async function quickBrandSummary(brandName: string): Promise<{
 
   try {
     const [primaryModel] = await getBrandResearchModels()
-    const response = await ai.models.generateContent({
+    const result = await callAI({
       model: primaryModel,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-      }
+      prompt,
+      useGoogleSearch: true,
+      callerId: 'brand-research-quick-summary',
     })
 
-    const text = response.text || ''
+    const text = result.text || ''
     return parseGeminiJson<{
       description: string
       industry: string

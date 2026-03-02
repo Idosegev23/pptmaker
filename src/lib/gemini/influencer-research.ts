@@ -3,16 +3,11 @@
  * Uses Gemini to recommend relevant, real influencers for a brand grounded in Google Search
  */
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai'
+import { callAI } from '@/lib/ai-provider'
 import type { BrandResearch } from './brand-research'
 import { parseGeminiJson } from '../utils/json-cleanup'
 import { getConfig } from '../config/admin-config'
 import { PROMPT_DEFAULTS, MODEL_DEFAULTS } from '../config/defaults'
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 }, // 9 min — prevents 5-min default timeout with googleSearch
-})
 
 const PRO_MODEL_DEFAULT = MODEL_DEFAULTS['influencer_research.primary_model'].value as string
 const FLASH_MODEL_DEFAULT = MODEL_DEFAULTS['influencer_research.fallback_model'].value as string
@@ -195,16 +190,19 @@ ${criticalRules}
 `
 
   const callGemini = async (model: string) => {
-    const response = await ai.models.generateContent({
+    const result = await callAI({
       model,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      prompt,
+      geminiConfig: {
+        thinkingConfig: { thinkingLevel: 'LOW' as any },
         maxOutputTokens: 6000,
-      }
+      },
+      thinkingLevel: 'LOW',
+      maxOutputTokens: 6000,
+      useGoogleSearch: true,
+      callerId: `influencer-research-${brandResearch.brandName}`,
     })
-    return response.text || ''
+    return result.text || ''
   }
 
   // Primary model first, fallback if it fails
@@ -268,16 +266,18 @@ export async function getQuickInfluencerSuggestions(
 
   try {
     const [primaryModel] = await getInfluencerModels()
-    const response = await ai.models.generateContent({
+    const result = await callAI({
       model: primaryModel,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      }
+      prompt,
+      geminiConfig: {
+        thinkingConfig: { thinkingLevel: 'LOW' as any },
+      },
+      thinkingLevel: 'LOW',
+      useGoogleSearch: true,
+      callerId: 'influencer-quick-suggestions',
     })
 
-    const text = response.text || ''
+    const text = result.text || ''
     return parseGeminiJson<InfluencerRecommendation[]>(text)
   } catch (error) {
     console.error('[Quick Influencer] Error fetching suggestions:', error)

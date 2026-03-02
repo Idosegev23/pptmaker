@@ -4,16 +4,11 @@
  * Instead of fixed templates, this creates a custom strategy for each brand
  */
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai'
+import { callAI } from '@/lib/ai-provider'
 import type { BrandResearch } from './brand-research'
 import type { BrandColors } from './color-extractor'
 import type { ProposalContent } from '../openai/proposal-writer'
 import { parseGeminiJson } from '../utils/json-cleanup'
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 },
-})
 const PRO_MODEL = 'gemini-3.1-pro-preview'     // Primary — best reasoning quality
 const FLASH_MODEL = 'gemini-3-flash-preview'   // Fallback when Pro fails/overloaded
 
@@ -107,16 +102,18 @@ ${proposalContent?.goals?.map(g => `- ${g.title}: ${g.description}`).join('\n') 
     const model = models[attempt]
     try {
       console.log(`[Image Strategist] Calling ${model} (attempt ${attempt + 1}/${models.length})...`)
-      const response = await ai.models.generateContent({
+      const aiResult = await callAI({
         model,
-        contents: prompt,
-        config: {
+        prompt,
+        geminiConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          thinkingConfig: { thinkingLevel: 'HIGH' as any },
         },
+        thinkingLevel: 'HIGH',
+        callerId: `image-strategist-${brandResearch.brandName}`,
       })
 
-      const text = response.text || ''
+      const text = aiResult.text || ''
       const strategy = parseGeminiJson<ImageStrategy>(text)
 
       if (strategy && strategy.images && strategy.images.length > 0) {

@@ -3,14 +3,9 @@
  * Uses Gemini to extract structured proposal data from client brief + kickoff documents
  */
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai'
+import { callAI } from '@/lib/ai-provider'
 import { parseGeminiJson } from '../utils/json-cleanup'
 import type { ExtractedBriefData } from '@/types/brief'
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 },
-})
 const FLASH_MODEL = 'gemini-3-flash-preview' // Primary — fast + cheap for extraction
 const PRO_MODEL = 'gemini-3.1-pro-preview'   // Fallback when Flash fails
 
@@ -47,17 +42,19 @@ export async function extractFromDocuments(
     try {
       console.log(`[${extractorId}] 🔄 Calling ${model} (attempt ${attempt + 1}/${models.length})...`)
       const geminiStart = Date.now()
-      const response = await ai.models.generateContent({
+      const aiResult = await callAI({
         model,
-        contents: prompt,
-        config: {
+        prompt,
+        geminiConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          thinkingConfig: { thinkingLevel: 'HIGH' as any },
         },
+        thinkingLevel: 'HIGH',
+        callerId: extractorId,
       })
 
-      const text = response.text || ''
-      console.log(`[${extractorId}] ✅ Gemini responded in ${Date.now() - geminiStart}ms (${model})`)
+      const text = aiResult.text || ''
+      console.log(`[${extractorId}] ✅ AI responded in ${Date.now() - geminiStart}ms (${model})`)
       console.log(`[${extractorId}] 📊 Response size: ${text.length} chars`)
 
       if (!text) throw new Error('Gemini returned empty response')

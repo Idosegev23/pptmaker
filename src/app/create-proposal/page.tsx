@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import { toast } from 'sonner'
 import GoogleDrivePicker from '@/components/google-drive-picker'
 import type { UploadedDocument, ExtractedBriefData } from '@/types/brief'
 
@@ -195,7 +196,25 @@ export default function CreateProposalPage() {
       const processData = await processRes.json()
       const processElapsed = ((Date.now() - processStart) / 1000).toFixed(1)
 
-      if (!processRes.ok) throw new Error(processData.error || 'שגיאה בעיבוד המסמכים')
+      if (!processRes.ok) {
+        if (processRes.status === 503 || processData.isOverloaded) {
+          toast.error('שרתי ה-AI עמוסים כרגע', {
+            description: 'כל מנועי ה-AI עמוסים. נסה שוב בעוד 2-3 דקות.',
+            duration: 12000,
+          })
+          throw new Error('שרתי ה-AI עמוסים כרגע — נסה שוב בעוד מספר דקות')
+        }
+        throw new Error(processData.error || 'שגיאה בעיבוד המסמכים')
+      }
+
+      // Notify user if engine switched from Gemini to Claude
+      if (processData.provider?.provider === 'claude') {
+        toast.info('עומס במנוע הראשי — עברנו למנוע חלופי', {
+          description: 'זיהינו עומס בשרתי Google Gemini. עברנו אוטומטית למנוע Claude AI. התהליך ממשיך כרגיל.',
+          duration: 10000,
+        })
+        addLog('warning', 'עומס ב-Gemini — המערכת עברה אוטומטית למנוע Claude AI')
+      }
 
       const extracted: ExtractedBriefData = processData.extracted
       setBrandInfo(extracted)

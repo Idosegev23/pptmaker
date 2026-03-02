@@ -4,8 +4,11 @@
  */
 
 import { GoogleGenAI } from '@google/genai'
+import { callAI } from '@/lib/ai-provider'
 
-const ai = new GoogleGenAI({
+// Vision-only client — callAI doesn't support multimodal (inlineData) content,
+// so extractColorsFromLogo & analyzeDesignStyle still need direct Gemini access.
+const visionClient = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
   httpOptions: { timeout: 540_000 },
 })
@@ -73,14 +76,14 @@ export async function extractColorsFromLogo(imageUrl: string): Promise<BrandColo
 `
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await visionClient.models.generateContent({
       model: MODEL,
       contents: [
         {
           role: 'user',
           parts: [
             { text: prompt },
-            { 
+            {
               inlineData: {
                 mimeType: 'image/png',
                 data: await fetchImageAsBase64(imageUrl)
@@ -143,13 +146,13 @@ ${cssColors.join(', ')}
 `
 
   try {
-    const response = await ai.models.generateContent({
+    const aiResult = await callAI({
       model: MODEL,
-      contents: prompt,
-      config: {}
+      prompt,
+      callerId: 'color-palette-analysis',
     })
 
-    const text = response.text || ''
+    const text = aiResult.text || ''
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
     if (jsonMatch) {
       return JSON.parse(jsonMatch[1]) as BrandColors
@@ -193,7 +196,7 @@ export async function analyzeDesignStyle(imageUrl: string): Promise<DesignStyle>
 `
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await visionClient.models.generateContent({
       model: MODEL,
       contents: [
         {
@@ -313,15 +316,14 @@ export async function extractColorsByBrandName(brandName: string): Promise<Brand
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
-      const response = await ai.models.generateContent({
+      const aiResult = await callAI({
         model,
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-        }
+        prompt,
+        useGoogleSearch: true,
+        callerId: `color-by-brand-name-${brandName}`,
       })
 
-      const result = parseColorResponse(response.text || '')
+      const result = parseColorResponse(aiResult.text || '')
       if (!result) throw new Error('No JSON in response')
 
       console.log(`[Gemini Colors] Brand "${brandName}" → primary=${result.primary}, accent=${result.accent} (model: ${model})`)

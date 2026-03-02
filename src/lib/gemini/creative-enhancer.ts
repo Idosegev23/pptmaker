@@ -4,17 +4,12 @@
  * and enriches it with competitive intelligence from brand research.
  */
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai'
+import { callAI } from '@/lib/ai-provider'
 import { parseGeminiJson } from '../utils/json-cleanup'
 import { getConfig } from '../config/admin-config'
 import { MODEL_DEFAULTS } from '../config/defaults'
 import type { BrandResearch } from './brand-research'
 import type { CreativeStepData } from '@/types/wizard'
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 },
-})
 const PRO_MODEL_DEFAULT = MODEL_DEFAULTS['creative_enhancer.primary_model'].value as string
 const FLASH_MODEL_DEFAULT = MODEL_DEFAULTS['creative_enhancer.fallback_model'].value as string
 
@@ -127,15 +122,17 @@ ${(brandResearch as any).israeliMarketContext || 'לא נמצא'}
     const model = models[attempt]
     try {
       console.log(`[CreativeEnhancer] Calling ${model} (attempt ${attempt + 1}/${models.length})...`)
-      const response = await ai.models.generateContent({
+      const aiResult = await callAI({
         model,
-        contents: prompt,
-        config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        prompt,
+        geminiConfig: {
+          thinkingConfig: { thinkingLevel: 'HIGH' as any },
         },
+        thinkingLevel: 'HIGH',
+        callerId: `creative-enhancer-${brandResearch.brandName}`,
       })
 
-      const text = response.text || ''
+      const text = aiResult.text || ''
       const enhanced = parseGeminiJson<Partial<CreativeStepData>>(text)
 
       // Merge — preserve referenceImages and any field not returned

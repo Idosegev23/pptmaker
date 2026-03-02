@@ -8,15 +8,11 @@
  * Output: CuratedSlideContent (punchy headlines, formatted stats, tight bullets)
  */
 
-import { GoogleGenAI, Type } from '@google/genai'
+import { Type } from '@google/genai'
 import type { CuratedSlideContent } from '@/types/presentation'
 import { getConfig } from '@/lib/config/admin-config'
 import { MODEL_DEFAULTS, PROMPT_DEFAULTS } from '@/lib/config/defaults'
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 120_000 },
-})
+import { callAI } from '@/lib/ai-provider'
 
 interface RawSlideInput {
   slideType: string
@@ -186,20 +182,26 @@ ${slidesXml}
   const [model, systemPrompt] = await Promise.all([getCuratorModel(), getCuratorSystemPrompt()])
 
   try {
-    const response = await ai.models.generateContent({
+    const aiResult = await callAI({
       model,
-      contents: prompt,
-      config: {
+      prompt,
+      systemPrompt,
+      geminiConfig: {
         systemInstruction: systemPrompt,
         responseMimeType: 'application/json',
         responseSchema: CURATED_SLIDE_SCHEMA,
         maxOutputTokens: 16384,
         temperature: 0.7,
-        httpOptions: { timeout: 60_000 },
       },
+      responseSchema: CURATED_SLIDE_SCHEMA as Record<string, unknown>,
+      thinkingLevel: 'LOW',
+      maxOutputTokens: 16384,
+      timeout: 60_000,
+      callerId: requestId,
     })
+    if (aiResult.switched) console.warn(`[ContentCurator][${requestId}] 🔄 Switched to Claude`)
 
-    const raw = response.text || ''
+    const raw = aiResult.text || ''
     let parsed: { slides: CuratedSlideContent[] }
 
     try {

@@ -11,7 +11,8 @@
  * - generateAISlides() — legacy HTML wrapper
  */
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai'
+import { ThinkingLevel } from '@google/genai'
+import { callAI } from '@/lib/ai-provider'
 import type {
   Presentation,
   Slide,
@@ -59,10 +60,7 @@ import {
 // Re-export pipeline types for external consumers
 export type { PipelineFoundation, BatchResult } from './slide-design'
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 },
-})
+// AI calls routed through callAI() in @/lib/ai-provider (Gemini primary, Claude fallback)
 
 // ─── Quality Constants (restored from v3 that produced good results) ──
 
@@ -197,24 +195,30 @@ async function generateDesignSystem(
     const model = models[attempt]
     try {
       console.log(`[SlideDesigner][${requestId}] Calling ${model} for design system (attempt ${attempt + 1}/${models.length}, timeout ${DS_TIMEOUT_MS / 1000}s)...`)
-      const dsCall = ai.models.generateContent({
+      const dsCallPromise = callAI({
         model,
-        contents: prompt,
-        config: {
+        prompt,
+        systemPrompt: sysInstruction,
+        geminiConfig: {
           systemInstruction: sysInstruction,
           responseMimeType: 'application/json',
           responseSchema: DESIGN_SYSTEM_SCHEMA,
           thinkingConfig: { thinkingLevel: dsThinking },
           maxOutputTokens: dsMaxOutputTokens,
-          httpOptions: { timeout: DS_TIMEOUT_MS },
         },
+        responseSchema: DESIGN_SYSTEM_SCHEMA as unknown as Record<string, unknown>,
+        thinkingLevel: dsThinkingLevel,
+        maxOutputTokens: dsMaxOutputTokens,
+        timeout: DS_TIMEOUT_MS,
+        callerId: `${requestId}-ds`,
       })
       const dsTimeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('DS_TIMEOUT')), DS_TIMEOUT_MS)
       )
-      const response = await Promise.race([dsCall, dsTimeout])
+      const dsResult = await Promise.race([dsCallPromise, dsTimeout])
+      if (dsResult.switched) console.warn(`[SlideDesigner][${requestId}] 🔄 Switched to Claude for design system`)
 
-      const rawText = response.text || ''
+      const rawText = dsResult.text || ''
       console.log(`[SlideDesigner][${requestId}] Raw response length: ${rawText.length} chars (model: ${model})`)
 
       let parsed: PremiumDesignSystem
@@ -394,28 +398,34 @@ ${contentBlock}
     try {
       console.log(`[SlideDesigner][${requestId}] Calling ${label} (attempt ${attempt + 1}/${attempts.length}, timeout ${Math.round(callTimeout / 1000)}s)...`)
 
-      const geminiCall = ai.models.generateContent({
-        model, contents: prompt,
-        config: {
+      const batchCallPromise = callAI({
+        model, prompt,
+        systemPrompt: batchSysInstruction,
+        geminiConfig: {
           systemInstruction: batchSysInstruction,
           responseMimeType: 'application/json',
           responseSchema: SLIDE_BATCH_SCHEMA,
           thinkingConfig: { thinkingLevel: thinking },
           maxOutputTokens, temperature,
-          httpOptions: { timeout: callTimeout },
         },
+        responseSchema: SLIDE_BATCH_SCHEMA as unknown as Record<string, unknown>,
+        thinkingLevel: thinking === ThinkingLevel.HIGH ? 'HIGH' : thinking === ThinkingLevel.MEDIUM ? 'MEDIUM' : 'LOW',
+        maxOutputTokens,
+        timeout: callTimeout,
+        callerId: `${requestId}-batch`,
       })
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('BATCH_TIMEOUT')), callTimeout)
       )
-      const response = await Promise.race([geminiCall, timeoutPromise])
+      const batchResult = await Promise.race([batchCallPromise, timeoutPromise])
+      if (batchResult.switched) console.warn(`[SlideDesigner][${requestId}] 🔄 Switched to Claude for batch`)
 
       let parsed: { slides: Slide[] }
       try {
-        parsed = JSON.parse(response.text || '') as { slides: Slide[] }
+        parsed = JSON.parse(batchResult.text || '') as { slides: Slide[] }
       } catch {
         const { parseGeminiJson } = await import('@/lib/utils/json-cleanup')
-        const fallbackParsed = parseGeminiJson<{ slides: Slide[] }>(response.text || '')
+        const fallbackParsed = parseGeminiJson<{ slides: Slide[] }>(batchResult.text || '')
         if (!fallbackParsed) throw new Error('JSON parse failed')
         parsed = fallbackParsed
       }
@@ -575,28 +585,34 @@ async function generateSingleSlide(
     const { model, thinking, label } = attempts[attempt]
     try {
       console.log(`[SlideDesigner][${requestId}] Calling ${label} (attempt ${attempt + 1}/${attempts.length})...`)
-      const geminiCall = ai.models.generateContent({
-        model, contents: prompt,
-        config: {
+      const singleCallPromise = callAI({
+        model, prompt,
+        systemPrompt: batchSysInstruction,
+        geminiConfig: {
           systemInstruction: batchSysInstruction,
           responseMimeType: 'application/json',
           responseSchema: SLIDE_BATCH_SCHEMA,
           thinkingConfig: { thinkingLevel: thinking },
           maxOutputTokens, temperature: modelTemperature,
-          httpOptions: { timeout: CALL_TIMEOUT },
         },
+        responseSchema: SLIDE_BATCH_SCHEMA as unknown as Record<string, unknown>,
+        thinkingLevel: thinking === ThinkingLevel.HIGH ? 'HIGH' : thinking === ThinkingLevel.MEDIUM ? 'MEDIUM' : 'LOW',
+        maxOutputTokens,
+        timeout: CALL_TIMEOUT,
+        callerId: `${requestId}-single-${slideIndex}`,
       })
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('SINGLE_SLIDE_TIMEOUT')), CALL_TIMEOUT)
       )
-      const response = await Promise.race([geminiCall, timeoutPromise])
+      const singleResult = await Promise.race([singleCallPromise, timeoutPromise])
+      if (singleResult.switched) console.warn(`[SlideDesigner][${requestId}] 🔄 Switched to Claude for slide ${slideIndex}`)
 
       let parsed: { slides: Slide[] }
       try {
-        parsed = JSON.parse(response.text || '') as { slides: Slide[] }
+        parsed = JSON.parse(singleResult.text || '') as { slides: Slide[] }
       } catch {
         const { parseGeminiJson } = await import('@/lib/utils/json-cleanup')
-        const fallback = parseGeminiJson<{ slides: Slide[] }>(response.text || '')
+        const fallback = parseGeminiJson<{ slides: Slide[] }>(singleResult.text || '')
         if (!fallback) throw new Error('JSON parse failed')
         parsed = fallback
       }

@@ -8,18 +8,12 @@
  * creative, deliverables, quantities, media targets, influencer profiles).
  */
 
-import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import { parseGeminiJson } from '../utils/json-cleanup'
 import { getConfig } from '@/lib/config/admin-config'
 import { MODEL_DEFAULTS } from '@/lib/config/defaults'
+import { callAI } from '@/lib/ai-provider'
 import type { ExtractedBriefData } from '@/types/brief'
 import type { WizardStepDataMap } from '@/types/wizard'
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 },
-})
-const PRO_MODEL = 'gemini-3.1-pro-preview'     // Used for extraction (fast, single model)
 
 async function getProposalModels() {
   const primary = await getConfig('ai_models', 'proposal_agent.primary_model', MODEL_DEFAULTS['proposal_agent.primary_model'].value as string)
@@ -75,21 +69,29 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
 }`
 
   const models = await getProposalModels()
+  let lastError = ''
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
-      console.log(`[${agentId}] Calling ${model} (attempt ${attempt + 1}/${models.length})`)
-      const response = await ai.models.generateContent({
+      const result = await callAI({
         model,
-        contents: prompt,
-        config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 32000, httpOptions: { timeout: 60_000 } },
+        prompt,
+        systemPrompt: 'אתה מחלץ מידע עסקי ממסמכים. החזר JSON בלבד.',
+        thinkingLevel: 'LOW',
+        maxOutputTokens: 32000,
+        timeout: 60_000,
+        callerId: agentId,
       })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const extracted = parseGeminiJson<any>(response.text || '{}')
-      console.log(`[${agentId}] ✅ Extraction done (${model}). Brand: ${extracted?.brand?.name || 'N/A'}`)
+      const extracted = parseGeminiJson<any>(result.text || '{}')
+      console.log(`[${agentId}] ✅ Extraction done (${result.provider}/${result.model}). Brand: ${extracted?.brand?.name || 'N/A'}`)
+      if (result.switched) {
+        console.warn(`[${agentId}] 🔄 Switched to Claude during extraction`)
+      }
       return extracted
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err)
+      lastError = errMsg
       console.error(`[${agentId}] ❌ Attempt ${attempt + 1}/${models.length} failed (${model}): ${errMsg}`)
       if (attempt < models.length - 1) {
         console.log(`[${agentId}] ⚡ Retrying with ${models[attempt + 1]}...`)
@@ -98,8 +100,8 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
     }
   }
 
-  console.error(`[${agentId}] ❌ All extraction attempts failed, returning minimal fallback`)
-  return { brand: { name: '', industry: '' }, budget: { amount: 0, currency: '₪' }, campaignGoals: [], targetAudience: { primary: { gender: '', ageRange: '', interests: [], painPoints: [] } }, _meta: { confidence: 'low', warnings: ['Extraction failed — all models returned 503'] } }
+  console.error(`[${agentId}] ❌ All extraction attempts failed`)
+  throw new Error(`Extraction failed: ${lastError}`)
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,22 +135,25 @@ export async function generateProposal(
     const model = models[attempt]
     try {
       console.log(`[${agentId}] 🔄 Calling ${model} (attempt ${attempt + 1}/${models.length})...`)
-      const geminiStart = Date.now()
+      const callStart = Date.now()
 
-      const response = await ai.models.generateContent({
+      const aiResult = await callAI({
         model,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-        },
+        prompt,
+        systemPrompt: 'אתה מנהל קריאייטיב ואסטרטג ראשי. החזר JSON בלבד.',
+        geminiConfig: { responseMimeType: 'application/json' },
+        thinkingLevel: 'HIGH',
+        maxOutputTokens: 32000,
+        timeout: 180_000,
+        callerId: agentId,
       })
 
-      const text = response.text || ''
-      console.log(`[${agentId}] ✅ Gemini responded in ${Date.now() - geminiStart}ms (${model})`)
+      const text = aiResult.text || ''
+      console.log(`[${agentId}] ✅ ${aiResult.provider} responded in ${Date.now() - callStart}ms (${aiResult.model})`)
       console.log(`[${agentId}] 📊 Response size: ${text.length} chars`)
+      if (aiResult.switched) console.warn(`[${agentId}] 🔄 Switched to Claude during proposal generation`)
 
-      if (!text) throw new Error('Gemini returned empty response')
+      if (!text) throw new Error('AI returned empty response')
 
       const raw = parseGeminiJson<RawProposalResponse>(text)
       const result = normalizeResponse(raw, !!kickoffText, agentId)
