@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateProposal } from '@/lib/gemini/proposal-agent'
 
-export const maxDuration = 600
+export const maxDuration = 300
 
 /**
  * POST /api/build-proposal

@@ -7,7 +7,7 @@ import { GoogleGenAI } from '@google/genai'
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 },
+  httpOptions: { timeout: 300_000 },
 })
 
 // Model for image generation - Nano Banana Pro

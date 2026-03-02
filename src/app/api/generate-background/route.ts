@@ -7,7 +7,7 @@ import {
   pipelineFinalize,
 } from '@/lib/gemini/slide-designer'
 import type { PipelineFoundation, BatchResult } from '@/lib/gemini/slide-designer'
-export const maxDuration = 800
+export const maxDuration = 300
 
 /**
  * POST /api/generate-background

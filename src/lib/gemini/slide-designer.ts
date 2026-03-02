@@ -183,7 +183,6 @@ async function generateDesignSystem(
 
 פונט: Heebo.`
 
-  const DS_TIMEOUT_MS = 300_000
   const sysInstruction = await getSystemInstruction()
   const models = await getDesignSystemModels()
   const [dsThinkingLevel, dsMaxOutputTokens] = await Promise.all([getThinkingLevel(), getMaxOutputTokens()])
@@ -194,8 +193,8 @@ async function generateDesignSystem(
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
-      console.log(`[SlideDesigner][${requestId}] Calling ${model} for design system (attempt ${attempt + 1}/${models.length}, timeout ${DS_TIMEOUT_MS / 1000}s)...`)
-      const dsCallPromise = callAI({
+      console.log(`[SlideDesigner][${requestId}] Calling ${model} for design system (attempt ${attempt + 1}/${models.length})...`)
+      const dsResult = await callAI({
         model,
         prompt,
         systemPrompt: sysInstruction,
@@ -209,13 +208,8 @@ async function generateDesignSystem(
         responseSchema: DESIGN_SYSTEM_SCHEMA as unknown as Record<string, unknown>,
         thinkingLevel: dsThinkingLevel,
         maxOutputTokens: dsMaxOutputTokens,
-        timeout: DS_TIMEOUT_MS,
         callerId: `${requestId}-ds`,
       })
-      const dsTimeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('DS_TIMEOUT')), DS_TIMEOUT_MS)
-      )
-      const dsResult = await Promise.race([dsCallPromise, dsTimeout])
       if (dsResult.switched) console.warn(`[SlideDesigner][${requestId}] 🔄 Switched to Claude for design system`)
 
       const rawText = dsResult.text || ''
@@ -369,10 +363,7 @@ ${contentBlock}
 
   const prompt = buildBatchPrompt(brandName, cd, colors, typo, effects, motif, designSystem, designPrinciples, depthLayers, elementFormat, technicalRules, finalInstruction, batchContext, slidesDescription, slides.length)
 
-  // 3-tier retry
-  const TIER_TIMEOUTS = [300_000, 300_000, 300_000]
-  const TOTAL_BUDGET_MS = 960_000
-  const functionStartTime = Date.now()
+  // Retry with model fallback
   const batchSysInstruction = await getSystemInstruction()
   const batchModels = await getBatchModels()
 
@@ -387,18 +378,11 @@ ${contentBlock}
   ]
 
   for (let attempt = 0; attempt < attempts.length; attempt++) {
-    const elapsedTotal = Date.now() - functionStartTime
-    if (elapsedTotal > TOTAL_BUDGET_MS) {
-      console.warn(`[SlideDesigner][${requestId}] ⚠️ Total budget exceeded. Generating fallback slides.`)
-      return slides.map((slide, i) => buildFallbackSlide(slide, i, batchContext, colors))
-    }
-
     const { model, thinking, label } = attempts[attempt]
-    const callTimeout = Math.min(TIER_TIMEOUTS[attempt] || 90_000, TOTAL_BUDGET_MS - elapsedTotal)
     try {
-      console.log(`[SlideDesigner][${requestId}] Calling ${label} (attempt ${attempt + 1}/${attempts.length}, timeout ${Math.round(callTimeout / 1000)}s)...`)
+      console.log(`[SlideDesigner][${requestId}] Calling ${label} (attempt ${attempt + 1}/${attempts.length})...`)
 
-      const batchCallPromise = callAI({
+      const batchResult = await callAI({
         model, prompt,
         systemPrompt: batchSysInstruction,
         geminiConfig: {
@@ -411,13 +395,8 @@ ${contentBlock}
         responseSchema: SLIDE_BATCH_SCHEMA as unknown as Record<string, unknown>,
         thinkingLevel: thinking === ThinkingLevel.HIGH ? 'HIGH' : thinking === ThinkingLevel.MEDIUM ? 'MEDIUM' : 'LOW',
         maxOutputTokens,
-        timeout: callTimeout,
         callerId: `${requestId}-batch`,
       })
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('BATCH_TIMEOUT')), callTimeout)
-      )
-      const batchResult = await Promise.race([batchCallPromise, timeoutPromise])
       if (batchResult.switched) console.warn(`[SlideDesigner][${requestId}] 🔄 Switched to Claude for batch`)
 
       let parsed: { slides: Slide[] }
@@ -566,8 +545,7 @@ async function generateSingleSlide(
 
   const prompt = buildSingleSlidePrompt(brandName, cd, colors, typo, effects, motif, designSystem, designPrinciples, depthLayers, elementFormat, technicalRules, finalInstruction, storyLines, previousSlidesBlock, slideIndex, context.totalSlides, slide.slideType, pacing, archetype, imageTag, emotionNote, contentBlock, colorTemp, hasTension)
 
-  // Call Gemini with retry
-  const CALL_TIMEOUT = 300_000
+  // Call with retry
   const batchSysInstruction = await getSystemInstruction()
   const batchModels = await getBatchModels()
 
@@ -585,7 +563,7 @@ async function generateSingleSlide(
     const { model, thinking, label } = attempts[attempt]
     try {
       console.log(`[SlideDesigner][${requestId}] Calling ${label} (attempt ${attempt + 1}/${attempts.length})...`)
-      const singleCallPromise = callAI({
+      const singleResult = await callAI({
         model, prompt,
         systemPrompt: batchSysInstruction,
         geminiConfig: {
@@ -598,13 +576,8 @@ async function generateSingleSlide(
         responseSchema: SLIDE_BATCH_SCHEMA as unknown as Record<string, unknown>,
         thinkingLevel: thinking === ThinkingLevel.HIGH ? 'HIGH' : thinking === ThinkingLevel.MEDIUM ? 'MEDIUM' : 'LOW',
         maxOutputTokens,
-        timeout: CALL_TIMEOUT,
         callerId: `${requestId}-single-${slideIndex}`,
       })
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('SINGLE_SLIDE_TIMEOUT')), CALL_TIMEOUT)
-      )
-      const singleResult = await Promise.race([singleCallPromise, timeoutPromise])
       if (singleResult.switched) console.warn(`[SlideDesigner][${requestId}] 🔄 Switched to Claude for slide ${slideIndex}`)
 
       let parsed: { slides: Slide[] }

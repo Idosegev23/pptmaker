@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scrapeMultipleInfluencers } from '@/lib/apify/influencer-scraper'
 
-export const maxDuration = 600
+export const maxDuration = 300
 import { researchInfluencers } from '@/lib/gemini/influencer-research'
 import type { BrandResearch } from '@/lib/gemini/brand-research'
 

@@ -96,7 +96,7 @@ function getGeminiClient(): GoogleGenAI {
   if (!_geminiClient) {
     _geminiClient = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY || '',
-      httpOptions: { timeout: 540_000 },
+      httpOptions: { timeout: 300_000 },
     })
   }
   return _geminiClient
@@ -193,8 +193,6 @@ export interface AICallOptions {
   thinkingLevel?: string
   /** Max output tokens */
   maxOutputTokens?: number
-  /** Request timeout in ms */
-  timeout?: number
   /** Caller ID for logging */
   callerId?: string
   /** If true, uses Google Search grounding (Gemini only) */
@@ -277,7 +275,6 @@ async function callGeminiDirect(options: AICallOptions): Promise<AICallResult> {
     prompt,
     geminiConfig,
     maxOutputTokens = 16000,
-    timeout = 120_000,
     callerId = 'unknown',
     useGoogleSearch = false,
     responseSchema,
@@ -292,7 +289,6 @@ async function callGeminiDirect(options: AICallOptions): Promise<AICallResult> {
     config: {
       ...geminiConfig,
       maxOutputTokens: geminiConfig?.maxOutputTokens || maxOutputTokens,
-      httpOptions: { timeout: geminiConfig?.httpOptions?.timeout || timeout },
       ...(responseSchema ? { responseSchema, responseMimeType: 'application/json' } : {}),
       ...(useGoogleSearch ? { tools: [{ googleSearch: {} }] } : {}),
     },

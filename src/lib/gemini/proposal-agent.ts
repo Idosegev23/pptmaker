@@ -82,7 +82,6 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
         systemPrompt: 'אתה מחלץ מידע עסקי ממסמכים. החזר JSON בלבד.',
         thinkingLevel: 'LOW',
         maxOutputTokens: 32000,
-        timeout: 60_000,
         callerId: agentId,
       })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,7 +146,6 @@ export async function generateProposal(
         geminiConfig: { responseMimeType: 'application/json' },
         thinkingLevel: 'HIGH',
         maxOutputTokens: 32000,
-        timeout: 180_000,
         callerId: agentId,
       })
 

@@ -125,7 +125,6 @@ async function main() {
         systemPrompt: 'אתה מחלץ מידע עסקי ממסמכים. החזר JSON בלבד.',
         thinkingLevel: 'LOW',
         maxOutputTokens: 32000,
-        timeout: 120_000,
         callerId: `test-${modelDef.id}`,
       })
 

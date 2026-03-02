@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendChatMessage, parseJsonFromResponse, type ChatMessage } from '@/lib/openai/chat'
 
-export const maxDuration = 600
+export const maxDuration = 300
 import { generateId } from '@/lib/utils'
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 

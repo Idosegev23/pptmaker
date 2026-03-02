@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runSingleAgent, getResearchAngles } from '@/lib/gemini/brand-research'
 
-export const maxDuration = 600
+export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
   const requestId = `agent-${Date.now()}`

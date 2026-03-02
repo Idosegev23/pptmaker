@@ -196,7 +196,6 @@ ${slidesXml}
       responseSchema: CURATED_SLIDE_SCHEMA as Record<string, unknown>,
       thinkingLevel: 'LOW',
       maxOutputTokens: 16384,
-      timeout: 60_000,
       callerId: requestId,
     })
     if (aiResult.switched) console.warn(`[ContentCurator][${requestId}] 🔄 Switched to Claude`)

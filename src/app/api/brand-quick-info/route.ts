@@ -5,7 +5,7 @@ export const maxDuration = 300
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: { timeout: 540_000 },
+  httpOptions: { timeout: 300_000 },
 })
 
 const FLASH_MODEL = 'gemini-3-flash-preview'
