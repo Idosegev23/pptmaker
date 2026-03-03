@@ -389,6 +389,13 @@ ${slidesXml}
       throw new Error(`Curator returned empty response after ${MAX_RETRIES + 1} attempts`)
     }
 
+    // ── Post-loop validation: if response is STILL bad after all retries, bail to fallback ──
+    const maxExpectedPostLoop = slides.length * 4000
+    if (raw.length > maxExpectedPostLoop) {
+      console.error(`[ContentCurator][${requestId}] All ${MAX_RETRIES + 1} attempts overflowed (last: ${raw.length} chars). Falling back.`)
+      throw new Error(`Curator overflow after ${MAX_RETRIES + 1} attempts (${raw.length} chars)`)
+    }
+
     let parsed: { slides: CuratedSlideContent[] }
 
     try {
