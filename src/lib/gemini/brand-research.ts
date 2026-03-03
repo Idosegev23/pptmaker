@@ -300,8 +300,9 @@ export async function synthesizeResearch(
 
   let rawLogsContent = ''
   gatheredData.forEach(result => {
-    // Limit each agent result to 1200 chars to keep total prompt manageable and avoid Gemini 499 cancellation
-    const truncated = result.data.length > 1200 ? result.data.slice(0, 1200) + '...[קוצר]' : result.data
+    // Each agent produces up to 4000 tokens (~6000 chars). Keep the full output —
+    // Flash input limit is 1M tokens, so 4×6000 chars is negligible.
+    const truncated = result.data.length > 6000 ? result.data.slice(0, 6000) + '...[קוצר]' : result.data
     rawLogsContent += `\n--- ANGLE: ${result.angle} ---\n${truncated}\n`
   })
 
@@ -415,10 +416,10 @@ ${websiteContext}
         prompt: synthesisPrompt,
         geminiConfig: {
           thinkingConfig: { thinkingLevel: 'LOW' as any },
-          maxOutputTokens: 8000,
+          maxOutputTokens: 16000,
         },
         thinkingLevel: 'LOW',
-        maxOutputTokens: 8000,
+        maxOutputTokens: 16000,
         callerId: `brand-research-synthesis`,
       })
 

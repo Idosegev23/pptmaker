@@ -113,6 +113,81 @@ const SLIDE_PACING: Record<string, { maxWords: number; prefer: string; tone: str
   closing:           { maxWords: 15, prefer: 'tagline + subtitle', tone: 'warm, inviting, memorable' },
 }
 
+// ─── Pre-curation QC ──────────────────────────────────
+
+/** Content-depth score: how much meaningful data does a slide carry? */
+function scoreSlideContent(slide: RawSlideInput): 'rich' | 'thin' | 'empty' {
+  const c = slide.content
+  if (!c || Object.keys(c).length === 0) return 'empty'
+  let fieldCount = 0
+  let charCount = 0
+  for (const [, v] of Object.entries(c)) {
+    if (v === null || v === undefined || v === '') continue
+    if (Array.isArray(v) && v.length === 0) continue
+    fieldCount++
+    charCount += JSON.stringify(v).length
+  }
+  if (fieldCount <= 1 || charCount < 30) return 'empty'
+  if (fieldCount <= 3 || charCount < 120) return 'thin'
+  return 'rich'
+}
+
+/** Pre-validate slides and tag thin/empty ones so the Curator works harder on them */
+function preValidateSlides(slides: RawSlideInput[], brandName: string): RawSlideInput[] {
+  const warnings: string[] = []
+  const validated = slides.map(slide => {
+    const score = scoreSlideContent(slide)
+    if (score === 'empty') {
+      warnings.push(`${slide.slideType}: EMPTY — Curator will rely on creativity`)
+    } else if (score === 'thin') {
+      warnings.push(`${slide.slideType}: THIN — limited raw data`)
+    }
+    // Inject quality hint into content so Curator can see it
+    if (score !== 'rich') {
+      return {
+        ...slide,
+        content: {
+          ...slide.content,
+          _contentQuality: score,
+          _brandName: brandName,
+        },
+      }
+    }
+    return slide
+  })
+  if (warnings.length > 0) {
+    console.warn(`[ContentCurator][QC] Pre-validation: ${warnings.length}/${slides.length} slides need extra attention:`)
+    warnings.forEach(w => console.warn(`[ContentCurator][QC]   ${w}`))
+  }
+  return validated
+}
+
+// ─── Post-curation QC ─────────────────────────────────
+
+/** Validate curated output — flag slides that are too weak for a premium presentation */
+function postValidateCurated(curated: CuratedSlideContent[]): void {
+  const issues: string[] = []
+  for (const slide of curated) {
+    if (!slide.title || slide.title.length < 2) {
+      issues.push(`${slide.slideType}: missing title`)
+    }
+    const hasBody = slide.bodyText && slide.bodyText.length > 10
+    const hasBullets = slide.bulletPoints && slide.bulletPoints.length > 0
+    const hasCards = slide.cards && slide.cards.length > 0
+    const hasKeyNumber = slide.keyNumber && slide.keyNumber.length > 0
+    const hasTagline = slide.tagline && slide.tagline.length > 0
+    if (!hasBody && !hasBullets && !hasCards && !hasKeyNumber && !hasTagline) {
+      issues.push(`${slide.slideType}: only title — no body/bullets/cards/keyNumber/tagline`)
+    }
+  }
+  if (issues.length > 0) {
+    console.warn(`[ContentCurator][QC] Post-validation: ${issues.length} weak slides:`)
+    issues.forEach(i => console.warn(`[ContentCurator][QC]   ${i}`))
+  } else {
+    console.log(`[ContentCurator][QC] Post-validation: all ${curated.length} slides pass quality check`)
+  }
+}
+
 // ─── Main Function ─────────────────────────────────────
 
 /**
@@ -129,20 +204,27 @@ export async function curateSlideContent(
     typographyVoice?: string
   },
 ): Promise<CuratedSlideContent[]> {
+  // ── Pre-curation QC: validate and tag thin slides ──
+  const validatedSlides = preValidateSlides(slides, brandName)
+
   // Split into sub-batches of 6 slides to avoid 67K+ responses that fail JSON parse
   const BATCH_SIZE = 6
-  if (slides.length > BATCH_SIZE) {
+  if (validatedSlides.length > BATCH_SIZE) {
     const batches: RawSlideInput[][] = []
-    for (let i = 0; i < slides.length; i += BATCH_SIZE) {
-      batches.push(slides.slice(i, i + BATCH_SIZE))
+    for (let i = 0; i < validatedSlides.length; i += BATCH_SIZE) {
+      batches.push(validatedSlides.slice(i, i + BATCH_SIZE))
     }
-    console.log(`[ContentCurator] Splitting ${slides.length} slides into ${batches.length} sub-batches of ${BATCH_SIZE}`)
+    console.log(`[ContentCurator] Splitting ${validatedSlides.length} slides into ${batches.length} sub-batches of ${BATCH_SIZE}`)
     const results = await Promise.all(
       batches.map(batch => curateSlideContentBatch(batch, brandName, creativeDirection))
     )
-    return results.flat()
+    const curated = results.flat()
+    postValidateCurated(curated)
+    return curated
   }
-  return curateSlideContentBatch(slides, brandName, creativeDirection)
+  const curated = await curateSlideContentBatch(validatedSlides, brandName, creativeDirection)
+  postValidateCurated(curated)
+  return curated
 }
 
 /**
@@ -157,6 +239,7 @@ async function curateSlideContentBatch(
     emotionalArc?: string
     typographyVoice?: string
   },
+  isRetry = false,
 ): Promise<CuratedSlideContent[]> {
   const requestId = `curator-${Date.now()}`
   console.log(`[ContentCurator][${requestId}] Curating ${slides.length} slides for "${brandName}"`)
@@ -322,6 +405,43 @@ ${slidesXml}
       ].filter(Boolean).join(', ')
       console.log(`[ContentCurator][${requestId}]   ${i + 1}. ${c.slideType}: [${fields}] emotion:${c.emotionalNote || '-'}`)
     })
+
+    // ─── Feedback loop: retry weak slides ───
+    // Slides that only have a title (no body/bullets/cards/keyNumber) are too thin
+    const weakIndices: number[] = []
+    for (let i = 0; i < curated.length; i++) {
+      const c = curated[i]
+      // cover/closing are allowed to be minimal
+      if (c.slideType === 'cover' || c.slideType === 'closing') continue
+      const hasSubstance = (c.bodyText && c.bodyText.length > 10)
+        || (c.bulletPoints && c.bulletPoints.length > 0)
+        || (c.cards && c.cards.length > 0)
+        || (c.keyNumber && c.keyNumber.length > 0)
+      if (!hasSubstance) weakIndices.push(i)
+    }
+
+    if (weakIndices.length > 0 && weakIndices.length <= 4 && !isRetry) {
+      console.warn(`[ContentCurator][${requestId}] Feedback loop: ${weakIndices.length} weak slides → retrying: ${weakIndices.map(i => curated[i].slideType).join(', ')}`)
+      try {
+        const weakSlides = weakIndices.map(i => slides[i]).filter(Boolean)
+        const retried = await curateSlideContentBatch(weakSlides, brandName, creativeDirection, true)
+        for (let j = 0; j < weakIndices.length; j++) {
+          if (retried[j]) {
+            const rc = retried[j]
+            const hasSubstance = (rc.bodyText && rc.bodyText.length > 10)
+              || (rc.bulletPoints && rc.bulletPoints.length > 0)
+              || (rc.cards && rc.cards.length > 0)
+              || (rc.keyNumber && rc.keyNumber.length > 0)
+            if (hasSubstance) {
+              curated[weakIndices[j]] = { ...rc, imageUrl: slides[weakIndices[j]]?.imageUrl }
+              console.log(`[ContentCurator][${requestId}] Feedback: improved ${rc.slideType}`)
+            }
+          }
+        }
+      } catch (retryErr) {
+        console.warn(`[ContentCurator][${requestId}] Feedback retry failed:`, retryErr instanceof Error ? retryErr.message : retryErr)
+      }
+    }
 
     return curated
   } catch (error) {
