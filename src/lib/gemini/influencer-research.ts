@@ -40,6 +40,7 @@ export interface InfluencerRecommendation {
   competitorBrandWork?: string      // האם עבד עם מתחרים (+ שמות)
   audienceQualitySignal?: 'high' | 'mixed' | 'low' // אותנטיות הקהל
   previousBrandCollabs?: string[]   // שמות מותגים שעבד איתם
+  brandFitScore?: 'high' | 'medium' | 'low'  // התאמה למותג
 }
 
 export interface InfluencerStrategy {
@@ -85,6 +86,9 @@ export interface InfluencerStrategy {
     risk: string
     mitigation: string
   }[]
+
+  // Verification needs
+  needsVerification?: string[]  // שמות שדרושים אימות מול פלטפורמת BI
 }
 
 /**

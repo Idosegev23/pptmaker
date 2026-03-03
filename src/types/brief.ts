@@ -67,6 +67,9 @@ export interface ExtractedBriefData {
   clientSpecificRequests?: string[]
   competitorMentions?: string[]
 
+  brandTone?: string
+  gaps?: string[]
+
   _meta: {
     confidence: 'high' | 'medium' | 'low'
     clientBriefProcessed: boolean

@@ -3,7 +3,7 @@
  */
 
 import type { Slide, ImageElement } from '@/types/presentation'
-import { hexToLuminance } from './color-utils'
+import { hexToLuminance } from './utils'
 
 function extractDominantColor(bg: Slide['background']): string {
   if (bg.type === 'solid') return bg.value

@@ -14,8 +14,7 @@ import type {
   PremiumDesignSystem,
   BatchContext,
 } from './types'
-import { validateAndFixColors } from './color-utils'
-import { findBestImagePlacement } from './spatial-utils'
+import { validateAndFixColors, findBestImagePlacement } from './utils'
 
 export function buildFallbackDesignSystem(brand: BrandDesignInput): PremiumDesignSystem {
   return {

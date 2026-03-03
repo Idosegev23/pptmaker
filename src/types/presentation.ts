@@ -61,6 +61,7 @@ export interface Slide {
   slideType: SlideType
   label: string
   archetype?: string
+  dramaticChoice?: string
   background: SlideBackground
   elements: SlideElement[]
 }

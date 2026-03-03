@@ -130,6 +130,20 @@ export interface BrandResearch {
   whyNowTrigger?: string           // הרגע העסקי שמניע את הקמפיין
   israeliMarketContext?: string    // הקשר שוק ישראלי ספציפי
 
+  // Strategic Analysis — "So what?" layer
+  tensions?: string[]
+  opportunities?: string[]
+  risks?: string[]
+  brandVoiceGuide?: {
+    personality: string
+    toneSpectrum: string
+    languageStyle: string
+    avoid: string
+  }
+  marketPosition_implication?: string
+  audience_implication?: string
+  competitors_implication?: string
+
   // Sources
   sources: { title: string; url: string }[]
 
@@ -317,7 +331,7 @@ ${websiteData.paragraphs.slice(0, 15).join('\n')}
 ` : ''
 
   const synthesisPrompt = `
-אתה אסטרטג מותגים וחוקר שוק בכיר. המשימה שלך היא לבנות דוח מחקר עומק מקיף וקפדני על המותג "${brandName}".
+אתה אסטרטג מותגים וחוקר שוק בכיר. המשימה שלך היא לבנות דוח מחקר עומק מקיף וקפדני על המותג "${brandName}" — לא סיכום אלא ניתוח.
 
 להלן כל המידע הגולמי שנאסף על ידי סוכני המחקר שלנו מרחבי הרשת:
 ${rawLogsContent}
@@ -330,6 +344,21 @@ ${websiteContext}
 3. כתוב פסקאות מלאות ועשירות, במיוחד בתיאור החברה, קהל היעד והצעת הערך.
 4. **אמינות היא מעל הכל!** אל תמציא מידע. אם נתון מסוים חסר לחלוטין במידע שנאסף, כתוב "לא נמצא מידע בסריקה".
 5. אסוף את כל המקורות (URLs) שהסוכנים ציינו במידע הגולמי והכנס אותם לשדה ה-sources.
+6. הצלב נתונים מהסוכנים השונים — אם סוכן אחד מצא X וסוכן שני מצא Y, מה המשמעות המשולבת?
+
+## חובה — שכבת "אז מה?":
+לכל שדה מרכזי, הוסף שדה _implication עם מסקנה בן משפט אחד:
+- marketPosition_implication: "מה זה אומר לקמפיין"
+- audience_implication: "מה זה אומר לבחירת משפיענים"
+- competitors_implication: "מה אפשר לעשות אחרת"
+
+## חובה — שדות חדשים:
+- "tensions": [3-5 מתחים/פערים שזוהו בין המותג, הקהל, והשוק]
+  דוגמה: "המותג מדבר על איכות אבל הקהל תופס אותו כזול"
+  דוגמה: "הקהל רוצה אותנטיות אבל המותג מפרסם תוכן מסוגנן מדי"
+- "opportunities": [2-3 הזדמנויות שעלו מהמחקר]
+- "risks": [2-3 סיכונים שצריך לדעת עליהם]
+- "brandVoiceGuide": { "personality": "3-5 תכונות מרכזיות", "toneSpectrum": "פורמלי — קז'ואל, היכן המותג?", "languageStyle": "לועזית? עברית נקייה? סלנג?", "avoid": "מה לא מתאים לטון הזה" }
 
 החזר JSON מפורט בלבד, לפי המבנה המדויק הבא:
 \`\`\`json
@@ -399,6 +428,18 @@ ${websiteContext}
   "dominantPlatformInIsrael": "אינסטגרם / טיקטוק / פייסבוק — עם הסבר קצר",
   "whyNowTrigger": "מה הרגע העסקי שמניע את הצורך בקמפיין עכשיו",
   "israeliMarketContext": "הקשר ייחודי של השוק הישראלי לתחום המותג",
+  "tensions": ["מתח 1 שזוהה בין המותג/הקהל/השוק", "מתח 2", "מתח 3"],
+  "opportunities": ["הזדמנות 1 שעלתה מהמחקר", "הזדמנות 2"],
+  "risks": ["סיכון 1 שצריך לדעת עליו", "סיכון 2"],
+  "brandVoiceGuide": {
+    "personality": "3-5 תכונות מרכזיות של אישיות המותג",
+    "toneSpectrum": "פורמלי — קז'ואל, היכן המותג?",
+    "languageStyle": "לועזית? עברית נקייה? סלנג?",
+    "avoid": "מה לא מתאים לטון הזה"
+  },
+  "marketPosition_implication": "מה זה אומר לקמפיין",
+  "audience_implication": "מה זה אומר לבחירת משפיענים",
+  "competitors_implication": "מה אפשר לעשות אחרת",
   "sources": [{ "title": "תיאור המקור", "url": "URL" }],
   "confidence": "high/medium/low",
   "researchNotes": "הערות על איכות המידע שנאסף"

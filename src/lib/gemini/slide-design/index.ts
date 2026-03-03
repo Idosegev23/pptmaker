@@ -3,7 +3,7 @@
  * Internal modules for the Slide Designer pipeline.
  */
 
-// Types
+// Types + Schemas
 export type {
   BrandDesignInput,
   SlideContentInput,
@@ -14,13 +14,20 @@ export type {
   ValidationResult,
   ValidationIssue,
   BoundingBox,
+  SlidePlan,
   PipelineFoundation,
   BatchResult,
   InfluencerResearchData,
   PremiumProposalData,
 } from './types'
 
-// Color utilities
+export {
+  DESIGN_SYSTEM_SCHEMA,
+  SLIDE_PLAN_SCHEMA,
+  SLIDE_BATCH_SCHEMA,
+} from './types'
+
+// Utilities (color + spatial + validation)
 export {
   hexToRgb,
   relativeLuminance,
@@ -28,22 +35,15 @@ export {
   contrastRatio,
   adjustLightness,
   validateAndFixColors,
-} from './color-utils'
-
-// Spatial utilities
-export {
   boxesOverlap,
   isImageElement,
   computeOccupiedArea,
   computeBalanceScore,
   findBestImagePlacement,
-} from './spatial-utils'
-
-// Schemas
-export {
-  DESIGN_SYSTEM_SCHEMA,
-  SLIDE_BATCH_SCHEMA,
-} from './schemas'
+  validateSlide,
+  autoFixSlide,
+  checkVisualConsistency,
+} from './utils'
 
 // Config loaders
 export {
@@ -60,13 +60,6 @@ export {
   getBatchSize,
 } from './config-loaders'
 
-// Validation
-export {
-  validateSlide,
-  autoFixSlide,
-  checkVisualConsistency,
-} from './validation'
-
 // Fallbacks
 export {
   buildFallbackDesignSystem,
@@ -74,14 +67,6 @@ export {
   buildFallbackSlide,
   createFallbackSlide,
 } from './fallbacks'
-
-// Slide content builder
-export {
-  cleanContent,
-  chunkByMax,
-  formatNum,
-  buildSlideBatches,
-} from './slide-content-builder'
 
 // Logo injection
 export {

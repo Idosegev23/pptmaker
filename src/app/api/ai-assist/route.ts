@@ -160,12 +160,13 @@ async function buildAudienceInsightsPrompt(params: Record<string, unknown>): Pro
       "source": "שם המחקר/סקר/מקור",
       "sourceUrl": "URL אם זמין",
       "dataPoint": "נתון מספרי בולט (לדוגמה: 72% מהנשים 25-34...)",
-      "confidence": "high/medium/low"
+      "confidence": "high/medium/low",
+      "isIsraeli": true
     }
   ]
 }
 
-חזור עם 3-5 תובנות. תן עדיפות לנתונים ישראליים כשזמינים.`
+חזור עם 3-5 תובנות. תן עדיפות לנתונים ישראליים כשזמינים. סמן isIsraeli: true אם המקור ישראלי.`
 }
 
 async function buildRefineInsightPrompt(params: Record<string, unknown>): Promise<string> {
@@ -184,8 +185,12 @@ async function buildRefineInsightPrompt(params: Record<string, unknown>): Promis
 
 החזר JSON:
 {
-  "keyInsight": "תובנה מחודדת ב-1-2 משפטים",
+  "keyInsight": "תובנה משופרת — משפט אחד או שניים",
   "insightSource": "מקור ראשי של התובנה",
+  "tension": "המתח שהתובנה חושפת",
+  "bridgeToBrand": "איך המותג הזה הוא הפתרון למתח",
+  "passesTest": { "surprising": true, "backed": true, "specific": true, "actionable": true },
+  "confidence": "high/medium/low",
   "supportingResearch": [
     {
       "statistic": "נתון סטטיסטי",

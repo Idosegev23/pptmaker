@@ -1,20 +1,20 @@
 /**
- * Internal types for the Slide Designer pipeline.
- * These types are NOT exported from the main package — they're internal implementation detail.
- * External consumers use the types from @/types/presentation.
+ * Internal types + schemas for the Slide Designer pipeline.
+ * Types are internal implementation detail — external consumers use @/types/presentation.
+ * Schemas define Gemini structured output format.
  */
 
+import { Type } from '@google/genai'
 import type {
   DesignSystem,
   Slide,
   SlideType,
   FontWeight,
   SlideElement,
-  CuratedSlideContent,
 } from '@/types/presentation'
 
 // Re-export for convenience within slide-design modules
-export type { Slide, SlideType, FontWeight, SlideElement, CuratedSlideContent }
+export type { Slide, SlideType, FontWeight, SlideElement }
 
 // ─── Brand & Input Types ──────────────────────────────
 
@@ -95,7 +95,6 @@ export interface BatchContext {
 }
 
 export interface SingleSlideContext {
-  allCurated: CuratedSlideContent[]
   previousSlides: Slide[]
   totalSlides: number
 }
@@ -126,21 +125,42 @@ export interface ValidationIssue {
 
 export interface BoundingBox { x: number; y: number; width: number; height: number }
 
+// ─── Slide Plan (output of Planner AI) ───────────────
+
+export interface SlidePlan {
+  slideType: string
+  title: string
+  subtitle?: string
+  bodyText?: string
+  bulletPoints?: string[]
+  cards?: { title: string; body: string }[]
+  keyNumber?: string
+  keyNumberLabel?: string
+  tagline?: string
+  /** Description of what image is needed — for future AI image generation */
+  imageDirection?: string
+  /** Key in the images map for an existing image */
+  existingImageKey?: string
+  /** Emotional tone: dramatic, warm, analytical, energetic, etc. */
+  emotionalTone: string
+}
+
 // ─── Pipeline Types (exported from main package) ──────
 
 export interface PipelineFoundation {
   designSystem: PremiumDesignSystem
-  /** 3 batch groups (not single-slide arrays) */
-  batches: SlideContentInput[][]
-  curatedBatches?: CuratedSlideContent[][]
-  /** Flat list of all curated slides for full-story context */
-  allCurated: CuratedSlideContent[]
-  /** Flat list of all raw inputs (1 per slide) */
-  allSlides: SlideContentInput[]
+  /** Per-slide plan from the Planner AI — content + image direction */
+  plan: SlidePlan[]
+  /** 3 batch groups of plan indices */
+  batches: number[][]
+  /** Full wizard data — available for reference */
+  proposalData: PremiumProposalData
   brandName: string
   clientLogo: string
   leadersLogo: string
   totalSlides: number
+  /** Image URLs from wizard/scraping */
+  images: Record<string, string>
   /** Number of batches (typically 3) */
   batchCount?: number
   /** Slide count per batch */
@@ -241,4 +261,211 @@ export interface PremiumProposalData {
   _imageStrategy?: { conceptSummary?: string; visualDirection?: string; styleGuide?: string }
   _influencerStrategy?: InfluencerResearchData
   [key: string]: unknown
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GEMINI STRUCTURED OUTPUT SCHEMAS
+// ═══════════════════════════════════════════════════════════
+
+export const DESIGN_SYSTEM_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    creativeDirection: {
+      type: Type.OBJECT,
+      properties: {
+        visualMetaphor: { type: Type.STRING },
+        visualTension: { type: Type.STRING },
+        oneRule: { type: Type.STRING },
+        colorStory: { type: Type.STRING },
+        typographyVoice: { type: Type.STRING },
+        emotionalArc: { type: Type.STRING },
+        visualMetaphor_translates_to: {
+          type: Type.OBJECT,
+          properties: {
+            whitespace_ratio: { type: Type.STRING },
+            max_colors_per_slide: { type: Type.INTEGER },
+            text_alignment: { type: Type.STRING },
+            image_treatment: { type: Type.STRING },
+          },
+          required: ['whitespace_ratio', 'max_colors_per_slide', 'text_alignment', 'image_treatment'],
+        },
+      },
+      required: ['visualMetaphor', 'visualTension', 'oneRule', 'colorStory', 'typographyVoice', 'emotionalArc', 'visualMetaphor_translates_to'],
+    },
+    colors: {
+      type: Type.OBJECT,
+      properties: {
+        primary: { type: Type.STRING }, secondary: { type: Type.STRING },
+        accent: { type: Type.STRING }, background: { type: Type.STRING },
+        text: { type: Type.STRING }, cardBg: { type: Type.STRING },
+        cardBorder: { type: Type.STRING }, gradientStart: { type: Type.STRING },
+        gradientEnd: { type: Type.STRING }, muted: { type: Type.STRING },
+        highlight: { type: Type.STRING }, auroraA: { type: Type.STRING },
+        auroraB: { type: Type.STRING }, auroraC: { type: Type.STRING },
+      },
+      required: ['primary', 'secondary', 'accent', 'background', 'text', 'cardBg', 'cardBorder',
+        'gradientStart', 'gradientEnd', 'muted', 'highlight', 'auroraA', 'auroraB', 'auroraC'],
+    },
+    fonts: {
+      type: Type.OBJECT,
+      properties: { heading: { type: Type.STRING }, body: { type: Type.STRING } },
+      required: ['heading', 'body'],
+    },
+    typography: {
+      type: Type.OBJECT,
+      properties: {
+        displaySize: { type: Type.INTEGER }, headingSize: { type: Type.INTEGER },
+        subheadingSize: { type: Type.INTEGER }, bodySize: { type: Type.INTEGER },
+        captionSize: { type: Type.INTEGER },
+        letterSpacingTight: { type: Type.NUMBER }, letterSpacingWide: { type: Type.NUMBER },
+        lineHeightTight: { type: Type.NUMBER }, lineHeightRelaxed: { type: Type.NUMBER },
+        weightPairs: { type: Type.ARRAY, items: { type: Type.ARRAY, items: { type: Type.INTEGER } } },
+      },
+      required: ['displaySize', 'headingSize', 'subheadingSize', 'bodySize', 'captionSize',
+        'letterSpacingTight', 'letterSpacingWide', 'lineHeightTight', 'lineHeightRelaxed', 'weightPairs'],
+    },
+    spacing: {
+      type: Type.OBJECT,
+      properties: {
+        unit: { type: Type.INTEGER }, cardPadding: { type: Type.INTEGER },
+        cardGap: { type: Type.INTEGER }, safeMargin: { type: Type.INTEGER },
+      },
+      required: ['unit', 'cardPadding', 'cardGap', 'safeMargin'],
+    },
+    effects: {
+      type: Type.OBJECT,
+      properties: {
+        borderRadius: { type: Type.STRING, enum: ['sharp', 'soft', 'pill'] },
+        borderRadiusValue: { type: Type.INTEGER },
+        decorativeStyle: { type: Type.STRING, enum: ['geometric', 'organic', 'minimal', 'brutalist'] },
+        shadowStyle: { type: Type.STRING, enum: ['none', 'fake-3d', 'glow'] },
+        auroraGradient: { type: Type.STRING },
+      },
+      required: ['borderRadius', 'borderRadiusValue', 'decorativeStyle', 'shadowStyle', 'auroraGradient'],
+    },
+    motif: {
+      type: Type.OBJECT,
+      properties: {
+        type: { type: Type.STRING }, opacity: { type: Type.NUMBER },
+        color: { type: Type.STRING }, implementation: { type: Type.STRING },
+      },
+      required: ['type', 'opacity', 'color', 'implementation'],
+    },
+  },
+  required: ['creativeDirection', 'colors', 'fonts', 'typography', 'spacing', 'effects', 'motif'],
+}
+
+/** Flat element schema — all element type fields combined, type-specific ones are optional */
+const SLIDE_ELEMENT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    id: { type: Type.STRING },
+    type: { type: Type.STRING, enum: ['text', 'shape', 'image'] },
+    x: { type: Type.NUMBER }, y: { type: Type.NUMBER },
+    width: { type: Type.NUMBER, description: 'Element width in px. Text: ensure width fits content at fontSize' },
+    height: { type: Type.NUMBER, description: 'Element height in px. Text: ensure height fits number of lines' },
+    zIndex: { type: Type.INTEGER },
+    opacity: { type: Type.NUMBER },
+    rotation: { type: Type.NUMBER },
+    // Text fields
+    content: { type: Type.STRING, description: 'Text content (Hebrew). Required for type=text' },
+    fontSize: { type: Type.NUMBER, description: 'Font size in px. Required for type=text. Titles: 60-140, body: 18-24, caption: 14-16' },
+    fontWeight: { type: Type.INTEGER, description: 'Font weight 100-900. Required for type=text. Titles: 700-900, body: 300-400' },
+    color: { type: Type.STRING, description: 'Text color hex. Required for type=text. Must contrast with background' },
+    textAlign: { type: Type.STRING, description: 'Text alignment. Always "right" for RTL Hebrew' },
+    role: { type: Type.STRING, description: 'Required for type=text: title|subtitle|body|caption|label|decorative' },
+    lineHeight: { type: Type.NUMBER },
+    letterSpacing: { type: Type.NUMBER },
+    textStroke: {
+      type: Type.OBJECT,
+      properties: { width: { type: Type.NUMBER }, color: { type: Type.STRING } },
+      required: ['width', 'color'],
+    },
+    // Shape fields
+    shapeType: { type: Type.STRING, description: 'Required for type=shape: background|decorative|divider|card' },
+    fill: { type: Type.STRING, description: 'Required for type=shape. Color hex, gradient, or "transparent"' },
+    borderRadius: { type: Type.NUMBER },
+    clipPath: { type: Type.STRING },
+    border: { type: Type.STRING },
+    // Image fields
+    src: { type: Type.STRING, description: 'Image URL. Required for type=image. Use exact URL from content' },
+    alt: { type: Type.STRING },
+    objectFit: { type: Type.STRING, description: 'Required for type=image: "cover" or "contain"' },
+    // Depth & effects
+    boxShadow: { type: Type.STRING, description: 'CSS box-shadow. Cards: "0 4px 20px rgba(0,0,0,0.2)"' },
+    textShadow: { type: Type.STRING, description: 'CSS text-shadow for type=text' },
+    filter: { type: Type.STRING, description: 'CSS filter for type=image. e.g. "brightness(0.85) contrast(1.1)"' },
+    backdropFilter: { type: Type.STRING, description: 'CSS backdrop-filter for glassmorphism' },
+  },
+  required: ['id', 'type', 'x', 'y', 'width', 'height', 'zIndex',
+    'color', 'fill', 'role', 'content', 'fontSize', 'fontWeight', 'shapeType', 'src', 'objectFit'],
+}
+
+export const SLIDE_PLAN_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    slides: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          slideType: { type: Type.STRING, description: 'Slide type: cover|brief|goals|audience|insight|whyNow|strategy|competitive|bigIdea|approach|deliverables|metrics|influencerStrategy|contentStrategy|influencers|timeline|closing' },
+          title: { type: Type.STRING, description: 'Hebrew title — creative, punchy, brand-specific' },
+          subtitle: { type: Type.STRING, description: 'Hebrew subtitle (optional)' },
+          bodyText: { type: Type.STRING, description: 'Hebrew body text — max 2-3 sentences (optional)' },
+          bulletPoints: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Hebrew bullet points (optional)' },
+          cards: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                body: { type: Type.STRING },
+              },
+              required: ['title', 'body'],
+            },
+            description: 'Cards for grid/bento layouts (optional)',
+          },
+          keyNumber: { type: Type.STRING, description: 'Key statistic or number (optional)' },
+          keyNumberLabel: { type: Type.STRING, description: 'Label for the key number (optional)' },
+          tagline: { type: Type.STRING, description: 'CTA or tagline (optional)' },
+          imageDirection: { type: Type.STRING, description: 'Description of what image is needed for this slide (optional)' },
+          existingImageKey: { type: Type.STRING, description: 'Key of existing image to use: coverImage|brandImage|audienceImage|activityImage or extra image ID (optional)' },
+          emotionalTone: { type: Type.STRING, description: 'Emotional direction: dramatic|warm|analytical|energetic|inspiring|confident|intimate|bold' },
+        },
+        required: ['slideType', 'title', 'emotionalTone'],
+      },
+    },
+  },
+  required: ['slides'],
+}
+
+export const SLIDE_BATCH_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    slides: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          slideType: { type: Type.STRING },
+          archetype: { type: Type.STRING, description: 'Layout archetype used' },
+          dramaticChoice: { type: Type.STRING, description: 'The ONE dramatic visual decision for this slide' },
+          label: { type: Type.STRING },
+          background: {
+            type: Type.OBJECT,
+            properties: {
+              type: { type: Type.STRING, enum: ['solid', 'gradient', 'image'] },
+              value: { type: Type.STRING },
+            },
+            required: ['type', 'value'],
+          },
+          elements: { type: Type.ARRAY, items: SLIDE_ELEMENT_SCHEMA },
+        },
+        required: ['id', 'slideType', 'archetype', 'dramaticChoice', 'label', 'background', 'elements'],
+      },
+    },
+  },
+  required: ['slides'],
 }
