@@ -232,7 +232,6 @@ ${slidesXml}
           responseSchema: CURATED_SLIDE_SCHEMA,
           maxOutputTokens: 32000,
           temperature: retryTemp,
-          frequencyPenalty: 0.5 + attempt * 0.2, // 0.5 → 0.7 → 0.9
         },
         responseSchema: CURATED_SLIDE_SCHEMA as Record<string, unknown>,
         thinkingLevel: 'LOW',
