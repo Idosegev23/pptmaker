@@ -416,7 +416,7 @@ export const MODEL_DEFAULTS = {
     group: 'סוכן הצעות',
   },
   'proposal_agent.thinking_level': {
-    value: 'MEDIUM',
+    value: 'LOW',
     description: 'רמת חשיבה (NONE/LOW/MEDIUM/HIGH)',
     value_type: 'text' as const,
     group: 'סוכן הצעות',
