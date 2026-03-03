@@ -336,8 +336,10 @@ ${slidesXml}
         continue
       }
 
-      // ── Overflow detection: 6 slides should never exceed ~6K chars ──
-      const maxExpectedChars = slides.length * 2000 // generous: 2K per slide
+      // ── Overflow detection ──
+      // Structured JSON per slide: ~1.5K content + ~500 formatting = ~2K realistic
+      // But Hebrew text + JSON escaping can push to ~3K legitimately. 4K/slide is the hard ceiling.
+      const maxExpectedChars = slides.length * 4000
       if (raw.length > maxExpectedChars) {
         console.warn(`[ContentCurator][${requestId}] Response overflow: ${raw.length} chars >> expected max ${maxExpectedChars} — likely repetition loop, will retry`)
         continue
