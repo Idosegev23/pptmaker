@@ -305,6 +305,10 @@ ${slidesXml}
       if (attempt > 0) {
         console.warn(`[ContentCurator][${requestId}] Retry ${attempt}/${MAX_RETRIES} with temp=${retryTemp.toFixed(2)}`)
       }
+      // 6 slides × ~600 chars = ~3600 chars. 8192 tokens is more than enough.
+      // Previously 32000 caused Flash to fill the entire budget with repetitive text.
+      const MAX_TOKENS = 8192
+
       aiResult = await callAI({
         model,
         prompt,
@@ -313,12 +317,12 @@ ${slidesXml}
           systemInstruction: systemPrompt,
           responseMimeType: 'application/json',
           responseSchema: CURATED_SLIDE_SCHEMA,
-          maxOutputTokens: 32000,
+          maxOutputTokens: MAX_TOKENS,
           temperature: retryTemp,
         },
         responseSchema: CURATED_SLIDE_SCHEMA as Record<string, unknown>,
         thinkingLevel: 'LOW',
-        maxOutputTokens: 32000,
+        maxOutputTokens: MAX_TOKENS,
         callerId: `${requestId}-a${attempt}`,
       })
       if (aiResult.switched) console.warn(`[ContentCurator][${requestId}] Switched to Claude`)
@@ -332,12 +336,44 @@ ${slidesXml}
         continue
       }
 
-      // Check for repetition loop: if the last 200 chars contain a repeated 30+ char phrase
-      const tail = raw.slice(-200)
-      const repMatch = tail.match(/(.{30,})\1/)
-      if (repMatch) {
-        console.warn(`[ContentCurator][${requestId}] Repetition loop detected: "${repMatch[1].slice(0, 50)}…", will retry`)
+      // ── Overflow detection: 6 slides should never exceed ~6K chars ──
+      const maxExpectedChars = slides.length * 2000 // generous: 2K per slide
+      if (raw.length > maxExpectedChars) {
+        console.warn(`[ContentCurator][${requestId}] Response overflow: ${raw.length} chars >> expected max ${maxExpectedChars} — likely repetition loop, will retry`)
         continue
+      }
+
+      // ── Multi-segment repetition detection ──
+      // Check 3 segments (25%, 50%, 75%) of the response for repeated phrases
+      let repetitionDetected = false
+      const segmentPositions = [0.25, 0.5, 0.75]
+      for (const pos of segmentPositions) {
+        const start = Math.floor(raw.length * pos)
+        const segment = raw.slice(start, start + 300)
+        // Repeated 20+ char phrase within any segment
+        const repMatch = segment.match(/(.{20,})\1/)
+        if (repMatch) {
+          console.warn(`[ContentCurator][${requestId}] Repetition at ${Math.round(pos * 100)}%: "${repMatch[1].slice(0, 40)}…", will retry`)
+          repetitionDetected = true
+          break
+        }
+      }
+      if (repetitionDetected) continue
+
+      // ── Short repeated token detection (e.g. "SOHO . DESIGN . SOHO . DESIGN") ──
+      const words = raw.slice(0, 2000).split(/\s+/)
+      if (words.length > 20) {
+        const wordFreq: Record<string, number> = {}
+        for (const w of words) {
+          if (w.length < 3) continue
+          wordFreq[w] = (wordFreq[w] || 0) + 1
+        }
+        const maxFreq = Math.max(...Object.values(wordFreq))
+        if (maxFreq > 15) {
+          const repeatedWord = Object.entries(wordFreq).find(([, v]) => v === maxFreq)?.[0]
+          console.warn(`[ContentCurator][${requestId}] Token spam: "${repeatedWord}" appears ${maxFreq}x in first 2K chars, will retry`)
+          continue
+        }
       }
 
       // Looks good — break out of retry loop
