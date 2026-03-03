@@ -117,6 +117,7 @@ function getOpenAIClient(): OpenAI {
   if (!_openaiClient) {
     _openaiClient = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY || '',
+      timeout: 600_000, // 10 min — slide batches need long generation time
     })
   }
   return _openaiClient
@@ -189,6 +190,8 @@ export interface AICallOptions {
   useGoogleSearch?: boolean
   /** JSON schema for structured output */
   responseSchema?: Record<string, unknown>
+  /** Skip global fallback — caller manages retries. Error propagates directly. */
+  noGlobalFallback?: boolean
 }
 
 export interface AICallResult {
@@ -201,10 +204,14 @@ export interface AICallResult {
 // ─── Main unified call function ───────────────────────────────────
 
 export async function callAI(options: AICallOptions): Promise<AICallResult> {
-  const { model, callerId = 'unknown' } = options
-
-  // Route based on model provider — try primary, fall back per-call if retryable error
+  const { model, noGlobalFallback } = options
   const provider = getProviderForModel(model)
+
+  // If caller manages its own retries, skip global fallback — let errors propagate
+  if (noGlobalFallback) {
+    return callByProvider(options, model, provider)
+  }
+
   return callWithFallback(options, model, provider)
 }
 

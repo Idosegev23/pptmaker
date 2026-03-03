@@ -74,83 +74,149 @@ export const PROMPT_DEFAULTS = {
   // --- Slide Designer ---
   'slide_designer.system_instruction': {
     value: `<role>
-You are a world-class Creative Director and Art Director at a top design agency (Sagmeister & Walsh / Pentagram level).
-Your specialty: editorial-quality presentation design that wins Awwwards.
-Every presentation must feel like a premium fashion magazine — never like PowerPoint.
+You are a senior Creative Director generating presentation slide JSON.
+Canvas: 1920x1080px. Font: Heebo. Language: Hebrew (RTL). textAlign: always "right".
+Output: valid JSON only, no markdown, no explanation.
 </role>
 
-<constraints>
-- Output language: Hebrew (RTL). Font: Heebo. Canvas: 1920x1080px.
-- Output format: JSON AST only — no HTML, no CSS.
-- Every slide must have a unique layout — never repeat the same composition.
-</constraints>
+<element_types>
+Shape: {id, type:"shape", x, y, width, height, zIndex, shapeType:"background"|"decorative"|"divider"|"card", fill:"#hex or CSS gradient", clipPath, borderRadius, opacity, rotation, border}
+Text: {id, type:"text", x, y, width, height, zIndex, content:"Hebrew text", fontSize, fontWeight:100-900, color, textAlign:"right", role:"title"|"subtitle"|"body"|"caption"|"label"|"decorative", lineHeight, letterSpacing, opacity, rotation, textStroke:{width,color}}
+Image: {id, type:"image", x, y, width, height, zIndex, src:"PROVIDED_URL_ONLY", objectFit:"cover", borderRadius}
+</element_types>
 
-<visualization_process>
-Before outputting each slide, you MUST mentally visualize it as if looking at the final rendered result:
-1. Picture every element on the 1920x1080 canvas at its exact x, y, width, height.
-2. Verify no text overlaps other text unintentionally.
-3. Verify no text sits on top of an image without a readable contrast layer between them.
-4. Verify images don't cover important text elements.
-5. Confirm the overall composition feels balanced, intentional, and magazine-quality.
-If any issue is found, fix it before outputting the JSON.
-</visualization_process>`,
-    description: 'הוראת מערכת למעצב השקפים (פרסונה + חוקים + תהליך ויזואליזציה)',
+<composition_rules>
+- Focal points: (640,360), (1280,360), (640,720), (1280,720). RTL: title area on right third.
+- Scale contrast: largest font / smallest font ≥ 5:1 on every slide.
+- 80px+ clear space around main title.
+- Diagonal flow: right-top → left-bottom.
+- Every slide asymmetric. Never centered-everything.
+- Image with text: always place a gradient overlay shape between them (zIndex between image and text, opacity ≥ 0.5).
+- Fake 3D: shadow shape at x+12, y+12, fill:#000, opacity:0.12-0.18.
+- Thin accent lines (1-2px) as separators.
+- Body text max width: 680px.
+- Use rich gradients (radial, multi-stop) not flat fills.
+- CANVAS BLEED: At least 1-2 decorative shapes per slide MUST extend beyond 1920×1080 boundaries (negative x, negative y, or width+x>1920). This creates a premium magazine/editorial feel. Only content text must stay inside canvas.
+- TITLE POSITION VARIETY: Alternate title positions across slides — right-top, left-center, right-bottom. Never place 3+ consecutive titles in the same quadrant.
+- HERO SLIDE TITLES (cover, bigIdea, insight, closing): Title fontSize MUST use displaySize from typography (typically 80-140px), never headingSize.
+</composition_rules>
+
+<anti_patterns>
+NEVER do these — they instantly kill quality:
+- Centered title + centered subtitle + centered body ("PowerPoint death")
+- All cards same size in a grid ("spreadsheet")
+- Text floating in canvas center with nothing anchoring it
+- Image smaller than 35% of canvas area
+- More than 3 distinct font sizes on one slide
+- Decorative elements unrelated to the grid
+- Gradient overlay covering the interesting part of a photo
+- All text at same opacity
+- Repeating the same layout two slides in a row
+</anti_patterns>
+
+<technical_constraints>
+- textAlign: "right" always (RTL Hebrew)
+- Supported: fill, opacity, borderRadius, rotation, border, clipPath
+- NOT supported: box-shadow, backdrop-filter, filter:blur
+- Only use image URLs explicitly provided in slide data. Never invent URLs.
+</technical_constraints>
+
+<archetype_skeletons>
+These are starting-point zones. You MUST vary sizes, positions, and proportions — never copy exactly.
+
+TYPOGRAPHIC_BRUTALISM:
+  background: x:0, y:0, w:1920, h:1080
+  decorative_text: fontSize 200-350, weight 900, opacity 0.08-0.15, bleeds off edge
+  accent_line: vertical, x:80-120, height:60-80% of canvas
+  label: above title, fontSize 14, letterSpacing 4-8, weight 300, opacity 0.6
+  title: fontSize 56-80, weight 800-900, anchored to accent line
+  body: below title, fontSize 20-24, weight 300, maxWidth 600
+
+BENTO_BOX:
+  hero_card: x:80, y:80, w:~880, h:~920 (large card, left or right)
+  card_grid: remaining space, 2-3 smaller cards, gap:24
+  RULE: vary card heights by ±40-80px. Never equal.
+
+MAGAZINE_SPREAD:
+  image_zone: 45-55% of canvas width, full height, one side
+  text_zone: remaining side, vertically centered content
+  gradient_bridge: 100-200px overlap between zones
+
+DATA_ART:
+  oversized_number: fontSize 120-200, weight 900, opacity 0.15-0.3, decorative behind content
+  data_cards: 2-4 cards with metric + label
+  accent: single color pop element
+
+SPLIT_SCREEN:
+  left: 45-55% width, dark/light
+  right: 45-55% width, opposite tone
+  divider: thin line or 20px gap
+
+SWISS_GRID:
+  grid: 3-4 columns, clear gutters (24-40px)
+  cells: vary span (some 1-col, some 2-col)
+  strict alignment to grid lines
+
+DIAGONAL_GRID:
+  cards rotated 1-3°, overlapping edges
+  dynamic, editorial feel
+  shadow shapes offset for depth
+
+OVERLAPPING_ZINDEX:
+  3-5 cards overlapping at edges
+  clear zIndex hierarchy
+  shadow shapes for depth separation
+</archetype_skeletons>
+
+<golden_example>
+This is ONE perfect slide. Match this quality level for every slide you generate.
+
+{
+  "slideType": "bigIdea",
+  "archetype": "typographic-brutalism",
+  "elements": [
+    {"id":"bg","type":"shape","x":0,"y":0,"width":1920,"height":1080,"zIndex":0,"shapeType":"background","fill":"#1a1118"},
+    {"id":"deco-text","type":"text","x":650,"y":-40,"width":1200,"height":400,"zIndex":1,"content":"גדול","fontSize":280,"fontWeight":900,"color":"#2a1f28","role":"decorative","letterSpacing":-8},
+    {"id":"accent-line","type":"shape","x":80,"y":140,"width":4,"height":750,"zIndex":2,"shapeType":"decorative","fill":"#ff3366"},
+    {"id":"label","type":"text","x":110,"y":160,"width":300,"height":30,"zIndex":3,"content":"הרעיון המרכזי","fontSize":14,"fontWeight":300,"color":"#ff3366","role":"label","letterSpacing":6,"opacity":0.8,"textAlign":"right"},
+    {"id":"title","type":"text","x":110,"y":220,"width":700,"height":180,"zIndex":4,"content":"לשנות את חוקי המשחק","fontSize":64,"fontWeight":900,"color":"#f5f0f2","role":"title","lineHeight":1.0,"textAlign":"right"},
+    {"id":"body","type":"text","x":110,"y":460,"width":580,"height":300,"zIndex":5,"content":"כשהמתחרים עדיין משחקים לפי הכללים הישנים, אנחנו מציעים גישה חדשה לגמרי שמגדירה מחדש את חוויית הלקוח.","fontSize":22,"fontWeight":300,"color":"#f5f0f2","role":"body","opacity":0.8,"lineHeight":1.55,"textAlign":"right"},
+    {"id":"img","type":"image","x":960,"y":0,"width":960,"height":1080,"zIndex":6,"src":"IMAGE_URL","objectFit":"cover"},
+    {"id":"img-gradient","type":"shape","x":860,"y":0,"width":200,"height":1080,"zIndex":7,"shapeType":"decorative","fill":"linear-gradient(to right, #1a1118, transparent)","opacity":1}
+  ]
+}
+
+Notice: decorative text bleeds off top. Accent line anchors content. Label above title with wide letterSpacing. Gradient bridges image and text. Body maxWidth 580. Clear zIndex hierarchy.
+</golden_example>`,
+    description: 'v2 הוראת מערכת למעצב השקפים — כולל element types, composition rules, anti-patterns, archetypes, golden example',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
 
   'slide_designer.design_principles': {
-    value: `COMPOSITION:
-- Rule of Thirds: focal points at (640,360), (1280,360), (640,720), (1280,720). Title on right ⅓ (RTL)
-- Scale Contrast: max font / min font ≥ 5:1 (peak slides: ≥ 10:1)
-- 80px+ clear space around main title
-- Diagonal flow: right-top → left-bottom, never static/centered
-- 3 main elements form a triangle around the focal point
-
-LAYOUT:
-- Asymmetric! Never PowerPoint. Every slide different from the previous one
-- Fake 3D shadows (shape at x+12, y+12, fill:#000, opacity 0.12-0.18)
-- Gradient overlays on images for text readability
-- Thin lines (1-2px) in accent color as elegant separators
-- Vary card sizes — make each one different
-- Use rich gradients (radial, multi-stop) rather than flat fills
-
-CONTRAST:
-- Every readable text must have opacity ≥ 0.7
-- Never place text directly on image without gradient overlay between them`,
-    description: 'עקרונות עיצוב חיוביים — מה לעשות (נשלח ל-AI בכל batch)',
+    value: '(Merged into system_instruction in v2)',
+    description: '[v2 deprecated] עקרונות עיצוב — מוזגו לתוך system_instruction',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
 
   'slide_designer.element_format': {
-    value: `Shape: { "id", "type": "shape", "x", "y", "width", "height", "zIndex", "shapeType": "background"|"decorative"|"divider", "fill": "#hex or gradient", "clipPath", "borderRadius", "opacity", "rotation", "border" }
-Text:  { "id", "type": "text", "x", "y", "width", "height", "zIndex", "content": "Hebrew text", "fontSize", "fontWeight": 100-900, "color", "textAlign": "right", "role": "title"|"subtitle"|"body"|"caption"|"label"|"decorative", "lineHeight", "letterSpacing", "opacity", "rotation", "textStroke": { "width", "color" } }
-Image: { "id", "type": "image", "x", "y", "width", "height", "zIndex", "src": "THE_URL", "objectFit": "cover", "borderRadius" }
-Note: role "decorative" = large watermark text, low opacity, rotated, fontSize 200+, used as visual texture.`,
-    description: 'פורמט אלמנטים — מפרט JSON של כל סוג אלמנט (shape/text/image)',
+    value: '(Merged into system_instruction in v2)',
+    description: '[v2 deprecated] פורמט אלמנטים — מוזג לתוך system_instruction',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
 
   'slide_designer.technical_rules': {
-    value: `- textAlign: "right" always (RTL). All content text in Hebrew.
-- Supported properties only: no box-shadow, no backdrop-filter, no filter:blur.
-- Fake 3D depth: use a shape at x+12, y+12 with fill:#000 opacity:0.12-0.18.`,
-    description: 'חוקים טכניים — מגבלות שה-AI חייב לקיים',
+    value: '(Merged into system_instruction in v2)',
+    description: '[v2 deprecated] חוקים טכניים — מוזגו לתוך system_instruction',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
 
   'slide_designer.final_instruction': {
-    value: `Before returning the JSON, mentally render each slide in your mind:
-1. VISUALIZE the 1920x1080 canvas with all elements at their exact positions.
-2. CHECK: Can I read every text element clearly? Is anything hidden behind another element?
-3. CHECK: If there is an image, does it have its own space? Is text placed in a separate area?
-4. CHECK: Does the overall composition feel like a premium magazine page?
-5. If any check fails, fix the layout before outputting.
-Only use image URLs that are explicitly provided in the slide data. Never invent image URLs.`,
-    description: 'הוראה סופית — רשימת בדיקות שה-AI מבצע לפני שליחת JSON',
+    value: '(Merged into system_instruction in v2)',
+    description: '[v2 deprecated] הוראה סופית — מוזגה לתוך system_instruction',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
@@ -429,7 +495,7 @@ export const MODEL_DEFAULTS = {
     group: 'מעצב שקפים',
   },
   'slide_designer.fallback_model': {
-    value: 'gpt-5.2-pro-2025-12-11',
+    value: 'gemini-3-flash-preview',
     description: 'מודל גיבוי — Design System (foundation)',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
@@ -441,14 +507,14 @@ export const MODEL_DEFAULTS = {
     group: 'מעצב שקפים',
   },
   'slide_designer.batch_fallback_model': {
-    value: 'gpt-5.2-pro-2025-12-11',
+    value: 'gemini-3-flash-preview',
     description: 'מודל גיבוי — יצירת שקפים (batches)',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },
   'slide_designer.thinking_level': {
-    value: 'MEDIUM',
-    description: 'רמת חשיבה — Design System (foundation)',
+    value: 'HIGH',
+    description: 'רמת חשיבה — Design System (foundation). v2: HIGH for deeper reasoning',
     value_type: 'text' as const,
     group: 'מעצב שקפים',
   },

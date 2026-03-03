@@ -39,13 +39,13 @@ export interface DesignStyle {
 /**
  * Extract colors from a logo image URL
  */
-export async function extractColorsFromLogo(imageUrl: string): Promise<BrandColors> {
+export async function extractColorsFromLogo(imageUrl: string): Promise<BrandColors | null> {
   console.log(`[Gemini Vision] Analyzing logo: ${imageUrl}`)
-  
+
   // Skip SVG files - Gemini can't process them
   if (imageUrl.endsWith('.svg') || imageUrl.includes('.svg?')) {
     console.log('[Gemini Vision] Skipping SVG logo - not supported')
-    return getDefaultColors()
+    return null
   }
   
   const prompt = `
@@ -113,7 +113,7 @@ export async function extractColorsFromLogo(imageUrl: string): Promise<BrandColo
     throw new Error('No JSON in response')
   } catch (error) {
     console.error('[Gemini Vision] Color extraction error:', error)
-    return getDefaultColors()
+    return null
   }
 }
 

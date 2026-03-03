@@ -77,6 +77,12 @@ export interface PremiumDesignSystem extends DesignSystem {
     colorStory: string
     typographyVoice: string
     emotionalArc: string
+    visualMetaphor_translates_to?: {
+      whitespace_ratio: string
+      max_colors_per_slide: number
+      text_alignment: string
+      image_treatment: string
+    }
   }
 }
 

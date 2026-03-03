@@ -195,12 +195,12 @@ export async function POST(request: NextRequest) {
 
     // ENHANCE: If Gemini failed but we have a logo, use vision to extract colors
     if (!brandColors && logoUrl) {
-      try {
-        console.log(`[Visual Assets][${requestId}] Gemini failed → trying logo vision: ${logoUrl}`)
-        brandColors = await extractColorsFromLogo(logoUrl)
+      console.log(`[Visual Assets][${requestId}] Gemini failed → trying logo vision: ${logoUrl}`)
+      brandColors = await extractColorsFromLogo(logoUrl)
+      if (brandColors) {
         console.log(`[Visual Assets][${requestId}] Colors from logo vision: primary=${brandColors.primary}`)
-      } catch (logoErr) {
-        console.error(`[Visual Assets][${requestId}] Logo vision failed:`, logoErr)
+      } else {
+        console.warn(`[Visual Assets][${requestId}] Logo vision failed, falling back`)
       }
     }
 

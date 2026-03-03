@@ -154,11 +154,129 @@ export function validateSlide(
     }
   }
 
+  // Text overflow detection — check if text fits in its bounding box
+  for (const el of contentTexts) {
+    const fontSize = el.fontSize || 20
+    const content = el.content || ''
+    if (content.length > 0 && el.width > 0) {
+      // Hebrew characters are roughly 0.55-0.65 × fontSize wide
+      const estCharWidth = fontSize * 0.6
+      const estTextWidth = content.length * estCharWidth
+      // Account for line wrapping: how many lines can fit?
+      const lineHeight = (el.lineHeight || 1.2) * fontSize
+      const maxLines = Math.max(1, Math.floor(el.height / lineHeight))
+      const effectiveWidth = el.width * maxLines
+      if (estTextWidth > effectiveWidth * 1.3) {
+        // Text is likely overflowing — needs wider box or smaller font
+        issues.push({
+          severity: 'warning', category: 'text-overflow',
+          message: `Text "${el.id}" likely overflows: ${content.length} chars at ${fontSize}px in ${el.width}px (est. needs ${Math.round(estTextWidth / maxLines)}px)`,
+          elementId: el.id, autoFixable: true,
+        })
+        score -= 8
+      }
+    }
+  }
+
   // Balance
   const balance = computeBalanceScore(allBoxes)
   if (balance < 0.3) {
     issues.push({ severity: 'suggestion', category: 'balance', message: `Balance ${(balance * 100).toFixed(0)}/100`, autoFixable: false })
     score -= 5
+  }
+
+  // === V2 Validation Checks ===
+
+  // V2-1: Element count 6-15 per slide
+  if (elements.length < 6) {
+    issues.push({ severity: 'suggestion', category: 'element-count-low', message: `Only ${elements.length} elements (min recommended: 6)`, autoFixable: false })
+    score -= 3
+  }
+  if (elements.length > 15) {
+    issues.push({ severity: 'warning', category: 'element-count-high', message: `${elements.length} elements (max recommended: 15)`, autoFixable: false })
+    score -= 5
+  }
+
+  // V2-2: Title fontSize >= headingSize (hero slides: >= displaySize)
+  const heroSlideTypes = new Set(['cover', 'bigIdea', 'insight', 'closing'])
+  const isHeroSlide = heroSlideTypes.has(slide.slideType)
+  const headingSize = designSystem.typography?.headingSize || 56
+  const minTitleSize = isHeroSlide
+    ? Math.max(headingSize, designSystem.typography?.displaySize || 96)
+    : headingSize
+  for (const title of titles) {
+    if ((title.fontSize || 48) < minTitleSize) {
+      issues.push({ severity: 'warning', category: 'title-too-small', message: `Title "${title.id}" fontSize ${title.fontSize}px (min: ${minTitleSize}px for ${isHeroSlide ? 'hero' : 'regular'} slide)`, elementId: title.id, autoFixable: true })
+      score -= isHeroSlide ? 12 : 8
+    }
+  }
+
+  // V2-8: Title position — titles pushed to bottom (y > 700) on non-closing slides
+  const bottomThreshold = 700
+  for (const title of titles) {
+    if ((title.y || 0) > bottomThreshold && slide.slideType !== 'closing') {
+      issues.push({ severity: 'warning', category: 'title-too-low', message: `Title "${title.id}" at y=${title.y} (max: ${bottomThreshold} for non-closing slides)`, elementId: title.id, autoFixable: true })
+      score -= 10
+    }
+  }
+
+  // V2-3: Font ratio >= 4:1 hard floor
+  if (fontSizes.length >= 2) {
+    const hardRatio = Math.max(...fontSizes) / Math.min(...fontSizes)
+    if (hardRatio < 4) {
+      // Find the title element to mark as fixable
+      const titleEl = titles[0]
+      issues.push({ severity: 'warning', category: 'font-ratio-low', message: `Font ratio ${hardRatio.toFixed(1)}:1 (minimum 4:1)`, elementId: titleEl?.id, autoFixable: !!titleEl })
+      score -= 5
+    }
+  }
+
+  // V2-4: Text-on-image overlay check
+  for (const txt of contentTexts) {
+    const txtBox: BoundingBox = { x: txt.x || 0, y: txt.y || 0, width: txt.width || 0, height: txt.height || 0 }
+    for (const img of imageElements) {
+      const imgBox: BoundingBox = { x: img.x || 0, y: img.y || 0, width: img.width || 0, height: img.height || 0 }
+      if (boxesOverlap(txtBox, imgBox)) {
+        const imgZ = (img as SlideElement).zIndex || 0
+        const txtZ = (txt as SlideElement).zIndex || 0
+        const hasOverlay = elements.some(el =>
+          el.type === 'shape' &&
+          (el.zIndex || 0) > imgZ &&
+          (el.zIndex || 0) < txtZ &&
+          boxesOverlap(imgBox, { x: el.x || 0, y: el.y || 0, width: el.width || 0, height: el.height || 0 })
+        )
+        if (!hasOverlay) {
+          issues.push({ severity: 'warning', category: 'text-on-image', message: `Text "${txt.id}" on image "${(img as SlideElement).id}" without overlay`, elementId: txt.id, autoFixable: false })
+          score -= 8
+        }
+      }
+    }
+  }
+
+  // V2-5: Body width <= 700
+  for (const el of contentTexts) {
+    if (el.role === 'body' && (el.width || 0) > 700) {
+      issues.push({ severity: 'suggestion', category: 'body-too-wide', message: `Body "${el.id}" width ${el.width}px (max: 700px)`, elementId: el.id, autoFixable: true })
+      score -= 3
+    }
+  }
+
+  // V2-6: RTL textAlign check
+  for (const el of contentTexts) {
+    if (el.textAlign && el.textAlign !== 'right') {
+      issues.push({ severity: 'warning', category: 'rtl-align', message: `Text "${el.id}" textAlign="${el.textAlign}" (must be "right")`, elementId: el.id, autoFixable: true })
+      score -= 5
+    }
+  }
+
+  // V2-7: Content element canvas bounds (non-decorative only)
+  for (const el of contentTexts) {
+    const right = (el.x || 0) + (el.width || 0)
+    const bottom = (el.y || 0) + (el.height || 0)
+    if (right > 1920 || bottom > 1080) {
+      issues.push({ severity: 'warning', category: 'canvas-overflow', message: `Text "${el.id}" extends beyond canvas (r:${right}, b:${bottom})`, elementId: el.id, autoFixable: true })
+      score -= 5
+    }
   }
 
   return { valid: issues.filter(i => i.severity === 'critical').length === 0, score: Math.max(0, score), issues }
@@ -271,6 +389,147 @@ export function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSyst
       }
     }
 
+    if (issue.category === 'text-overflow') {
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el)) {
+        const updated: TextElement = { ...el }
+        const fontSize = updated.fontSize || 20
+        const content = updated.content || ''
+        const estCharWidth = fontSize * 0.6
+        const estTextWidth = content.length * estCharWidth
+        const lineHeight = (updated.lineHeight || 1.2) * fontSize
+
+        // Strategy 1: Widen the box if there's room on canvas
+        const maxWidth = 1840 - Math.max(80, updated.x)
+        if (estTextWidth <= maxWidth * 1.1) {
+          // Single line can fit if we widen
+          updated.width = Math.min(maxWidth, Math.round(estTextWidth * 1.15))
+        } else {
+          // Strategy 2: Allow more lines by increasing height, or reduce font
+          const neededLines = Math.ceil(estTextWidth / maxWidth)
+          const neededHeight = neededLines * lineHeight + 20
+          if (neededHeight <= 800 && updated.y + neededHeight <= 1040) {
+            updated.width = maxWidth
+            updated.height = Math.round(neededHeight)
+          } else {
+            // Strategy 3: Reduce font size to fit
+            const targetWidth = Math.max(updated.width, maxWidth)
+            const maxLines = Math.max(1, Math.floor(600 / lineHeight))
+            const targetCharWidth = (targetWidth * maxLines) / content.length
+            const newFontSize = Math.max(14, Math.round(targetCharWidth / 0.6))
+            updated.fontSize = newFontSize
+            updated.width = Math.min(maxWidth, Math.max(updated.width, targetWidth))
+            const newLineHeight = (updated.lineHeight || 1.2) * newFontSize
+            const newLines = Math.ceil(content.length * newFontSize * 0.6 / updated.width)
+            updated.height = Math.max(updated.height, Math.round(newLines * newLineHeight + 20))
+          }
+        }
+        // Keep in canvas bounds
+        if (updated.x + updated.width > 1880) updated.x = Math.max(40, 1880 - updated.width)
+        if (updated.y + updated.height > 1040) updated.height = 1040 - updated.y
+        fixed.elements[elIndex] = updated
+      }
+    }
+
+    // V2 auto-fixes
+    if (issue.category === 'title-too-small') {
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el)) {
+        const updated: TextElement = { ...el }
+        const heroTypes = new Set(['cover', 'bigIdea', 'insight', 'closing'])
+        const hSize = designSystem.typography?.headingSize || 56
+        const targetSize = heroTypes.has(slide.slideType)
+          ? Math.max(hSize, designSystem.typography?.displaySize || 96)
+          : hSize
+        updated.fontSize = Math.max(targetSize, updated.fontSize || 48)
+        // Ensure the title fits: if bumped significantly, widen the box
+        if (updated.fontSize >= 80 && updated.width < 800) {
+          updated.width = Math.min(1760, updated.width * 1.5)
+        }
+        if (updated.fontSize >= 80) {
+          updated.height = Math.max(updated.height, updated.fontSize * 1.3)
+        }
+        fixed.elements[elIndex] = updated
+      }
+    }
+
+    if (issue.category === 'body-too-wide') {
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el)) {
+        const updated: TextElement = { ...el }
+        updated.width = 680
+        fixed.elements[elIndex] = updated
+      }
+    }
+
+    if (issue.category === 'rtl-align') {
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el)) {
+        const updated: TextElement = { ...el }
+        updated.textAlign = 'right'
+        fixed.elements[elIndex] = updated
+      }
+    }
+
+    if (issue.category === 'title-too-low') {
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el)) {
+        const updated: TextElement = { ...el }
+        // Move title to top area (y: 80-200 range)
+        const oldY = updated.y
+        updated.y = Math.min(200, Math.max(80, updated.y))
+        // If other elements were positioned relative to the title, we need to shift content zone
+        // Find body/bullet elements that were near the old title position and shift them proportionally
+        const shift = oldY - updated.y
+        if (shift > 200) {
+          for (let j = 0; j < fixed.elements.length; j++) {
+            if (j === elIndex) continue
+            const other = fixed.elements[j]
+            if (isTextElement(other) && other.role !== 'decorative' && other.role !== 'title') {
+              if ((other.y || 0) > 400) {
+                const shifted = { ...other }
+                shifted.y = Math.max(updated.y + (updated.height || 120) + 40, (shifted.y || 0) - shift * 0.5)
+                fixed.elements[j] = shifted
+              }
+            }
+          }
+        }
+        fixed.elements[elIndex] = updated
+      }
+    }
+
+    if (issue.category === 'font-ratio-low') {
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el) && el.role === 'title') {
+        const updated: TextElement = { ...el }
+        // Find smallest font size on this slide to compute target
+        const allFontSizes = fixed.elements
+          .filter((e): e is TextElement => isTextElement(e) && e.role !== 'decorative')
+          .map(e => e.fontSize || 20)
+          .filter(s => s > 0)
+        const minFs = Math.min(...allFontSizes)
+        const targetTitle = Math.max(updated.fontSize || 48, minFs * 4)
+        updated.fontSize = Math.min(targetTitle, 140) // cap at 140px
+        if (updated.fontSize >= 80 && updated.width < 800) {
+          updated.width = Math.min(1760, updated.width * 1.5)
+        }
+        if (updated.fontSize >= 80) {
+          updated.height = Math.max(updated.height, updated.fontSize * 1.3)
+        }
+        fixed.elements[elIndex] = updated
+      }
+    }
+
+    if (issue.category === 'canvas-overflow') {
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el)) {
+        const updated: TextElement = { ...el }
+        if (updated.x + updated.width > 1920) updated.width = 1920 - updated.x - 40
+        if (updated.y + updated.height > 1080) updated.height = 1080 - updated.y - 40
+        fixed.elements[elIndex] = updated
+      }
+    }
+
     if (issue.category === 'text-text-overlap') {
       const el = fixed.elements[elIndex]
       if (isTextElement(el)) {
@@ -302,14 +561,14 @@ export function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSyst
 }
 
 export function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDesignSystem): Slide[] {
-  const allTitles: { slideIndex: number; y: number; fontSize: number; element: TextElement }[] = []
+  const allTitles: { slideIndex: number; x: number; y: number; fontSize: number; element: TextElement }[] = []
 
   slides.forEach((slide, si) => {
     const titles = (slide.elements || []).filter(
       (e): e is TextElement => isTextElement(e) && e.role === 'title'
     )
     for (const t of titles) {
-      allTitles.push({ slideIndex: si, y: t.y || 0, fontSize: t.fontSize || 48, element: t })
+      allTitles.push({ slideIndex: si, x: t.x || 0, y: t.y || 0, fontSize: t.fontSize || 48, element: t })
     }
   })
 
@@ -320,19 +579,54 @@ export function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDe
   )
 
   if (regularTitles.length > 0) {
-    // Align title Y positions to median (60px threshold — tight consistency)
-    const medianY = regularTitles.map(t => t.y).sort((a, b) => a - b)[Math.floor(regularTitles.length / 2)]
+    // Normalize heading font sizes — snap outliers to the median
+    const headingSizes = regularTitles.map(t => t.element.fontSize || 48)
+    const sorted = [...headingSizes].sort((a, b) => a - b)
+    const medianSize = sorted[Math.floor(sorted.length / 2)]
     for (const t of regularTitles) {
-      if (Math.abs(t.y - medianY) > 60) t.element.y = medianY
+      const diff = Math.abs((t.element.fontSize || 48) - medianSize)
+      // If more than 10px off from median, snap to median (catches both drifts like 56 vs 88)
+      if (diff > 10) {
+        t.element.fontSize = medianSize
+        // Ensure the box is big enough for the new size
+        if (medianSize >= 80 && (t.element.width || 0) < 800) {
+          t.element.width = Math.min(1760, (t.element.width || 800) * 1.5)
+        }
+        if (medianSize >= 80) {
+          t.element.height = Math.max(t.element.height || 100, medianSize * 1.3)
+        }
+      }
     }
 
-    // Normalize heading font sizes (6-30px range — catch drifts but allow intentional variance)
-    const headingSizes = regularTitles.map(t => t.element.fontSize || 48)
-    const medianSize = headingSizes.sort((a, b) => a - b)[Math.floor(headingSizes.length / 2)]
-    for (const t of regularTitles) {
-      const diff = Math.abs(t.fontSize - medianSize)
-      if (diff > 6 && diff < 30) {
-        t.element.fontSize = medianSize
+    // === Layout variety — break runs of 3+ titles in same quadrant ===
+    const getQuadrant = (x: number, y: number): string => {
+      const h = x > 960 ? 'R' : 'L'
+      const v = y < 400 ? 'T' : y > 600 ? 'B' : 'M'
+      return `${h}${v}`
+    }
+
+    // Predefined alternative positions for variety
+    const altPositions: Array<{ x: number; y: number }> = [
+      { x: 1200, y: 120 },  // right-top
+      { x: 120, y: 120 },   // left-top
+      { x: 120, y: 480 },   // left-middle
+      { x: 1200, y: 480 },  // right-middle
+      { x: 120, y: 780 },   // left-bottom
+    ]
+
+    for (let i = 2; i < regularTitles.length; i++) {
+      const q0 = getQuadrant(regularTitles[i - 2].element.x, regularTitles[i - 2].element.y)
+      const q1 = getQuadrant(regularTitles[i - 1].element.x, regularTitles[i - 1].element.y)
+      const q2 = getQuadrant(regularTitles[i].element.x, regularTitles[i].element.y)
+
+      if (q0 === q1 && q1 === q2) {
+        // 3 consecutive same quadrant — move the third to a different position
+        const currentQ = q2
+        const alt = altPositions.find(p => getQuadrant(p.x, p.y) !== currentQ)
+        if (alt) {
+          regularTitles[i].element.x = alt.x
+          regularTitles[i].element.y = alt.y
+        }
       }
     }
   }

@@ -41,21 +41,8 @@ export async function getSystemInstruction(): Promise<string> {
   return getConfig('ai_prompts', 'slide_designer.system_instruction', PROMPT_DEFAULTS['slide_designer.system_instruction'].value as string)
 }
 
-export async function getDesignPrinciples(): Promise<string> {
-  return getConfig('ai_prompts', 'slide_designer.design_principles', PROMPT_DEFAULTS['slide_designer.design_principles'].value as string)
-}
-
-export async function getElementFormat(): Promise<string> {
-  return getConfig('ai_prompts', 'slide_designer.element_format', PROMPT_DEFAULTS['slide_designer.element_format'].value as string)
-}
-
-export async function getTechnicalRules(): Promise<string> {
-  return getConfig('ai_prompts', 'slide_designer.technical_rules', PROMPT_DEFAULTS['slide_designer.technical_rules'].value as string)
-}
-
-export async function getFinalInstruction(): Promise<string> {
-  return getConfig('ai_prompts', 'slide_designer.final_instruction', PROMPT_DEFAULTS['slide_designer.final_instruction'].value as string)
-}
+// v2: getDesignPrinciples, getElementFormat, getTechnicalRules, getFinalInstruction
+// are deprecated — their content is now in the system instruction.
 
 export async function getImageRoleHints(): Promise<Record<string, string>> {
   return getConfig('ai_prompts', 'slide_designer.image_role_hints', PROMPT_DEFAULTS['slide_designer.image_role_hints'].value as Record<string, string>)
@@ -71,9 +58,7 @@ export async function getPacingMap(): Promise<Record<string, PacingDirective>> {
   return getConfig('design_system', 'pacing_map', DESIGN_DEFAULTS['pacing_map'].value as Record<string, PacingDirective>)
 }
 
-export async function getDepthLayers(): Promise<string> {
-  return getConfig('design_system', 'depth_layers', DESIGN_DEFAULTS['depth_layers'].value as string)
-}
+// v2: getDepthLayers deprecated — depth layers are in the system instruction.
 
 // ─── Model Config Loaders ─────────────────────────────
 

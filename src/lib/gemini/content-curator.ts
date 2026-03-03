@@ -117,9 +117,38 @@ const SLIDE_PACING: Record<string, { maxWords: number; prefer: string; tone: str
 
 /**
  * Curate a batch of raw slide inputs into presentation-ready content.
- * Uses Flash model for speed (~3-5s for a batch of 4 slides).
+ * Splits into sub-batches of 6 to avoid oversized responses that fail JSON parse.
  */
 export async function curateSlideContent(
+  slides: RawSlideInput[],
+  brandName: string,
+  creativeDirection?: {
+    visualMetaphor?: string
+    oneRule?: string
+    emotionalArc?: string
+    typographyVoice?: string
+  },
+): Promise<CuratedSlideContent[]> {
+  // Split into sub-batches of 6 slides to avoid 67K+ responses that fail JSON parse
+  const BATCH_SIZE = 6
+  if (slides.length > BATCH_SIZE) {
+    const batches: RawSlideInput[][] = []
+    for (let i = 0; i < slides.length; i += BATCH_SIZE) {
+      batches.push(slides.slice(i, i + BATCH_SIZE))
+    }
+    console.log(`[ContentCurator] Splitting ${slides.length} slides into ${batches.length} sub-batches of ${BATCH_SIZE}`)
+    const results = await Promise.all(
+      batches.map(batch => curateSlideContentBatch(batch, brandName, creativeDirection))
+    )
+    return results.flat()
+  }
+  return curateSlideContentBatch(slides, brandName, creativeDirection)
+}
+
+/**
+ * Curate a single batch of up to 6 slides.
+ */
+async function curateSlideContentBatch(
   slides: RawSlideInput[],
   brandName: string,
   creativeDirection?: {
@@ -173,6 +202,7 @@ ${cdSection}
 
 CRITICAL: Not every field is needed. A great insight slide might only need title + keyNumber + bodyText.
 A cover slide might only need title + tagline. Use ONLY what serves the slide. Empty fields are BETTER than weak content.
+UNIQUE CONTENT: Each slide MUST have unique card titles and body text. NEVER reuse the same cards or phrases across different slides. Each slideType covers a different topic — mine the raw data for unique details per slide.
 </rules>
 
 <slides_to_curate>
@@ -182,6 +212,8 @@ ${slidesXml}
   const [model, systemPrompt] = await Promise.all([getCuratorModel(), getCuratorSystemPrompt()])
 
   try {
+    // ~500 tokens per slide × 6 = 3000, with buffer → 4096
+    const tokensPerBatch = Math.min(4096, slides.length * 700)
     const aiResult = await callAI({
       model,
       prompt,
@@ -190,12 +222,12 @@ ${slidesXml}
         systemInstruction: systemPrompt,
         responseMimeType: 'application/json',
         responseSchema: CURATED_SLIDE_SCHEMA,
-        maxOutputTokens: 16384,
-        temperature: 0.7,
+        maxOutputTokens: tokensPerBatch,
+        temperature: 0.3, // Low temp to prevent repetitive loops
       },
       responseSchema: CURATED_SLIDE_SCHEMA as Record<string, unknown>,
       thinkingLevel: 'LOW',
-      maxOutputTokens: 16384,
+      maxOutputTokens: tokensPerBatch,
       callerId: requestId,
     })
     if (aiResult.switched) console.warn(`[ContentCurator][${requestId}] 🔄 Switched to Claude`)
@@ -206,11 +238,28 @@ ${slidesXml}
     try {
       parsed = JSON.parse(raw)
     } catch {
-      console.warn(`[ContentCurator][${requestId}] JSON.parse failed, using robust parser`)
+      console.warn(`[ContentCurator][${requestId}] JSON.parse failed (${raw.length} chars), trying robust parser`)
       const { parseGeminiJson } = await import('@/lib/utils/json-cleanup')
-      const fallback = parseGeminiJson<{ slides: CuratedSlideContent[] }>(raw)
-      if (!fallback?.slides) throw new Error('Curator JSON parse failed completely')
-      parsed = fallback
+      try {
+        const fallback = parseGeminiJson<{ slides: CuratedSlideContent[] }>(raw)
+        if (!fallback?.slides) throw new Error('No slides in parsed result')
+        parsed = fallback
+      } catch {
+        // Last resort: try to find and parse individual slide objects
+        console.warn(`[ContentCurator][${requestId}] Robust parser also failed, trying individual slide extraction`)
+        const slideMatches = raw.match(/\{[^{}]*"slideType"\s*:\s*"[^"]+?"[^{}]*\}/g) || []
+        if (slideMatches.length > 0) {
+          const extractedSlides = slideMatches.map(m => { try { return JSON.parse(m) } catch { return null } }).filter(Boolean)
+          if (extractedSlides.length > 0) {
+            console.log(`[ContentCurator][${requestId}] Salvaged ${extractedSlides.length} slides from malformed response`)
+            parsed = { slides: extractedSlides }
+          } else {
+            throw new Error('All extraction attempts failed')
+          }
+        } else {
+          throw new Error('Curator JSON parse failed completely')
+        }
+      }
     }
 
     if (!parsed.slides || parsed.slides.length === 0) {
@@ -248,6 +297,7 @@ ${slidesXml}
 
 /**
  * Minimal fallback — extract basic text from raw content when AI fails.
+ * Enhanced to ensure hero slides (cover, bigIdea, insight, closing) always get rich content.
  */
 function buildFallbackCurated(slide: RawSlideInput): CuratedSlideContent {
   const c = slide.content
@@ -255,13 +305,15 @@ function buildFallbackCurated(slide: RawSlideInput): CuratedSlideContent {
 
   // Try to extract bullets from common array fields
   const bullets: string[] = []
-  for (const key of ['goals', 'painPoints', 'insights', 'criteria', 'deliverables']) {
+  for (const key of ['goals', 'painPoints', 'insights', 'criteria', 'deliverables', 'pillars', 'tiers', 'measurableTargets']) {
     const arr = c[key]
     if (Array.isArray(arr)) {
-      for (const item of arr.slice(0, 4)) {
+      for (const item of arr.slice(0, 5)) {
         if (typeof item === 'string') bullets.push(item.slice(0, 50))
         else if (typeof item === 'object' && item && 'title' in item) {
           bullets.push(String((item as { title: string }).title).slice(0, 50))
+        } else if (typeof item === 'object' && item && 'name' in item) {
+          bullets.push(String((item as { name: string }).name).slice(0, 50))
         }
       }
       break
@@ -273,13 +325,61 @@ function buildFallbackCurated(slide: RawSlideInput): CuratedSlideContent {
     : typeof c.brandBrief === 'string' ? c.brandBrief
     : typeof c.concept === 'string' ? c.concept
     : typeof c.strategy === 'string' ? c.strategy
+    : typeof c.keyInsight === 'string' ? c.keyInsight
+    : typeof c.whyNowTrigger === 'string' ? c.whyNowTrigger
+    : typeof c.strategySummary === 'string' ? c.strategySummary
     : undefined
+
+  // Extract key numbers from common metric fields
+  const keyNumber = typeof c.budget === 'string' ? c.budget
+    : typeof c.reach === 'string' && c.reach !== '0' ? c.reach
+    : typeof c.impressions === 'string' && c.impressions !== '0' ? c.impressions
+    : undefined
+
+  // Tagline for hero slides
+  const tagline = typeof c.tagline === 'string' ? c.tagline
+    : typeof c.campaignSubtitle === 'string' ? c.campaignSubtitle
+    : typeof c.brandPromise === 'string' ? c.brandPromise
+    : undefined
+
+  // Cards from common structured fields
+  const cards: Array<{ title: string; body: string }> = []
+  for (const key of ['competitors', 'contentThemes', 'deliverables', 'goals']) {
+    const arr = c[key]
+    if (Array.isArray(arr) && arr.length > 0) {
+      for (const item of arr.slice(0, 4)) {
+        if (typeof item === 'object' && item) {
+          const obj = item as Record<string, unknown>
+          const t = String(obj.title || obj.name || obj.theme || '')
+          const b = String(obj.description || obj.body || obj.type || '')
+          if (t) cards.push({ title: t.slice(0, 30), body: b.slice(0, 80) })
+        }
+      }
+      break
+    }
+  }
+
+  // Special handling for cover/closing — always include brandName and tagline
+  if (slide.slideType === 'cover' || slide.slideType === 'closing') {
+    const brandName = typeof c.brandName === 'string' ? c.brandName : ''
+    return {
+      slideType: slide.slideType,
+      title: brandName || headline,
+      subtitle: typeof c.campaignSubtitle === 'string' ? c.campaignSubtitle : undefined,
+      tagline: tagline || (typeof c.subheadline === 'string' ? c.subheadline : undefined),
+      imageUrl: slide.imageUrl,
+      emotionalNote: slide.slideType === 'cover' ? 'התלהבות' : 'חום',
+    }
+  }
 
   return {
     slideType: slide.slideType,
     title: headline,
     bodyText: body ? body.slice(0, 200) : undefined,
     bulletPoints: bullets.length > 0 ? bullets : undefined,
+    keyNumber: keyNumber || undefined,
+    cards: cards.length > 0 ? cards : undefined,
+    tagline: (slide.slideType === 'bigIdea') ? tagline : undefined,
     imageUrl: slide.imageUrl,
   }
 }

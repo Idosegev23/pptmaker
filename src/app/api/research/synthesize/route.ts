@@ -26,13 +26,14 @@ export async function POST(request: NextRequest) {
 
     // Extract colors — priority chain
     let colors = null
+    let colorSource = 'defaults'
     const discoveredLogoUrl = brandColorData.logoUrl
 
     if (discoveredLogoUrl && !discoveredLogoUrl.endsWith('.svg')) {
-      try {
-        colors = await extractColorsFromLogo(discoveredLogoUrl)
-        console.log(`[${requestId}] Colors from discovered logo`)
-      } catch {
+      colors = await extractColorsFromLogo(discoveredLogoUrl)
+      if (colors) {
+        colorSource = 'discovered logo'
+      } else {
         console.warn(`[${requestId}] Discovered logo color extraction failed, falling back`)
       }
     }
@@ -40,14 +41,14 @@ export async function POST(request: NextRequest) {
     if (!colors) {
       const websiteLogoUrl = websiteData?.logos?.primary || websiteData?.logoUrl
       if (websiteLogoUrl && !websiteLogoUrl.endsWith('.svg')) {
-        try {
-          colors = await extractColorsFromLogo(websiteLogoUrl)
-        } catch { /* continue */ }
+        colors = await extractColorsFromLogo(websiteLogoUrl)
+        if (colors) colorSource = 'website logo'
       }
     }
 
     if (!colors) {
       colors = brandColorData
+      colorSource = 'brand name lookup'
     }
 
     const cssColors = websiteData?.dominantColors || websiteData?.cssColors
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`[${requestId}] Final colors: primary=${colors.primary}, accent=${colors.accent}`)
+    console.log(`[${requestId}] Final colors: primary=${colors.primary}, accent=${colors.accent} (source: ${colorSource})`)
 
     return NextResponse.json({
       success: true,

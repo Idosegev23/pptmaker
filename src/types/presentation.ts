@@ -60,6 +60,7 @@ export interface Slide {
   id: string
   slideType: SlideType
   label: string
+  archetype?: string
   background: SlideBackground
   elements: SlideElement[]
 }

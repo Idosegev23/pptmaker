@@ -37,9 +37,8 @@ import type {
 import {
   // Config loaders
   getDesignSystemModels, getBatchModels,
-  getSystemInstruction, getDesignPrinciples, getElementFormat,
-  getTechnicalRules, getFinalInstruction, getImageRoleHints,
-  getPacingMap, getDepthLayers,
+  getSystemInstruction, getImageRoleHints,
+  getPacingMap,
   getThinkingLevel, getBatchThinkingLevel,
   getMaxOutputTokens, getTemperature,
   // Schemas
@@ -82,6 +81,10 @@ const TEMPERATURE_MAP: Record<string, 'cold' | 'neutral' | 'warm'> = {
 }
 
 const TENSION_SLIDES = new Set(['cover', 'insight', 'bigIdea', 'closing'])
+
+/** Sticky fallback — once Pro 503s, skip it for all subsequent batch calls in this generation */
+let _proUnavailable = false
+export function resetStickyFallback() { _proUnavailable = false }
 
 /** Fixed layout directive per slide type — mandatory, not a suggestion */
 const LAYOUT_MAP: Record<string, string> = {
@@ -137,71 +140,56 @@ async function generateDesignSystem(
   const requestId = `ds-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Step 1: Design System for "${brand.brandName}"`)
 
-  const prompt = `המשימה: לייצר כיוון קריאטיבי + Design System מלא למצגת ברמת Awwwards עבור "${brand.brandName}".
+  const prompt = `<brand>
+name: ${brand.brandName}
+industry: ${brand.industry || 'לא ידוע'}
+personality: ${brand.brandPersonality?.join(', ') || 'מקצועי'}
+colors: primary=${brand.brandColors.primary}, secondary=${brand.brandColors.secondary}, accent=${brand.brandColors.accent}
+style: ${brand.brandColors.style || 'corporate'}
+audience: ${brand.targetAudience || 'מבוגרים 25-45'}
+</brand>
 
-## מידע על המותג:
-- תעשייה: ${brand.industry || 'לא ידוע'}
-- אישיות: ${brand.brandPersonality?.join(', ') || 'מקצועי'}
-- צבע ראשי: ${brand.brandColors.primary}
-- צבע משני: ${brand.brandColors.secondary}
-- צבע הדגשה: ${brand.brandColors.accent}
-- סגנון: ${brand.brandColors.style || 'corporate'}
-- קהל יעד: ${brand.targetAudience || 'מבוגרים 25-45'}
+<task>
+Generate a creative direction and design system JSON for a premium presentation.
+</task>
 
-═══════════════════════════════
-🧠 PART 1: CREATIVE DIRECTION
-═══════════════════════════════
-חשוב כמו Creative Director. כל מותג חייב להרגיש אחרת. אל תחזור על "מודרני ונקי" — זה ריק מתוכן.
+<creative_direction_spec>
+Generate these fields:
 
-### creativeDirection:
-1. **visualMetaphor** — מטאפורה ויזואלית קונקרטית. לא "מקצועי" אלא "ארכיטקטורה ברוטליסטית של בטון חשוף" או "גלריית אמנות מינימליסטית יפנית" או "מגזין אופנה של שנות ה-90".
-2. **visualTension** — ההפתעה. למשל: "טקסט ענק שבור + מינימליזם יפני" או "נתונים קרים בתוך אסתטיקה חמה אורגנית".
-3. **oneRule** — חוק אחד שכל שקף חייב לקיים. למשל: "תמיד יש אלמנט אחד שחורג מהמסגרת" או "הצבע הראשי מופיע רק כנקודת מיקוד אחת קטנה".
-4. **colorStory** — נרטיב: "מתחילה בחושך וקור, מתחממת באמצע עם פרץ של accent, וחוזרת לאיפוק בסוף".
-5. **typographyVoice** — איך הטיפוגרפיה "מדברת"? למשל: "צורחת — כותרות ענקיות 900 weight לצד גוף רזה 300".
-6. **emotionalArc** — המסע הרגשי: סקרנות → הבנה → התלהבות → ביטחון → רצון לפעול.
+visualMetaphor: One concrete visual reference. Examples: "Japanese gallery minimalism", "90s fashion magazine", "brutalist concrete architecture". Never generic words like "modern", "clean", "professional".
 
-═══════════════════════════════
-🎨 PART 2: DESIGN SYSTEM
-═══════════════════════════════
+visualMetaphor_translates_to: Object with concrete design implications:
+  - whitespace_ratio: description (e.g. "high — 40%+ white space")
+  - max_colors_per_slide: number (2–4)
+  - text_alignment: e.g. "edge-anchored" or "asymmetric-offset"
+  - image_treatment: e.g. "full-bleed" or "contained-with-margin" or "strip"
 
-### צבעים (colors):
-- primary, secondary, accent — מבוססים על צבעי המותג
-- background — כהה מאוד (לא שחור טהור — עם hint של צבע)
-- text — בהיר מספיק ל-WCAG AA (4.5:1 contrast מול background)
-- cardBg — נבדל מהרקע (יותר בהיר/כהה ב-10-15%)
-- cardBorder — עדין (opacity נמוך של primary או white)
-- gradientStart, gradientEnd — לגרדיאנטים דקורטיביים
-- muted — צבע טקסט מושתק (3:1 contrast minimum)
-- highlight — accent שני (complementary או analogous)
-- auroraA, auroraB, auroraC — 3 צבעים ל-mesh gradient
+visualTension: A surprising contrast pair. Example: "giant broken text + Japanese minimalism".
 
-### טיפוגרפיה (typography):
-- displaySize: 80-140 (שער) — חשוב! לא displaySize של 48, זה לכותרות ענקיות
-- headingSize: 48-64
-- subheadingSize: 28-36
-- bodySize: 20-24
-- captionSize: 14-16
-- letterSpacingTight: -5 עד -1 (כותרות גדולות — tight!)
-- letterSpacingWide: 2 עד 8 (subtitles/labels — spaced out!)
-- lineHeightTight: 0.9-1.05 (כותרות)
-- lineHeightRelaxed: 1.4-1.6 (גוף)
-- weightPairs: [[heading, body]] — למשל [[900,300]] או [[700,400]] — חובה ניגוד חד!
+oneRule: A single rule every slide must follow. Example: "one element always bleeds off-canvas".
 
-### מרווחים (spacing):
-- unit: 8, cardPadding: 32-48, cardGap: 24-40, safeMargin: 80
+colorStory: 3-act narrative for color across the deck. Example: "dark and cold → accent burst in middle → restrained ending".
 
-### אפקטים (effects):
-- borderRadius: "sharp" / "soft" / "pill" + borderRadiusValue
-- decorativeStyle: "geometric" / "organic" / "minimal" / "brutalist"
-- shadowStyle: "none" / "fake-3d" / "glow"
-- auroraGradient: מחרוזת CSS מוכנה של radial-gradient mesh מ-3 צבעים
+typographyVoice: Weight contrast description. Example: "900 headings screaming vs 300 body whispering".
 
-### מוטיב חוזר (motif):
-- type: (diagonal-lines / dots / circles / angular-cuts / wave / grid-lines / organic-blobs / triangles)
-- opacity: 0.05-0.2, color: צבע, implementation: תיאור CSS
+emotionalArc: Sequence of 5-6 emotions the viewer should feel across the deck.
+</creative_direction_spec>
 
-פונט: Heebo.`
+<design_system_spec>
+Generate these exact fields:
+
+colors: {primary, secondary, accent, background (dark, not pure black — add color hint), text (WCAG AA 4.5:1 vs background), cardBg (10-15% lighter/darker than background), cardBorder (low opacity primary or white), gradientStart, gradientEnd, muted (3:1 contrast min), highlight, auroraA, auroraB, auroraC}
+
+typography: {displaySize:80-140, headingSize:48-64, subheadingSize:28-36, bodySize:20-24, captionSize:14-16, letterSpacingTight:-5 to -1, letterSpacingWide:2-8, lineHeightTight:0.9-1.05, lineHeightRelaxed:1.4-1.6, weightPairs:[[heading,body]] e.g. [[900,300]]}
+
+spacing: {unit:8, cardPadding:32-48, cardGap:24-40, safeMargin:80}
+
+effects: {borderRadius:"sharp"|"soft"|"pill", borderRadiusValue:number, decorativeStyle:"geometric"|"organic"|"minimal"|"brutalist", shadowStyle:"none"|"fake-3d"|"glow", auroraGradient:"CSS radial-gradient string from auroraA/B/C"}
+
+motif: {type:"diagonal-lines"|"dots"|"circles"|"angular-cuts"|"wave"|"grid-lines"|"organic-blobs"|"triangles", opacity:0.05-0.2, color:string, implementation:"CSS description"}
+
+Font: Heebo.
+</design_system_spec>`
 
   const sysInstruction = await getSystemInstruction()
   const models = await getDesignSystemModels()
@@ -229,8 +217,8 @@ async function generateDesignSystem(
         thinkingLevel: dsThinkingLevel,
         maxOutputTokens: dsMaxOutputTokens,
         callerId: `${requestId}-ds`,
+        noGlobalFallback: true,
       })
-      if (dsResult.switched) console.warn(`[SlideDesigner][${requestId}] 🔄 Switched to Claude for design system`)
 
       const rawText = dsResult.text || ''
       console.log(`[SlideDesigner][${requestId}] Raw response length: ${rawText.length} chars (model: ${model})`)
@@ -257,6 +245,13 @@ async function generateDesignSystem(
     } catch (error) {
       const msg = detailedError(error)
       console.error(`[SlideDesigner][${requestId}] Design system attempt ${attempt + 1}/${models.length} failed (${model}): ${msg}`)
+
+      // Mark Pro as unavailable for sticky fallback
+      if (attempt === 0 && (msg.includes('503') || msg.includes('fetch failed') || msg.includes('UNAVAILABLE') || msg.includes('overloaded'))) {
+        _proUnavailable = true
+        console.log(`[SlideDesigner][${requestId}] 🔴 Marked ${model} as unavailable — batches will skip to fallback`)
+      }
+
       if (attempt < models.length - 1) {
         console.log(`[SlideDesigner][${requestId}] ⚡ Falling back to ${models[attempt + 1]}...`)
         await new Promise(r => setTimeout(r, 1500))
@@ -285,11 +280,9 @@ async function generateSlidesBatchAST(
 
   const [
     pacingMap, imageRoleHints,
-    _designPrinciples, _depthLayers, _elementFormat, _technicalRules, _finalInstruction,
     thinkingLevel, maxOutputTokens, temperature,
   ] = await Promise.all([
     getPacingMap(), getImageRoleHints(),
-    getDesignPrinciples(), getDepthLayers(), getElementFormat(), getTechnicalRules(), getFinalInstruction(),
     getBatchThinkingLevel(), getMaxOutputTokens(), getTemperature(),
   ])
 
@@ -325,6 +318,15 @@ async function generateSlidesBatchAST(
       if (curated.cards?.length) parts.push(`  <cards>\n${curated.cards.map(c => `    <card title="${c.title}">${c.body}</card>`).join('\n')}\n  </cards>`)
       if (curated.tagline) parts.push(`  <tagline>${curated.tagline}</tagline>`)
       contentBlock = parts.join('\n')
+      // Safety net: if curated content is too thin (only headline, no body/bullets/cards),
+      // inject raw content so the model has data to work with
+      const hasSubstance = curated.bodyText || curated.bulletPoints?.length || curated.cards?.length || curated.keyNumber || curated.tagline
+      if (!hasSubstance && slide.content && Object.keys(slide.content).length > 1) {
+        const rawStr = JSON.stringify(slide.content, null, 1)
+        if (rawStr.length > 20 && rawStr.length < 2000) {
+          contentBlock += `\n  <supplementary_data>\n${rawStr}\n  </supplementary_data>`
+        }
+      }
     } else {
       contentBlock = `  <raw_json>\n${JSON.stringify(slide.content, null, 2)}\n  </raw_json>`
     }
@@ -354,21 +356,50 @@ ${contentBlock}
 </slide>`
   }).join('\n')
 
-  const prompt = buildBatchPrompt(brandName, cd, colors, typo, effects, motif, designSystem, _designPrinciples, _depthLayers, _elementFormat, _technicalRules, _finalInstruction, batchContext, slidesDescription, slides.length)
+  // Determine narrative rhythm for this batch
+  const batchPosition = batchContext.totalSlides > 0
+    ? batchContext.slideIndex / batchContext.totalSlides
+    : 0
+  const rhythm = batchPosition <= 0.33
+    ? { arc: 'opening' as const, description: 'Opening arc — build curiosity, introduce the brand. More whitespace, spacious layouts. Color: darker/cooler, accent sparingly. Max 2 consecutive image slides, then 1 typography-only.' }
+    : batchPosition <= 0.66
+    ? { arc: 'core' as const, description: 'Core content — densest section. Tighter spacing, more cards, bolder colors. Accent used freely. Maintain visual variety.' }
+    : { arc: 'resolution' as const, description: 'Resolution — transition from dense to spacious. Final slide = maximum whitespace, deep breath. Color returns to restraint.' }
+
+  const prompt = buildBatchPrompt(brandName, cd, colors, typo, effects, motif, designSystem, batchContext, slidesDescription, slides.length, rhythm)
 
   // Retry with model fallback
   const batchSysInstruction = await getSystemInstruction()
   const batchModels = await getBatchModels()
 
-  const attempts: Array<{ model: string; thinking: ThinkingLevel; label: string }> = [
+  // Sticky fallback: if Pro already 503'd in this generation, skip directly to fallback model
+  const allAttempts: Array<{ model: string; thinking: ThinkingLevel; label: string }> = [
     { model: batchModels[0], thinking: resolvedThinking, label: `${batchModels[0]} (${thinkingLevel})` },
     ...(resolvedThinking !== ThinkingLevel.LOW
       ? [{ model: batchModels[0], thinking: ThinkingLevel.LOW, label: `${batchModels[0]} (LOW fallback)` }]
       : []),
     ...(batchModels[1] !== batchModels[0]
-      ? [{ model: batchModels[1], thinking: ThinkingLevel.LOW, label: `${batchModels[1]} (LOW fallback)` }]
+      ? [{ model: batchModels[1], thinking: ThinkingLevel.HIGH, label: `${batchModels[1]} (HIGH fallback)` }]
       : []),
   ]
+
+  // If Pro is known-unavailable, skip straight to fallback model
+  const attempts = _proUnavailable
+    ? allAttempts.filter(a => a.model !== batchModels[0])
+    : allAttempts
+
+  if (_proUnavailable) {
+    console.log(`[SlideDesigner][${requestId}] ⚡ Sticky fallback — skipping ${batchModels[0]} (known 503), going straight to ${batchModels[1]}`)
+  }
+
+  // === DEBUG: Log prompt to file ===
+  const debugDir = '/tmp/slide-debug'
+  try {
+    const { mkdirSync, writeFileSync } = await import('fs')
+    mkdirSync(debugDir, { recursive: true })
+    writeFileSync(`${debugDir}/batch-${batchIndex}-prompt.txt`, prompt, 'utf8')
+    console.log(`[SlideDesigner][${requestId}] 📝 Prompt saved to ${debugDir}/batch-${batchIndex}-prompt.txt (${prompt.length} chars)`)
+  } catch { /* ignore fs errors */ }
 
   for (let attempt = 0; attempt < attempts.length; attempt++) {
     const { model, thinking, label } = attempts[attempt]
@@ -389,8 +420,15 @@ ${contentBlock}
         thinkingLevel: thinking === ThinkingLevel.HIGH ? 'HIGH' : thinking === ThinkingLevel.MEDIUM ? 'MEDIUM' : 'LOW',
         maxOutputTokens,
         callerId: `${requestId}-batch`,
+        noGlobalFallback: true,
       })
-      if (batchResult.switched) console.warn(`[SlideDesigner][${requestId}] 🔄 Switched to Claude for batch`)
+
+      // === DEBUG: Log raw response to file ===
+      try {
+        const { writeFileSync } = await import('fs')
+        writeFileSync(`${debugDir}/batch-${batchIndex}-response-raw.json`, batchResult.text || '', 'utf8')
+        console.log(`[SlideDesigner][${requestId}] 📝 Raw response saved to ${debugDir}/batch-${batchIndex}-response-raw.json (${(batchResult.text || '').length} chars, model: ${label})`)
+      } catch { /* ignore */ }
 
       let parsed: { slides: Slide[] }
       try {
@@ -403,21 +441,54 @@ ${contentBlock}
       }
 
       if (parsed?.slides?.length > 0) {
-        console.log(`[SlideDesigner][${requestId}] Generated ${parsed.slides.length} AST slides (${label})`)
-        return parsed.slides.map((slide, i) => ({
-          id: slide.id || `slide-${batchContext.slideIndex + i}`,
-          slideType: (slide.slideType || slides[i]?.slideType || 'closing') as SlideType,
-          label: slide.label || slides[i]?.title || `שקף ${batchContext.slideIndex + i + 1}`,
-          background: slide.background || { type: 'solid' as const, value: colors.background },
-          elements: (slide.elements || []).map((el, j) =>
-            sanitizeElement(el, j, batchContext.slideIndex + i, colors)
-          ),
-        }))
+        // === DEBUG: Log parsed + sanitized to file ===
+        try {
+          const { writeFileSync } = await import('fs')
+          writeFileSync(`${debugDir}/batch-${batchIndex}-parsed.json`, JSON.stringify(parsed, null, 2), 'utf8')
+        } catch { /* ignore */ }
+
+        const generatedSlides = parsed.slides.map((slide, i) => {
+          const resolvedType = (slide.slideType || slides[i]?.slideType || 'closing') as SlideType
+          // Enforce archetype — fill from LAYOUT_MAP if model didn't return it
+          const archetype = (slide as unknown as Record<string, unknown>).archetype as string | undefined
+          const resolvedArchetype = archetype && archetype !== 'N/A' && archetype.trim().length > 2
+            ? archetype
+            : LAYOUT_MAP[resolvedType] || LAYOUT_MAP.brief
+          return {
+            id: slide.id || `slide-${batchContext.slideIndex + i}`,
+            slideType: resolvedType,
+            archetype: resolvedArchetype,
+            label: slide.label || slides[i]?.title || `שקף ${batchContext.slideIndex + i + 1}`,
+            background: slide.background || { type: 'solid' as const, value: colors.background },
+            elements: (slide.elements || []).map((el, j) =>
+              sanitizeElement(el, j, batchContext.slideIndex + i, colors)
+            ),
+          }
+        })
+
+        // If model returned fewer slides than expected, fill in with fallbacks
+        if (generatedSlides.length < slides.length) {
+          console.warn(`[SlideDesigner][${requestId}] ⚠️ Got ${generatedSlides.length}/${slides.length} slides — filling missing with fallbacks`)
+          for (let mi = generatedSlides.length; mi < slides.length; mi++) {
+            const fb = buildFallbackSlide(slides[mi], mi, batchContext, colors)
+            generatedSlides.push({ ...fb, archetype: LAYOUT_MAP[fb.slideType] || LAYOUT_MAP.brief })
+          }
+        }
+
+        console.log(`[SlideDesigner][${requestId}] Generated ${generatedSlides.length} AST slides (${label})`)
+        return generatedSlides
       }
       throw new Error('No slides in AST response')
     } catch (error) {
       const msg = detailedError(error)
       console.error(`[SlideDesigner][${requestId}] Batch attempt ${attempt + 1}/${attempts.length} failed (${label}): ${msg}`)
+
+      // Mark Pro as unavailable for sticky fallback (503/overloaded/fetch fail)
+      if (model === batchModels[0] && (msg.includes('503') || msg.includes('fetch failed') || msg.includes('UNAVAILABLE') || msg.includes('overloaded'))) {
+        _proUnavailable = true
+        console.log(`[SlideDesigner][${requestId}] 🔴 Marked ${batchModels[0]} as unavailable — subsequent batches will skip to fallback`)
+      }
+
       if (attempt < attempts.length - 1) {
         await new Promise(r => setTimeout(r, 1500))
       } else {
@@ -442,19 +513,88 @@ function sanitizeElement(
 ): SlideElement {
   const base = { ...el, id: el.id || `el-${slideIndex}-${elIndex}` }
 
+  // Clean up cross-type fields that the flat schema forces on all elements
+  const raw = base as unknown as Record<string, unknown>
+  if (base.type === 'text') {
+    // Remove shape/image fields that don't belong on text
+    if (!raw.fill || raw.fill === 'transparent') delete raw.fill
+    if (!raw.src) delete raw.src
+    if (!raw.shapeType) delete raw.shapeType
+    if (!raw.objectFit) delete raw.objectFit
+  } else if (base.type === 'shape') {
+    // Remove text/image fields that don't belong on shapes
+    if (!raw.content) delete raw.content
+    if (!raw.color) delete raw.color
+    if (!raw.role) delete raw.role
+    if (!raw.src) delete raw.src
+    if (!raw.objectFit) delete raw.objectFit
+    if (!raw.fontSize) delete raw.fontSize
+    if (!raw.fontWeight) delete raw.fontWeight
+  } else if (base.type === 'image') {
+    // Remove text/shape fields that don't belong on images
+    if (!raw.content) delete raw.content
+    if (!raw.color) delete raw.color
+    if (!raw.role) delete raw.role
+    if (!raw.fill) delete raw.fill
+    if (!raw.shapeType) delete raw.shapeType
+    if (!raw.fontSize) delete raw.fontSize
+    if (!raw.fontWeight) delete raw.fontWeight
+  }
+
   if (base.type === 'text') {
     const txt = base as TextElement
-    if (!txt.color) txt.color = colors.text || '#F5F5F7'
+    // Infer role first (needed for other defaults)
+    if (!txt.role) {
+      txt.role = txt.fontSize && txt.fontSize >= 80 ? 'title'
+        : txt.fontSize && txt.fontSize >= 40 ? 'subtitle'
+        : txt.fontSize && txt.fontSize <= 16 ? 'caption'
+        : 'body'
+    }
+    // Color based on role: readable text gets text color, decorative/muted gets muted
+    if (!txt.color) {
+      if (txt.role === 'decorative') {
+        txt.color = `${colors.text || '#F5F5F7'}15` // very faint for watermarks
+      } else if (txt.role === 'caption' || txt.role === 'label') {
+        txt.color = colors.muted || `${colors.text || '#F5F5F7'}80`
+      } else {
+        txt.color = colors.text || '#F5F5F7'
+      }
+    }
     if (!txt.textAlign) txt.textAlign = 'right'
-    if (!txt.role) txt.role = txt.fontSize && txt.fontSize >= 80 ? 'title' : txt.fontSize && txt.fontSize >= 40 ? 'subtitle' : 'body'
-    if (!txt.fontWeight) txt.fontWeight = txt.role === 'title' ? 900 : txt.role === 'subtitle' ? 700 : 400
+    if (!txt.fontWeight) {
+      txt.fontWeight = txt.role === 'title' ? 900
+        : txt.role === 'subtitle' ? 700
+        : txt.role === 'decorative' ? 900
+        : txt.role === 'label' ? 300
+        : 400
+    }
+    if (!txt.fontSize) {
+      txt.fontSize = txt.role === 'title' ? 64
+        : txt.role === 'subtitle' ? 32
+        : txt.role === 'caption' ? 14
+        : txt.role === 'label' ? 14
+        : 20
+    }
     if (txt.opacity === undefined) txt.opacity = 1
+    // Fix common issue: decorative text should have low opacity, not full
+    if (txt.role === 'decorative' && txt.opacity > 0.3 && txt.fontSize >= 150) {
+      txt.opacity = 0.08
+    }
+    // Ensure text has content
+    if (!txt.content) txt.content = ''
     return txt as unknown as SlideElement
   }
 
   if (base.type === 'shape') {
     const shape = base as ShapeElement
-    if (!shape.fill) shape.fill = 'transparent'
+    if (!shape.fill) {
+      // If it's a card-like shape (has border or borderRadius), give it cardBg
+      if (shape.borderRadius || shape.border) {
+        shape.fill = colors.cardBg || '#252527'
+      } else {
+        shape.fill = 'transparent'
+      }
+    }
     if (!shape.shapeType) shape.shapeType = 'decorative'
     return shape as unknown as SlideElement
   }
@@ -477,185 +617,64 @@ function buildBatchPrompt(
   brandName: string, cd: PremiumDesignSystem['creativeDirection'],
   colors: PremiumDesignSystem['colors'], typo: PremiumDesignSystem['typography'],
   effects: PremiumDesignSystem['effects'], motif: PremiumDesignSystem['motif'],
-  designSystem: PremiumDesignSystem, _designPrinciples: string, _depthLayers: string,
-  _elementFormat: string, _technicalRules: string, _finalInstruction: string,
+  designSystem: PremiumDesignSystem,
   batchContext: BatchContext, slidesDescription: string, slideCount: number,
+  rhythm: { arc: string; description: string },
 ): string {
-  return `אתה ארט דיירקטור גאון ברמת Awwwards / Pentagram / Sagmeister & Walsh.
-המצגת חייבת להיראות כמו **מגזין אופנה פרימיום / editorial design** — לא כמו PowerPoint!
+  return `<design_system>
+<canvas>1920x1080px</canvas>
+<direction>RTL</direction>
+<font>Heebo</font>
+<colors primary="${colors.primary}" secondary="${colors.secondary}" accent="${colors.accent}" background="${colors.background}" text="${colors.text}" cardBg="${colors.cardBg}" cardBorder="${colors.cardBorder}" muted="${colors.muted}" highlight="${colors.highlight}" gradientStart="${colors.gradientStart}" gradientEnd="${colors.gradientEnd}" />
+<aurora>${effects.auroraGradient}</aurora>
+<typography display="${typo.displaySize}px" heading="${typo.headingSize}px" subheading="${typo.subheadingSize}px" body="${typo.bodySize}px" caption="${typo.captionSize}px" spacing_tight="${typo.letterSpacingTight}" spacing_wide="${typo.letterSpacingWide}" weight_pairs="${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}" line_tight="${typo.lineHeightTight}" line_relaxed="${typo.lineHeightRelaxed}" />
+<cards padding="${designSystem.spacing.cardPadding}px" gap="${designSystem.spacing.cardGap}px" radius="${effects.borderRadiusValue}px" />
+<style decorative="${effects.decorativeStyle}" shadow="${effects.shadowStyle}" border_radius="${effects.borderRadius}" />
+<motif type="${motif.type}" opacity="${motif.opacity}" color="${motif.color}">${motif.implementation}</motif>
+${cd ? `<creative_direction>
+  <visual_metaphor>${cd.visualMetaphor}</visual_metaphor>
+  <visual_tension>${cd.visualTension}</visual_tension>
+  <master_rule>${cd.oneRule}</master_rule>
+  <color_story>${cd.colorStory}</color_story>
+  <typography_voice>${cd.typographyVoice}</typography_voice>
+  <emotional_arc>${cd.emotionalArc}</emotional_arc>
+</creative_direction>` : ''}
+</design_system>
 
-עצב ${slideCount} שקפים למותג "${brandName}".
-
-══════════════════════════════════
-🧠 THE CREATIVE BRIEF
-══════════════════════════════════
-${cd ? `
-**מטאפורה ויזואלית:** ${cd.visualMetaphor}
-**מתח ויזואלי:** ${cd.visualTension}
-**חוק-על (כל שקף חייב לקיים):** ${cd.oneRule}
-**סיפור צבע:** ${cd.colorStory}
-**קול טיפוגרפי:** ${cd.typographyVoice}
-**מסע רגשי:** ${cd.emotionalArc}
-` : `חשוב כמו Creative Director — מה המטאפורה הויזואלית של "${brandName}"? מה המתח? מה מפתיע?`}
-
-══════════════════════════════════
-🎨 DESIGN SYSTEM
-══════════════════════════════════
-Canvas: 1920×1080px | RTL (עברית) | פונט: Heebo
-
-צבעים: primary ${colors.primary} | secondary ${colors.secondary} | accent ${colors.accent}
-רקע: ${colors.background} | טקסט: ${colors.text} | כרטיסים: ${colors.cardBg}
-מושתק: ${colors.muted} | highlight: ${colors.highlight}
-Aurora: ${effects.auroraGradient}
-
-טיפוגרפיה: display ${typo.displaySize}px | heading ${typo.headingSize}px | body ${typo.bodySize}px | caption ${typo.captionSize}px
-Spacing tight: ${typo.letterSpacingTight} | wide: ${typo.letterSpacingWide}
-Weight pairs: ${typo.weightPairs.map(p => `${p[0]}/${p[1]}`).join(', ')}
-Line height: tight ${typo.lineHeightTight} | relaxed ${typo.lineHeightRelaxed}
-
-Card: padding ${designSystem.spacing.cardPadding}px | gap ${designSystem.spacing.cardGap}px | radius ${effects.borderRadiusValue}px
-Decorative style: ${effects.decorativeStyle} | Shadow: ${effects.shadowStyle}
-
-Motif: ${motif.type} (opacity: ${motif.opacity}, color: ${motif.color})
-${motif.implementation}
-
-══════════════════════════════════
-📐 COMPOSITION & QUALITY RULES
-══════════════════════════════════
-
-## חוקי קומפוזיציה (Composition Rules):
-
-### Rule of Thirds:
-נקודות העניין הויזואליות חייבות לשבת על אחד מ-4 צמתי ⅓:
-- נקודה A: x=640, y=360
-- נקודה B: x=1280, y=360
-- נקודה C: x=640, y=720
-- נקודה D: x=1280, y=720
-הכותרת הראשית תמיד על נקודה A או B (צד ימין — RTL).
-
-### Diagonal Dominance:
-אלמנטים צריכים ליצור קו אלכסוני מנחה דינמי (מימין-למעלה לשמאל-למטה) — לא ישר ולא סטטי.
-
-### Focal Point Triangle:
-ב-3 האלמנטים הראשיים (title, visual, supporting) — מקמם אותם כמשולש שמקיף את מרכז העניין.
-
-### Scale Contrast (חובה):
-היחס בין הפונט הגדול ביותר לפונט הקטן ביותר בשקף חייב להיות לפחות 5:1.
-למשל: אם הכותרת 96px, caption צריך להיות 18px או פחות.
-שקפי peak (cover, insight, bigIdea, closing): יחס 10:1 לפחות (למשל 300px ו-18px).
-
-## שכבות עומק (Depth Layers) — כל אלמנט חייב לשבת בשכבה אחת:
-- Layer 0 (zIndex: 0-1):    BACKGROUND — aurora, gradient, texture, full-bleed color
-- Layer 1 (zIndex: 2-3):    DECORATIVE — watermark text, geometric shapes, motif patterns, thin architectural lines
-- Layer 2 (zIndex: 4-5):    STRUCTURE — cards, containers, dividers, image frames
-- Layer 3 (zIndex: 6-8):    CONTENT — body text, data, images, influencer cards
-- Layer 4 (zIndex: 9-10):   HERO — main title, key number, focal element, brand name
-
-חוק: אלמנטים מאותה שכבה לא חופפים (אלא אם אחד מהם decorative עם opacity < 0.3).
-
-## ❌ Anti-Patterns (הפרה = פסילה):
-1. ❌ טקסט ממורכז בדיוק באמצע המסך (x:960, y:540) — BORING
-2. ❌ כל האלמנטים על אותו קו אנכי / 3 כרטיסים זהים ברוחב שווה — PowerPoint
-3. ❌ כל הטקסטים באותו fontSize — חייב היררכיה (יחס ≥5:1 בין גדול לקטן)
-4. ❌ opacity < 0.7 על טקסט קריא / rotation על body text
-5. ❌ טקסט חופף טקסט אחר — כל אלמנט חייב שטח משלו עם 20px+ רווח
-6. ❌ תמונה שמכסה טקסט בלי gradient overlay — טקסט חייב להיות קריא
-
-## Typography:
-- כותרות 60px+: letterSpacing ${typo.letterSpacingTight}, lineHeight ${typo.lineHeightTight}, fontWeight ${typo.weightPairs[0]?.[0] || 900}
-- Labels: letterSpacing ${typo.letterSpacingWide}, fontWeight ${typo.weightPairs[0]?.[1] || 300}
-- מספרים גדולים: fontSize 80-140px, fontWeight 900, letterSpacing -4
-- רווח לבן = אלמנט עיצובי. כותרת ראשית: 80px+ מכל אלמנט אחר
-
-══════════════════════════════════
-🛠️ EDITORIAL DESIGN RULES (THE WOW FACTOR!)
-══════════════════════════════════
-
-1. **שבור את התבנית:** אף שקף לא נראה כמו PowerPoint עם כותרת ובולטים. לייאוט א-סימטרי!
-2. **Watermarks ענקיים:** בכל שקף — טקסט רקע עצום (200-400px) עם opacity 0.03-0.08, rotation -5 עד -15. זה נותן עומק!
-3. **clip-path / shapes דינמיים:** אל תעשה רק ריבועים. shapes בזווית, עיגולים שגולשים מחוץ למסך, קווים אלכסוניים
-4. **טיפוגרפיה אדירה:** כותרות שחותכות את המסך. textStroke (קו מתאר) לטקסט דקורטיבי. ניגוד חד בין weight 900 ל-300
-5. **מספרים = drama:** נתון של "500K" מקבל fontSize: 120+, accent color, ושטח ענק. הטקסט שמתחתיו קטן ומגזיני
-6. **Gradient overlays:** גרדיאנטים מעל תמונות (linear-gradient to top) כדי שטקסט יבלוט
-7. **קווים ומפרידים אלגנטיים:** קווים דקים (1-2px) ב-accent color, מפרידים בין אזורים, מסגרות חלקיות
-8. **כרטיסים = לא סתם ריבועים:** offset borders, רקעים מדורגים, fake-3d shadow (shape ב-+12px offset)
-
-══════════════════════════════════
-📦 ELEMENT TYPES (JSON FORMAT)
-══════════════════════════════════
-
-### Shape:
-{ "id": "el-X", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0,
-  "shapeType": "background"|"decorative"|"divider", "fill": "#hex or gradient", "clipPath": "...",
-  "borderRadius": px, "opacity": 0-1, "rotation": degrees, "border": "1px solid rgba(...)" }
-
-### Text:
-{ "id": "el-X", "type": "text", "x": 80, "y": 120, "width": 800, "height": 80, "zIndex": 10,
-  "content": "טקסט", "fontSize": px, "fontWeight": 100-900, "color": "#hex", "textAlign": "right",
-  "role": "title"|"subtitle"|"body"|"caption"|"label"|"decorative", "lineHeight": 0.9-1.6,
-  "letterSpacing": px, "opacity": 0-1, "rotation": degrees,
-  "textStroke": { "width": 2, "color": "#hex" } }
-  *** role "decorative" = watermark text ענק, opacity נמוך, rotation, fontSize 200+ ***
-
-### Image:
-{ "id": "el-X", "type": "image", "x": 960, "y": 0, "width": 960, "height": 1080, "zIndex": 5,
-  "src": "THE_URL", "objectFit": "cover", "borderRadius": px, "clipPath": "..." }
-
-**תמונות קריטי**: אם יש imageUrl לשקף → חובה element מסוג "image" עם src=URL, גודל ≥40% מהשקף
-
-══════════════════════════════════
-🖼️ REFERENCE EXAMPLES (THIS IS WHAT WOW LOOKS LIKE)
-══════════════════════════════════
-
-### דוגמה 1 — שקף שער (Typographic Brutalism):
-\`\`\`json
-{
-  "id": "slide-1", "slideType": "cover", "label": "שער",
-  "background": { "type": "solid", "value": "${colors.background}" },
-  "elements": [
-    { "id": "bg", "type": "shape", "x": 0, "y": 0, "width": 1920, "height": 1080, "zIndex": 0, "shapeType": "background", "fill": "radial-gradient(circle at 20% 30%, ${colors.primary}50 0%, transparent 50%), radial-gradient(circle at 80% 80%, ${colors.accent}50 0%, transparent 50%)", "opacity": 0.7 },
-    { "id": "watermark", "type": "text", "x": -150, "y": 180, "width": 2200, "height": 500, "zIndex": 2, "content": "BRAND", "fontSize": 380, "fontWeight": 900, "color": "transparent", "textAlign": "center", "lineHeight": 0.9, "letterSpacing": -8, "opacity": 0.12, "rotation": -8, "textStroke": { "width": 2, "color": "#ffffff" }, "role": "decorative" },
-    { "id": "line", "type": "shape", "x": 160, "y": 620, "width": 340, "height": 1, "zIndex": 2, "shapeType": "decorative", "fill": "${colors.text}30", "opacity": 1 },
-    { "id": "accent-circle", "type": "shape", "x": 1450, "y": -80, "width": 400, "height": 400, "zIndex": 2, "shapeType": "decorative", "fill": "${colors.accent}", "clipPath": "circle(50%)", "opacity": 0.12 },
-    { "id": "title", "type": "text", "x": 120, "y": 380, "width": 900, "height": 200, "zIndex": 10, "content": "שם המותג", "fontSize": ${typo.displaySize}, "fontWeight": 900, "color": "${colors.text}", "textAlign": "right", "lineHeight": 1.0, "letterSpacing": -4, "role": "title" },
-    { "id": "subtitle", "type": "text", "x": 120, "y": 610, "width": 600, "height": 50, "zIndex": 8, "content": "הצעת שיתוף פעולה", "fontSize": 22, "fontWeight": 300, "color": "${colors.text}70", "textAlign": "right", "letterSpacing": 6, "role": "subtitle" },
-    { "id": "date", "type": "text", "x": 120, "y": 680, "width": 300, "height": 30, "zIndex": 8, "content": "ינואר 2025", "fontSize": 16, "fontWeight": 300, "color": "${colors.text}40", "textAlign": "right", "letterSpacing": 3, "role": "caption" }
-  ]
-}
-\`\`\`
-
-⚠️ צור עיצוב שונה מהדוגמה — היא רק ברמת האיכות, לא בסגנון. כל שקף חייב layout_directive שלו!
-
-══════════════════════════════════
-📝 CONTEXT FROM PREVIOUS SLIDES
-══════════════════════════════════
-${batchContext.previousSlidesVisualSummary || 'זה הבאצ׳ הראשון — אין הקשר קודם.'}
-
-══════════════════════════════════
-📋 SLIDES TO CREATE
-══════════════════════════════════
+<slides>
 ${slidesDescription}
+</slides>
 
-══════════════════════════════════
-⚙️ TECHNICAL RULES
-══════════════════════════════════
-- textAlign: "right" תמיד (RTL). כל הטקסט בעברית
-- zIndex layering: 0-1 רקע, 2-3 דקורציה, 4-5 מבנה, 6-8 תוכן, 9-10 hero
-- 🚫 אסור: box-shadow, backdrop-filter, filter: blur
-- ✅ Fake 3D: shape ב-x+12,y+12 fill:#000 opacity:0.12-0.18
-- לתמונות full-bleed: image ב-zIndex 1, gradient overlay ב-zIndex 2, טקסט ב-zIndex 8+
-- מספרים מרכזיים: fontSize 80-140px, fontWeight 900, accent color
-- תמונות עם URL: חובה element מסוג "image" עם src=URL, גודל ≥40% מהשקף
+<rhythm arc="${rhythm.arc}">
+${rhythm.description}
+${batchContext.previousSlidesVisualSummary ? `Previous slides context: ${batchContext.previousSlidesVisualSummary}` : 'First batch — no previous context.'}
+</rhythm>
 
-לפני שליחת ה-JSON, דמיין כל שקף מנטלית ב-1920×1080:
-1. האם אני קורא כל טקסט בבירור?
-2. שום דבר לא מוסתר מאחורי אלמנט אחר?
-3. אם יש תמונה — יש לה מקום משלה? טקסט לא עולה עליה ישירות?
-4. הקומפוזיציה מרגישה כמו עמוד מגזין פרימיום?
-5. אם בדיקה נכשלת — תקן את הלייאוט לפני שליחת ה-JSON.
-רק תמונות עם URL שסופק בתוכן. לעולם אל תמציא URL.
+<task>
+Design ${slideCount} slides for "${brandName}".
+CRITICAL ARCHETYPE RULE: Each slide MUST use the layout_directive archetype from its <slide> tag. Return it in the "archetype" field (e.g. "typographic-brutalism", "bento-box", "magazine-spread", "data-art", "split-screen", "swiss-grid", "diagonal-grid", "overlapping-zindex"). Do NOT return "N/A" or empty — pick from the archetype list.
+Each slide must have a unique composition — never repeat the same title position two slides in a row.
+TITLE POSITION: Title (role="title") must be in the TOP THIRD of the slide (y < 300) except for closing slide. NEVER place title at y > 400. Title fontSize MUST be at least ${typo.headingSize}px for regular slides, ${typo.displaySize}px for cover/bigIdea/insight/closing.
+CANVAS BLEED: At least 1-2 decorative shapes per slide should extend beyond the 1920×1080 canvas (negative x/y or width/height exceeding bounds). This creates premium editorial feel.
+UNIQUE CONTENT: Each slide MUST have unique card titles and body text. Do NOT repeat the same cards or text across different slides — each slideType covers a different topic.
+</task>
 
-החזר JSON: { "slides": [{ "id": "slide-N", "slideType": "TYPE", "label": "שם בעברית", "background": { "type": "solid"|"gradient", "value": "..." }, "elements": [...] }] }`
+<validation>
+Before returning JSON, verify each slide passes ALL checks:
+1. Element count: 6-15 elements per slide.
+2. Title fontSize >= ${typo.headingSize}px (hero slides: ${typo.displaySize}px). Title at y < 300.
+3. Font ratio: max_fontSize / min_fontSize >= 4:1 (peak slides: >= 10:1).
+4. No text directly on image without gradient overlay shape between them.
+5. Body text width <= 700px.
+6. All readable text: textAlign = "right" (RTL).
+7. No content element extends beyond 1920x1080 canvas (decorative bleeds OK).
+8. Every text has color. Every shape has fill. Every image has src from provided URLs only.
+9. Card shapes contain text elements inside them.
+10. No duplicate content between slides — each slide has unique text.
+If any check fails, fix before returning.
+</validation>
+
+Return JSON: { "slides": [{ "id": "slide-N", "slideType": "TYPE", "archetype": "ARCHETYPE_NAME", "label": "שם בעברית", "background": { "type": "solid"|"gradient", "value": "..." }, "elements": [...] }] }`
 }
 
 // (buildSingleSlidePrompt removed — batch generation only)
@@ -676,6 +695,9 @@ export async function generateAIPresentation(
   const requestId = `pres-${Date.now()}`
   const startTime = Date.now()
   console.log(`\n${'═'.repeat(50)}\n[SlideDesigner][${requestId}] Starting for "${data.brandName}"\n${'═'.repeat(50)}\n`)
+
+  // Reset sticky fallback for each new presentation generation
+  _proUnavailable = false
 
   const brandColors = data._brandColors || { primary: config.accentColor || '#E94560', secondary: '#1A1A2E', accent: config.accentColor || '#E94560', style: 'corporate', mood: 'מקצועי' }
   const brandInput: BrandDesignInput = {

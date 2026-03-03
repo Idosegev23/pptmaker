@@ -44,10 +44,10 @@ export async function POST(request: NextRequest) {
     const discoveredLogoUrl = brandColorData.logoUrl
     if (discoveredLogoUrl && !discoveredLogoUrl.endsWith('.svg')) {
       console.log('[API Research] Extracting colors from discovered logo:', discoveredLogoUrl)
-      try {
-        colors = await extractColorsFromLogo(discoveredLogoUrl)
+      colors = await extractColorsFromLogo(discoveredLogoUrl)
+      if (colors) {
         console.log('[API Research] Discovered logo colors extracted')
-      } catch {
+      } else {
         console.warn('[API Research] Discovered logo extraction failed, falling back')
       }
     }
@@ -56,9 +56,7 @@ export async function POST(request: NextRequest) {
     if (!colors) {
       const websiteLogoUrl = websiteData?.logos?.primary || websiteData?.logoUrl
       if (websiteLogoUrl && !websiteLogoUrl.endsWith('.svg')) {
-        try {
-          colors = await extractColorsFromLogo(websiteLogoUrl)
-        } catch { /* continue */ }
+        colors = await extractColorsFromLogo(websiteLogoUrl)
       }
     }
 
