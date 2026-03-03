@@ -464,10 +464,9 @@ export async function generateSmartImages(
 ): Promise<SmartImageSet> {
   console.log(`[Smart Image] Starting smart generation for ${brandResearch.brandName}`)
 
-  // Fetch client logo buffer once (if available) for reference image integration
-  let logoBuffer: Buffer | null = null
-  if (clientLogoUrl) {
-    // Try direct URL first, then Clearbit fallback on DNS/network failure
+  // ─── Logo fetch + Strategy in PARALLEL (independent tasks) ───
+  const fetchLogoBuffer = async (): Promise<Buffer | null> => {
+    if (!clientLogoUrl) return null
     const logoFetchUrls = [clientLogoUrl]
     try {
       const domain = new URL(clientLogoUrl.startsWith('http') ? clientLogoUrl : `https://${clientLogoUrl}`).hostname
@@ -479,22 +478,26 @@ export async function generateSmartImages(
         console.log(`[Smart Image] Fetching client logo: ${fetchUrl}`)
         const logoRes = await fetch(fetchUrl, { signal: AbortSignal.timeout(5000) })
         if (logoRes.ok) {
-          logoBuffer = Buffer.from(await logoRes.arrayBuffer())
-          console.log(`[Smart Image] Logo fetched: ${logoBuffer.length} bytes`)
-          break
+          const buf = Buffer.from(await logoRes.arrayBuffer())
+          console.log(`[Smart Image] Logo fetched: ${buf.length} bytes`)
+          return buf
         }
       } catch (err) {
         console.log(`[Smart Image] Logo fetch failed (${fetchUrl}):`, err instanceof Error ? err.message : err)
       }
     }
+    return null
   }
 
-  // Step 1: AI analyzes brand and creates strategy
-  console.log('[Smart Image] Step 1: Creating image strategy...')
-  const strategy = await analyzeAndPlanImages(brandResearch, brandColors, proposalContent)
-  console.log(`[Smart Image] Strategy created: ${strategy.images.length} images planned`)
+  // Step 1: Logo fetch + Strategy run in parallel
+  console.log('[Smart Image] Step 1: Strategy + logo fetch (parallel)...')
+  const [logoBuffer, strategy] = await Promise.all([
+    fetchLogoBuffer(),
+    analyzeAndPlanImages(brandResearch, brandColors, proposalContent),
+  ])
+  console.log(`[Smart Image] Strategy created: ${strategy.images.length} images planned, logo=${!!logoBuffer}`)
 
-  // Step 2: AI generates optimized prompts
+  // Step 2: AI generates optimized prompts (depends on strategy)
   console.log('[Smart Image] Step 2: Generating smart prompts...')
   const promptsData = await generateSmartPrompts(strategy, brandResearch, brandColors)
   console.log(`[Smart Image] Prompts generated: ${promptsData.prompts.length}`)
