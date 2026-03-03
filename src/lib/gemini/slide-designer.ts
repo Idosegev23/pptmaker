@@ -403,6 +403,13 @@ ${contentBlock}
 
   for (let attempt = 0; attempt < attempts.length; attempt++) {
     const { model, thinking, label } = attempts[attempt]
+
+    // Skip Pro if it became unavailable during this batch's earlier attempt
+    if (_proUnavailable && model === batchModels[0]) {
+      console.log(`[SlideDesigner][${requestId}] ⏭️ Skipping ${label} — Pro marked unavailable mid-batch`)
+      continue
+    }
+
     try {
       console.log(`[SlideDesigner][${requestId}] Calling ${label} (attempt ${attempt + 1}/${attempts.length})...`)
 
@@ -497,7 +504,9 @@ ${contentBlock}
       }
     }
   }
-  throw new Error('All slide generation attempts failed')
+  // If we got here, all attempts were either skipped or failed
+  console.warn(`[SlideDesigner][${requestId}] ⚠️ All attempts exhausted (some skipped). Generating fallback slides.`)
+  return slides.map((slide, i) => buildFallbackSlide(slide, i, batchContext, colors))
 }
 
 
