@@ -65,10 +65,10 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
     `width: ${el.width}px`,
     `height: ${el.height}px`,
     `z-index: ${el.zIndex}`,
-    `font-size: ${el.fontSize}px`,
-    `font-weight: ${el.fontWeight}`,
-    `color: ${useGradient ? 'transparent' : el.color}`,
-    `text-align: ${el.textAlign}`,
+    `font-size: ${el.fontSize || 16}px`,
+    `font-weight: ${el.fontWeight || 400}`,
+    `color: ${useGradient ? 'transparent' : (el.color || '#F5F5F7')}`,
+    `text-align: ${el.textAlign || 'right'}`,
     `white-space: pre-wrap`,
     `word-wrap: break-word`,
     `overflow: ${overflowVisible ? 'visible' : 'hidden'}`,
@@ -116,7 +116,7 @@ function renderImageElement(el: ImageElement): string {
   const imgStyles = [
     `width: 100%`,
     `height: 100%`,
-    `object-fit: ${el.objectFit}`,
+    `object-fit: ${el.objectFit || 'cover'}`,
     `display: block`,
   ]
 
@@ -133,11 +133,12 @@ function renderShapeElement(el: ShapeElement): string {
     `z-index: ${el.zIndex}`,
   ]
 
-  // Fill can be a color or gradient
-  if (el.fill.includes('gradient') || el.fill.includes('linear') || el.fill.includes('radial')) {
-    styles.push(`background: ${el.fill}`)
+  // Fill can be a color, gradient, or missing
+  const fill = el.fill || 'transparent'
+  if (fill.includes('gradient') || fill.includes('linear') || fill.includes('radial')) {
+    styles.push(`background: ${fill}`)
   } else {
-    styles.push(`background-color: ${el.fill}`)
+    styles.push(`background-color: ${fill}`)
   }
 
   if (el.borderRadius) styles.push(`border-radius: ${el.borderRadius}px`)

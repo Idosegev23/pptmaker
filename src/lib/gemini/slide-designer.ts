@@ -17,9 +17,12 @@ import type {
   Presentation,
   Slide,
   SlideType,
+  SlideElement,
+  TextElement,
+  ImageElement,
+  ShapeElement,
   CuratedSlideContent,
 } from '@/types/presentation'
-import { isTextElement } from '@/types/presentation'
 import { curateSlideContent } from './content-curator'
 
 // ── Sub-module imports ──────────────────────────────────
@@ -406,7 +409,9 @@ ${contentBlock}
           slideType: (slide.slideType || slides[i]?.slideType || 'closing') as SlideType,
           label: slide.label || slides[i]?.title || `שקף ${batchContext.slideIndex + i + 1}`,
           background: slide.background || { type: 'solid' as const, value: colors.background },
-          elements: (slide.elements || []).map((el, j) => ({ ...el, id: el.id || `el-${batchContext.slideIndex + i}-${j}` })),
+          elements: (slide.elements || []).map((el, j) =>
+            sanitizeElement(el, j, batchContext.slideIndex + i, colors)
+          ),
         }))
       }
       throw new Error('No slides in AST response')
@@ -424,6 +429,45 @@ ${contentBlock}
   throw new Error('All slide generation attempts failed')
 }
 
+
+// ═══════════════════════════════════════════════════════════
+//  ELEMENT SANITIZER — fills in missing properties from Design System
+// ═══════════════════════════════════════════════════════════
+
+function sanitizeElement(
+  el: SlideElement,
+  elIndex: number,
+  slideIndex: number,
+  colors: PremiumDesignSystem['colors'],
+): SlideElement {
+  const base = { ...el, id: el.id || `el-${slideIndex}-${elIndex}` }
+
+  if (base.type === 'text') {
+    const txt = base as TextElement
+    if (!txt.color) txt.color = colors.text || '#F5F5F7'
+    if (!txt.textAlign) txt.textAlign = 'right'
+    if (!txt.role) txt.role = txt.fontSize && txt.fontSize >= 80 ? 'title' : txt.fontSize && txt.fontSize >= 40 ? 'subtitle' : 'body'
+    if (!txt.fontWeight) txt.fontWeight = txt.role === 'title' ? 900 : txt.role === 'subtitle' ? 700 : 400
+    if (txt.opacity === undefined) txt.opacity = 1
+    return txt as unknown as SlideElement
+  }
+
+  if (base.type === 'shape') {
+    const shape = base as ShapeElement
+    if (!shape.fill) shape.fill = 'transparent'
+    if (!shape.shapeType) shape.shapeType = 'decorative'
+    return shape as unknown as SlideElement
+  }
+
+  if (base.type === 'image') {
+    const img = base as ImageElement
+    if (!img.objectFit) img.objectFit = 'cover'
+    if (!img.src) img.src = ''
+    return img as unknown as SlideElement
+  }
+
+  return base
+}
 
 // ═══════════════════════════════════════════════════════════
 //  PROMPT BUILDERS (extracted for readability)
@@ -678,12 +722,12 @@ export async function generateAIPresentation(
   const pacingMap = await getPacingMap()
   const allGeneratedSlides: Slide[] = []
 
-  let batchSlideOffset = 0
   for (let bi = 0; bi < batchResults.length; bi++) {
     const result = batchResults[bi]
     if (result.status === 'fulfilled') {
-      for (const slide of result.value) {
-        const inputSlide = flatSlides[batchSlideOffset + allGeneratedSlides.length - batchSlideOffset] || flatSlides[allGeneratedSlides.length]
+      for (let si = 0; si < result.value.length; si++) {
+        const slide = result.value[si]
+        const inputSlide = flatSlides[allGeneratedSlides.length]
         const pacing = pacingMap[slide.slideType] || pacingMap.brief
         const validResult = validateSlide(slide, designSystem, pacing, inputSlide?.imageUrl)
         const fixable = validResult.issues.filter(i => i.autoFixable)
@@ -696,7 +740,6 @@ export async function generateAIPresentation(
         allGeneratedSlides.push(createFallbackSlide(slide, designSystem, allGeneratedSlides.length))
       }
     }
-    batchSlideOffset += allBatches[bi].length
   }
 
   if (allGeneratedSlides.length === 0) throw new Error('All slides failed')
