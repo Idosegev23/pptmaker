@@ -27,9 +27,11 @@ async function getCuratorModel(): Promise<string> {
   return getConfig(
     'ai_models',
     'content_curator.model',
-    MODEL_DEFAULTS['content_curator.model']?.value as string || 'gemini-3-flash-preview',
+    MODEL_DEFAULTS['content_curator.model']?.value as string || 'gemini-3.1-pro-preview',
   )
 }
+
+const FLASH_FALLBACK = 'gemini-3-flash-preview'
 
 async function getCuratorSystemPrompt(): Promise<string> {
   return getConfig(
@@ -279,21 +281,23 @@ ${cdSection}
 5. **keyNumber**: Pick THE most impressive stat. Format it big: "500K+", "₪120K", "4.2%", "12 שבועות".
 6. **keyNumberLabel**: 2-4 words explaining the number.
 7. **cards**: Max 4. Each card title = 2-3 words. Card body = one punchy sentence.
-8. **tagline**: Only for cover/closing/bigIdea. A memorable one-liner.
+8. **tagline**: ONLY for cover/closing/bigIdea slides. For ALL other slide types — DO NOT write a tagline. When used, MAX 10 words. One punchy sentence, period. STOP after one sentence.
 9. **imageRole**: If has_image=true, decide: hero (dominates), accent (supporting), background (behind text), portrait (person), icon (small).
 10. **emotionalNote**: One word describing the slide's emotional intent (e.g., "סקרנות", "ביטחון", "התלהבות", "דחיפות").
 
-CRITICAL: Not every field is needed. A great insight slide might only need title + keyNumber + bodyText.
-A cover slide might only need title + tagline. Use ONLY what serves the slide. Empty fields are BETTER than weak content.
-UNIQUE CONTENT: Each slide MUST have unique card titles and body text. NEVER reuse the same cards or phrases across different slides. Each slideType covers a different topic — mine the raw data for unique details per slide.
-NO REPETITION: NEVER repeat the same phrase, sentence, or word pattern more than once. If you catch yourself looping on a phrase — stop, rephrase, and move on. Varied language is mandatory.
+CRITICAL CONSTRAINTS:
+- Not every field is needed. A great insight slide might only need title + keyNumber + bodyText.
+- A cover slide might only need title + tagline. Use ONLY what serves the slide. Empty fields are BETTER than weak content.
+- UNIQUE CONTENT: Each slide MUST have unique card titles and body text. NEVER reuse the same cards or phrases across different slides.
+- MAX FIELD LENGTHS: title ≤ 5 words, subtitle ≤ 8 words, tagline ≤ 10 words, bodyText ≤ 40 words, each bulletPoint ≤ 8 words. STOP writing when you hit the limit.
+- NO REPETITION: NEVER repeat the same phrase, sentence, or word pattern. If you notice yourself repeating — STOP immediately and move to the next field or slide.
 </rules>
 
 <slides_to_curate>
 ${slidesXml}
 </slides_to_curate>`
 
-  const [model, systemPrompt] = await Promise.all([getCuratorModel(), getCuratorSystemPrompt()])
+  const [primaryModel, systemPrompt] = await Promise.all([getCuratorModel(), getCuratorSystemPrompt()])
 
   try {
     const MAX_RETRIES = 2
@@ -301,9 +305,11 @@ ${slidesXml}
     let aiResult: Awaited<ReturnType<typeof callAI>> | null = null
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      // Pro for first 2 attempts (no repetition issues), Flash as last resort
+      const model = attempt < MAX_RETRIES ? primaryModel : FLASH_FALLBACK
       const retryTemp = 0.6 + attempt * 0.15 // 0.6 → 0.75 → 0.9 on retries
       if (attempt > 0) {
-        console.warn(`[ContentCurator][${requestId}] Retry ${attempt}/${MAX_RETRIES} with temp=${retryTemp.toFixed(2)}`)
+        console.warn(`[ContentCurator][${requestId}] Retry ${attempt}/${MAX_RETRIES} with model=${model}, temp=${retryTemp.toFixed(2)}`)
       }
       // 6 slides × ~600 chars = ~3600 chars. 8192 tokens is more than enough.
       // Previously 32000 caused Flash to fill the entire budget with repetitive text.
@@ -398,14 +404,51 @@ ${slidesXml}
 
     let parsed: { slides: CuratedSlideContent[] }
 
-    try {
-      parsed = JSON.parse(raw)
-    } catch (e) {
-      console.warn(`[ContentCurator][${requestId}] JSON.parse failed (${raw.length} chars): ${e instanceof Error ? e.message : e}`)
-      console.warn(`[ContentCurator][${requestId}] trying robust parser`)
+    // ── Try parsing, with JSON repair if needed ──
+    const parseAttempts: Array<{ label: string; input: string }> = [
+      { label: 'direct', input: raw },
+    ]
+
+    // If direct parse might fail (truncated string), prepare a repaired version
+    // Truncate any string value > 200 chars (repetition loops produce 10K+ char strings)
+    const repaired = raw.replace(/"((?:[^"\\]|\\.)*)"/g, (match, content: string) => {
+      if (content.length > 200) {
+        return `"${content.slice(0, 200)}…"`
+      }
+      return match
+    })
+    if (repaired !== raw) {
+      // Also try to close truncated JSON (unterminated strings from token limit)
+      let closed = repaired
+      const openQuotes = (closed.match(/(?<!\\)"/g) || []).length
+      if (openQuotes % 2 !== 0) closed += '"'
+      const openBrackets = (closed.match(/\[/g) || []).length - (closed.match(/\]/g) || []).length
+      const openBraces = (closed.match(/\{/g) || []).length - (closed.match(/\}/g) || []).length
+      for (let i = 0; i < openBrackets; i++) closed += ']'
+      for (let i = 0; i < openBraces; i++) closed += '}'
+      parseAttempts.push({ label: 'repaired (truncated strings)', input: closed })
+    }
+
+    for (const { label, input } of parseAttempts) {
+      try {
+        parsed = JSON.parse(input)
+        if (parsed?.slides?.length > 0) {
+          if (label !== 'direct') {
+            console.warn(`[ContentCurator][${requestId}] Parsed via ${label} (${parsed.slides.length} slides salvaged)`)
+          }
+          break
+        }
+      } catch {
+        console.warn(`[ContentCurator][${requestId}] JSON.parse failed (${label}, ${input.length} chars)`)
+      }
+    }
+
+    // @ts-expect-error — parsed might not be assigned if all attempts failed
+    if (!parsed?.slides?.length) {
+      console.warn(`[ContentCurator][${requestId}] All parse attempts failed, trying robust parser`)
       const { parseGeminiJson } = await import('@/lib/utils/json-cleanup')
       try {
-        const fallback = parseGeminiJson<{ slides: CuratedSlideContent[] }>(raw)
+        const fallback = parseGeminiJson<{ slides: CuratedSlideContent[] }>(repaired || raw)
         if (!fallback?.slides) throw new Error('No slides in parsed result')
         parsed = fallback
       } catch {
