@@ -286,15 +286,25 @@ export async function POST(request: NextRequest) {
       // ─── Fetch client logo buffer for compositing onto generated images ───
       let clientLogoBuffer: Buffer | null = null
       if (logoUrl) {
+        // Try direct URL first, then Clearbit fallback on DNS/network failure
+        const logoFetchUrls = [logoUrl]
         try {
-          console.log(`[Visual Assets][${requestId}] Fetching client logo for compositing: ${logoUrl}`)
-          const logoRes = await fetch(logoUrl, { signal: AbortSignal.timeout(8000) })
-          if (logoRes.ok) {
-            clientLogoBuffer = Buffer.from(await logoRes.arrayBuffer())
-            console.log(`[Visual Assets][${requestId}] Client logo buffer: ${clientLogoBuffer.length} bytes`)
+          const domain = new URL(logoUrl.startsWith('http') ? logoUrl : `https://${logoUrl}`).hostname
+          logoFetchUrls.push(`https://logo.clearbit.com/${domain}`)
+        } catch { /* can't parse URL, skip Clearbit */ }
+
+        for (const fetchUrl of logoFetchUrls) {
+          try {
+            console.log(`[Visual Assets][${requestId}] Fetching logo for compositing: ${fetchUrl}`)
+            const logoRes = await fetch(fetchUrl, { signal: AbortSignal.timeout(5000) })
+            if (logoRes.ok) {
+              clientLogoBuffer = Buffer.from(await logoRes.arrayBuffer())
+              console.log(`[Visual Assets][${requestId}] Client logo buffer: ${clientLogoBuffer.length} bytes`)
+              break
+            }
+          } catch (logoErr) {
+            console.warn(`[Visual Assets][${requestId}] Logo fetch failed (${fetchUrl}):`, logoErr instanceof Error ? logoErr.message : logoErr)
           }
-        } catch (logoErr) {
-          console.warn(`[Visual Assets][${requestId}] Logo fetch for compositing failed:`, logoErr)
         }
       }
 

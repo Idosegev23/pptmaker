@@ -110,7 +110,7 @@ ${imagePlans}
 `
 
   // Flash first (fast + cheap), Pro fallback
-  const models = [PRO_MODEL, FLASH_MODEL]
+  const models = [FLASH_MODEL, PRO_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -120,9 +120,9 @@ ${imagePlans}
         prompt,
         geminiConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingLevel: 'HIGH' as any },
+          thinkingConfig: { thinkingLevel: 'LOW' as any },
         },
-        thinkingLevel: 'HIGH',
+        thinkingLevel: 'LOW',
         callerId: `smart-prompts-${brandResearch.brandName}`,
       })
 

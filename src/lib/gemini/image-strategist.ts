@@ -97,7 +97,7 @@ ${proposalContent?.goals?.map(g => `- ${g.title}: ${g.description}`).join('\n') 
 - אל תכתוב תיאורים גנריים - תהיה יצירתי ומדויק`
 
   // Flash first (fast + cheap), Pro fallback
-  const models = [PRO_MODEL, FLASH_MODEL]
+  const models = [FLASH_MODEL, PRO_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -107,9 +107,9 @@ ${proposalContent?.goals?.map(g => `- ${g.title}: ${g.description}`).join('\n') 
         prompt,
         geminiConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingLevel: 'HIGH' as any },
+          thinkingConfig: { thinkingLevel: 'LOW' as any },
         },
-        thinkingLevel: 'HIGH',
+        thinkingLevel: 'LOW',
         callerId: `image-strategist-${brandResearch.brandName}`,
       })
 

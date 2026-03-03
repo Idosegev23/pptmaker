@@ -467,15 +467,25 @@ export async function generateSmartImages(
   // Fetch client logo buffer once (if available) for reference image integration
   let logoBuffer: Buffer | null = null
   if (clientLogoUrl) {
+    // Try direct URL first, then Clearbit fallback on DNS/network failure
+    const logoFetchUrls = [clientLogoUrl]
     try {
-      console.log(`[Smart Image] Fetching client logo for reference: ${clientLogoUrl}`)
-      const logoRes = await fetch(clientLogoUrl, { signal: AbortSignal.timeout(8000) })
-      if (logoRes.ok) {
-        logoBuffer = Buffer.from(await logoRes.arrayBuffer())
-        console.log(`[Smart Image] Logo fetched: ${logoBuffer.length} bytes`)
+      const domain = new URL(clientLogoUrl.startsWith('http') ? clientLogoUrl : `https://${clientLogoUrl}`).hostname
+      logoFetchUrls.push(`https://logo.clearbit.com/${domain}`)
+    } catch { /* can't parse URL, skip Clearbit */ }
+
+    for (const fetchUrl of logoFetchUrls) {
+      try {
+        console.log(`[Smart Image] Fetching client logo: ${fetchUrl}`)
+        const logoRes = await fetch(fetchUrl, { signal: AbortSignal.timeout(5000) })
+        if (logoRes.ok) {
+          logoBuffer = Buffer.from(await logoRes.arrayBuffer())
+          console.log(`[Smart Image] Logo fetched: ${logoBuffer.length} bytes`)
+          break
+        }
+      } catch (err) {
+        console.log(`[Smart Image] Logo fetch failed (${fetchUrl}):`, err instanceof Error ? err.message : err)
       }
-    } catch (err) {
-      console.log(`[Smart Image] Logo fetch failed, generating without logo:`, err)
     }
   }
 
