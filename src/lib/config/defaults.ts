@@ -99,6 +99,10 @@ Image: {id, type:"image", x, y, width, height, zIndex, src:"PROVIDED_URL_ONLY", 
 - CANVAS BLEED: At least 1-2 decorative shapes per slide MUST extend beyond 1920×1080 boundaries (negative x, negative y, or width+x>1920). This creates a premium magazine/editorial feel. Only content text must stay inside canvas.
 - TITLE POSITION VARIETY: Alternate title positions across slides — right-top, left-center, right-bottom. Never place 3+ consecutive titles in the same quadrant.
 - HERO SLIDE TITLES (cover, bigIdea, insight, closing): Title fontSize MUST use displaySize from typography (typically 80-140px), never headingSize.
+- DECORATIVE DENSITY: Every content slide (not cover/closing) must have at least 2 decorative shapes (accent lines, blobs, dividers, textStroke watermarks).
+- MAX CONSECUTIVE SOLID: No more than 3 consecutive slides with solid backgrounds. Break runs with gradient backgrounds using aurora/gradientStart/gradientEnd colors.
+- LETTER SPACING: Labels/captions MUST have letterSpacing: 2-6. Large titles (fontSize >= 60) SHOULD have tight letterSpacing: -1 to -3.
+- textStroke WATERMARKS: Use textStroke decorative watermarks on at least 60% of slides (large, faint text behind content).
 </composition_rules>
 
 <anti_patterns>
@@ -114,10 +118,29 @@ NEVER do these — they instantly kill quality:
 - Repeating the same layout two slides in a row
 </anti_patterns>
 
+<depth_elevation>
+THREE-TIER SHADOW SYSTEM — use boxShadow to create depth hierarchy:
+- Tier 0: Flat backgrounds, decorative shapes — NO shadow
+- Tier 1 (Cards): boxShadow: "0 4px 20px rgba(0,0,0,0.2)" — all card shapes
+- Tier 2 (Hero): boxShadow: "0 12px 40px rgba(0,0,0,0.35)" — hero titles, CTA buttons, closing
+
+GLASSMORPHISM (max 1-2 per presentation, only over gradient/image backgrounds):
+  Shape recipe: backdropFilter: "blur(16px) saturate(1.8)" + fill: "rgba(255,255,255,0.08)" + border: "1px solid rgba(255,255,255,0.12)"
+  Never on solid-color backgrounds. Never on cover slide.
+
+IMAGE TREATMENTS — use filter on image elements:
+  Hero images: filter: "brightness(0.9) contrast(1.05)"
+  Background images: filter: "brightness(0.6) contrast(1.1) saturate(0.8)"
+  Never use blur() on content images.
+
+TITLE GLOW — use textShadow on hero slide titles only:
+  textShadow: "0 0 40px rgba(ACCENT_COLOR, 0.25)"
+  Never combine textShadow with textStroke on same element.
+</depth_elevation>
+
 <technical_constraints>
 - textAlign: "right" always (RTL Hebrew)
-- Supported: fill, opacity, borderRadius, rotation, border, clipPath
-- NOT supported: box-shadow, backdrop-filter, filter:blur
+- Supported: fill, opacity, borderRadius, rotation, border, clipPath, boxShadow, textShadow, filter, backdropFilter
 - Only use image URLs explicitly provided in slide data. Never invent URLs.
 </technical_constraints>
 
@@ -179,14 +202,14 @@ This is ONE perfect slide. Match this quality level for every slide you generate
     {"id":"deco-text","type":"text","x":650,"y":-40,"width":1200,"height":400,"zIndex":1,"content":"גדול","fontSize":280,"fontWeight":900,"color":"#2a1f28","role":"decorative","letterSpacing":-8},
     {"id":"accent-line","type":"shape","x":80,"y":140,"width":4,"height":750,"zIndex":2,"shapeType":"decorative","fill":"#ff3366"},
     {"id":"label","type":"text","x":110,"y":160,"width":300,"height":30,"zIndex":3,"content":"הרעיון המרכזי","fontSize":14,"fontWeight":300,"color":"#ff3366","role":"label","letterSpacing":6,"opacity":0.8,"textAlign":"right"},
-    {"id":"title","type":"text","x":110,"y":220,"width":700,"height":180,"zIndex":4,"content":"לשנות את חוקי המשחק","fontSize":64,"fontWeight":900,"color":"#f5f0f2","role":"title","lineHeight":1.0,"textAlign":"right"},
-    {"id":"body","type":"text","x":110,"y":460,"width":580,"height":300,"zIndex":5,"content":"כשהמתחרים עדיין משחקים לפי הכללים הישנים, אנחנו מציעים גישה חדשה לגמרי שמגדירה מחדש את חוויית הלקוח.","fontSize":22,"fontWeight":300,"color":"#f5f0f2","role":"body","opacity":0.8,"lineHeight":1.55,"textAlign":"right"},
+    {"id":"title","type":"text","x":110,"y":220,"width":700,"height":180,"zIndex":4,"content":"לשנות את חוקי המשחק","fontSize":64,"fontWeight":900,"color":"#f5f0f2","role":"title","lineHeight":1.0,"textAlign":"right","textShadow":"0 0 40px rgba(255,51,102,0.25)"},
+    {"id":"body","type":"text","x":110,"y":460,"width":580,"height":300,"zIndex":5,"content":"כשהמתחרים עדיין משחקים לפי הכללים הישנים, אנחנו מציעים גישה חדשה לגמרי שמגדירה מחדש את חוויית הלקוח.","fontSize":22,"fontWeight":300,"color":"#f5f0f2","role":"body","opacity":0.8,"lineHeight":1.55,"textAlign":"right","boxShadow":"0 4px 20px rgba(0,0,0,0.2)"},
     {"id":"img","type":"image","x":960,"y":0,"width":960,"height":1080,"zIndex":6,"src":"IMAGE_URL","objectFit":"cover"},
     {"id":"img-gradient","type":"shape","x":860,"y":0,"width":200,"height":1080,"zIndex":7,"shapeType":"decorative","fill":"linear-gradient(to right, #1a1118, transparent)","opacity":1}
   ]
 }
 
-Notice: decorative text bleeds off top. Accent line anchors content. Label above title with wide letterSpacing. Gradient bridges image and text. Body maxWidth 580. Clear zIndex hierarchy.
+Notice: decorative text bleeds off top. Accent line anchors content. Label above title with wide letterSpacing. Gradient bridges image and text. Body maxWidth 580. Clear zIndex hierarchy. textShadow glow on hero title. boxShadow on body card.
 </golden_example>`,
     description: 'v2 הוראת מערכת למעצב השקפים — כולל element types, composition rules, anti-patterns, archetypes, golden example',
     value_type: 'text' as const,

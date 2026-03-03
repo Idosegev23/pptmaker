@@ -361,10 +361,10 @@ ${contentBlock}
     ? batchContext.slideIndex / batchContext.totalSlides
     : 0
   const rhythm = batchPosition <= 0.33
-    ? { arc: 'opening' as const, description: 'Opening arc — build curiosity, introduce the brand. More whitespace, spacious layouts. Color: darker/cooler, accent sparingly. Max 2 consecutive image slides, then 1 typography-only.' }
+    ? { arc: 'opening' as const, description: 'Opening arc — build curiosity, introduce the brand. More whitespace, spacious layouts. Color: darker/cooler, accent sparingly. Max 2 consecutive image slides, then 1 typography-only. DEPTH: heavy shadows (Tier 2 boxShadow on hero elements), cinematic image filter "brightness(0.7) contrast(1.15)", tight negative letterSpacing on titles.' }
     : batchPosition <= 0.66
-    ? { arc: 'core' as const, description: 'Core content — densest section. Tighter spacing, more cards, bolder colors. Accent used freely. Maintain visual variety.' }
-    : { arc: 'resolution' as const, description: 'Resolution — transition from dense to spacious. Final slide = maximum whitespace, deep breath. Color returns to restraint.' }
+    ? { arc: 'core' as const, description: 'Core content — densest section. Tighter spacing, more cards, bolder colors. Accent used freely. Maintain visual variety. DEPTH: Tier 1 boxShadow on all cards, introduce 1 glassmorphism card (backdropFilter: "blur(16px) saturate(1.8)" + semi-transparent fill), aurora gradient backgrounds, textStroke watermarks on 2+ slides.' }
+    : { arc: 'resolution' as const, description: 'Resolution — transition from dense to spacious. Final slide = maximum whitespace, deep breath. Color returns to restraint. DEPTH: Tier 2 boxShadow only on closing CTA, largest textStroke watermark, textShadow glow on closing title.' }
 
   const prompt = buildBatchPrompt(brandName, cd, colors, typo, effects, motif, designSystem, batchContext, slidesDescription, slides.length, rhythm)
 
@@ -505,6 +505,13 @@ ${contentBlock}
 //  ELEMENT SANITIZER — fills in missing properties from Design System
 // ═══════════════════════════════════════════════════════════
 
+/** Quick CSS shadow/filter syntax check — reject garbage strings from AI */
+function isValidCssShadow(value: string): boolean {
+  if (!value || typeof value !== 'string') return false
+  // Must contain at least one number with px or a recognized keyword
+  return /\d+px|rgba?\(|hsla?\(|inset|blur|brightness|contrast|saturate/.test(value)
+}
+
 function sanitizeElement(
   el: SlideElement,
   elIndex: number,
@@ -580,6 +587,22 @@ function sanitizeElement(
     if (txt.role === 'decorative' && txt.opacity > 0.3 && txt.fontSize >= 150) {
       txt.opacity = 0.08
     }
+    // Default letterSpacing: labels/captions get wide, large titles get tight
+    if (txt.letterSpacing === undefined || txt.letterSpacing === 0) {
+      if (txt.role === 'label' || txt.role === 'caption') {
+        txt.letterSpacing = 4
+      } else if (txt.role === 'title' && txt.fontSize >= 60) {
+        txt.letterSpacing = -2
+      }
+    }
+    // Validate textShadow — delete if malformed
+    if (txt.textShadow && !isValidCssShadow(txt.textShadow)) {
+      delete txt.textShadow
+    }
+    // Validate boxShadow — delete if malformed
+    if (txt.boxShadow && !isValidCssShadow(txt.boxShadow)) {
+      delete txt.boxShadow
+    }
     // Ensure text has content
     if (!txt.content) txt.content = ''
     return txt as unknown as SlideElement
@@ -596,6 +619,28 @@ function sanitizeElement(
       }
     }
     if (!shape.shapeType) shape.shapeType = 'decorative'
+    // Default boxShadow for card shapes
+    if ((shape.shapeType as string) === 'card' && !shape.boxShadow) {
+      shape.boxShadow = '0 4px 20px rgba(0,0,0,0.2)'
+    }
+    // Validate boxShadow
+    if (shape.boxShadow && !isValidCssShadow(shape.boxShadow)) {
+      delete shape.boxShadow
+    }
+    // backdropFilter shapes: ensure fill is semi-transparent
+    if (shape.backdropFilter) {
+      if (!isValidCssShadow(shape.backdropFilter)) {
+        delete shape.backdropFilter
+      } else {
+        // Convert solid fill to semi-transparent for glass effect
+        if (shape.fill && !shape.fill.includes('rgba') && !shape.fill.includes('transparent')) {
+          shape.fill = 'rgba(255,255,255,0.08)'
+        }
+        if (!shape.border) {
+          shape.border = '1px solid rgba(255,255,255,0.12)'
+        }
+      }
+    }
     return shape as unknown as SlideElement
   }
 
@@ -603,6 +648,14 @@ function sanitizeElement(
     const img = base as ImageElement
     if (!img.objectFit) img.objectFit = 'cover'
     if (!img.src) img.src = ''
+    // Validate filter syntax
+    if (img.filter && !isValidCssShadow(img.filter)) {
+      delete img.filter
+    }
+    // Validate boxShadow
+    if (img.boxShadow && !isValidCssShadow(img.boxShadow)) {
+      delete img.boxShadow
+    }
     return img as unknown as SlideElement
   }
 
@@ -657,6 +710,7 @@ Each slide must have a unique composition — never repeat the same title positi
 TITLE POSITION: Title (role="title") must be in the TOP THIRD of the slide (y < 300) except for closing slide. NEVER place title at y > 400. Title fontSize MUST be at least ${typo.headingSize}px for regular slides, ${typo.displaySize}px for cover/bigIdea/insight/closing.
 CANVAS BLEED: At least 1-2 decorative shapes per slide should extend beyond the 1920×1080 canvas (negative x/y or width/height exceeding bounds). This creates premium editorial feel.
 UNIQUE CONTENT: Each slide MUST have unique card titles and body text. Do NOT repeat the same cards or text across different slides — each slideType covers a different topic.
+DEPTH HIERARCHY: Use boxShadow on card shapes ("0 4px 20px rgba(0,0,0,0.2)"), textShadow on hero titles ("0 0 40px rgba(accent,0.25)"), filter on images ("brightness(0.9) contrast(1.05)"). Include at least 1 glass card (backdropFilter) in core batch. At least 2 decorative shapes per content slide.
 </task>
 
 <validation>

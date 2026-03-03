@@ -104,6 +104,7 @@ export interface BaseElement {
   opacity?: number
   rotation?: number
   locked?: boolean
+  boxShadow?: string
 }
 
 export type TextRole =
@@ -140,6 +141,7 @@ export interface TextElement extends BaseElement {
   textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize'
   gradientFill?: string // CSS gradient for text fill (uses background-clip: text)
   mixBlendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'difference' | 'exclusion'
+  textShadow?: string // e.g. "0 0 40px rgba(255,107,107,0.25)"
 }
 
 export interface ImageElement extends BaseElement {
@@ -150,6 +152,7 @@ export interface ImageElement extends BaseElement {
   borderRadius?: number
   clipPath?: string
   border?: string
+  filter?: string // e.g. "brightness(0.85) contrast(1.1)"
 }
 
 export type ShapeType = 'rectangle' | 'circle' | 'line' | 'decorative' | 'background' | 'divider'
@@ -162,6 +165,7 @@ export interface ShapeElement extends BaseElement {
   clipPath?: string
   border?: string
   mixBlendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'difference' | 'exclusion'
+  backdropFilter?: string // e.g. "blur(16px) saturate(1.8)" for glassmorphism
 }
 
 export type SlideElement = TextElement | ImageElement | ShapeElement

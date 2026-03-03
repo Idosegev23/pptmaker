@@ -128,6 +128,11 @@ const SLIDE_ELEMENT_SCHEMA = {
     src: { type: Type.STRING, description: 'Image URL. Required for type=image. Use exact URL from content' },
     alt: { type: Type.STRING },
     objectFit: { type: Type.STRING, description: 'Required for type=image: "cover" or "contain"' },
+    // Depth & effects — all optional
+    boxShadow: { type: Type.STRING, description: 'CSS box-shadow. Cards: "0 4px 20px rgba(0,0,0,0.2)", Hero: "0 12px 40px rgba(0,0,0,0.35)"' },
+    textShadow: { type: Type.STRING, description: 'CSS text-shadow for type=text. Hero glow: "0 0 40px rgba(accent,0.25)"' },
+    filter: { type: Type.STRING, description: 'CSS filter for type=image. e.g. "brightness(0.85) contrast(1.1)"' },
+    backdropFilter: { type: Type.STRING, description: 'CSS backdrop-filter for type=shape glassmorphism. e.g. "blur(16px) saturate(1.8)"' },
   },
   required: ['id', 'type', 'x', 'y', 'width', 'height', 'zIndex',
     // Force model to always output these — even if empty for non-applicable types

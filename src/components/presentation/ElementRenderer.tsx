@@ -64,6 +64,8 @@ function TextElementView({ element, isEditing, onTextChange }: {
     outline: 'none',
     cursor: isEditing ? 'text' : 'default',
     mixBlendMode: element.mixBlendMode !== 'normal' ? element.mixBlendMode : undefined,
+    textShadow: element.textShadow || undefined,
+    boxShadow: element.boxShadow || undefined,
     // Hollow/Stroke Typography
     ...(element.textStroke ? {
       WebkitTextStroke: `${element.textStroke.width}px ${element.textStroke.color}`,
@@ -108,6 +110,7 @@ function ImageElementView({ element }: { element: ImageElement }) {
     borderRadius: element.borderRadius ? `${element.borderRadius}px` : undefined,
     clipPath: element.clipPath || undefined,
     border: element.border || undefined,
+    boxShadow: element.boxShadow || undefined,
   }
 
   const handleError = () => {
@@ -153,6 +156,7 @@ function ImageElementView({ element }: { element: ImageElement }) {
             height: '100%',
             objectFit: element.objectFit,
             display: 'block',
+            filter: element.filter || undefined,
           }}
           onError={handleError}
           draggable={false}
@@ -170,6 +174,9 @@ function ShapeElementView({ element }: { element: ShapeElement }) {
     clipPath: element.clipPath || undefined,
     border: element.border || undefined,
     mixBlendMode: element.mixBlendMode !== 'normal' ? element.mixBlendMode : undefined,
+    boxShadow: element.boxShadow || undefined,
+    backdropFilter: element.backdropFilter || undefined,
+    WebkitBackdropFilter: element.backdropFilter || undefined,
   }
 
   // Handle gradient or solid fill

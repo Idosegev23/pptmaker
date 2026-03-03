@@ -87,6 +87,8 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
   if (el.padding) styles.push(`padding: ${el.padding}px`)
   if (!pdfMode && el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
   if (el.textStroke) styles.push(`-webkit-text-stroke: ${el.textStroke.width}px ${el.textStroke.color}`)
+  if (el.textShadow) styles.push(`text-shadow: ${el.textShadow}`)
+  if (el.boxShadow) styles.push(`box-shadow: ${el.boxShadow}`)
   if (useGradient) {
     styles.push(`background: ${el.gradientFill}`)
     styles.push(`-webkit-background-clip: text`)
@@ -112,6 +114,7 @@ function renderImageElement(el: ImageElement): string {
   if (el.border) containerStyles.push(`border: ${el.border}`)
   if (el.opacity !== undefined && el.opacity !== 1) containerStyles.push(`opacity: ${el.opacity}`)
   if (el.rotation) containerStyles.push(`transform: rotate(${el.rotation}deg)`)
+  if (el.boxShadow) containerStyles.push(`box-shadow: ${el.boxShadow}`)
 
   const imgStyles = [
     `width: 100%`,
@@ -119,11 +122,12 @@ function renderImageElement(el: ImageElement): string {
     `object-fit: ${el.objectFit || 'cover'}`,
     `display: block`,
   ]
+  if (el.filter) imgStyles.push(`filter: ${el.filter}`)
 
   return `<div style="${containerStyles.join('; ')}"><img src="${sanitizeUrl(el.src)}" alt="${escapeHtml(el.alt || '')}" style="${imgStyles.join('; ')}" onerror="this.style.display='none'" /></div>`
 }
 
-function renderShapeElement(el: ShapeElement): string {
+function renderShapeElement(el: ShapeElement, pdfMode = false): string {
   const styles = [
     `position: absolute`,
     `left: ${el.x}px`,
@@ -147,6 +151,11 @@ function renderShapeElement(el: ShapeElement): string {
   if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
   if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
   if (el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
+  if (el.boxShadow) styles.push(`box-shadow: ${el.boxShadow}`)
+  if (!pdfMode && el.backdropFilter) {
+    styles.push(`backdrop-filter: ${el.backdropFilter}`)
+    styles.push(`-webkit-backdrop-filter: ${el.backdropFilter}`)
+  }
 
   return `<div style="${styles.join('; ')}"></div>`
 }
@@ -158,7 +167,7 @@ function renderElement(el: SlideElement, defaultFont: string, pdfMode = false): 
     case 'image':
       return renderImageElement(el)
     case 'shape':
-      return renderShapeElement(el)
+      return renderShapeElement(el, pdfMode)
     default:
       return ''
   }

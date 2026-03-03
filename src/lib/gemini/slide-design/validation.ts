@@ -279,6 +279,21 @@ export function validateSlide(
     }
   }
 
+  // V2-9: Low decoration — content slides need at least 2 decorative shapes
+  const nonHeroTypes = new Set(['cover', 'closing'])
+  if (!nonHeroTypes.has(slide.slideType)) {
+    const decorativeShapes = elements.filter(e =>
+      e.type === 'shape' && ((e as import('@/types/presentation').ShapeElement).shapeType === 'decorative' ||
+        (e as import('@/types/presentation').ShapeElement).shapeType === 'divider')
+    )
+    const decorativeTexts = textElements.filter(e => e.role === 'decorative')
+    const totalDecorative = decorativeShapes.length + decorativeTexts.length
+    if (totalDecorative < 2) {
+      issues.push({ severity: 'suggestion', category: 'low-decoration', message: `Only ${totalDecorative} decorative elements (min: 2)`, autoFixable: true })
+      score -= 5
+    }
+  }
+
   return { valid: issues.filter(i => i.severity === 'critical').length === 0, score: Math.max(0, score), issues }
 }
 
@@ -530,6 +545,25 @@ export function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSyst
       }
     }
 
+    if (issue.category === 'low-decoration') {
+      // Inject accent line + gradient blob
+      const accentColor = designSystem.colors.accent || '#ff3366'
+      fixed.elements.push({
+        id: `autofix-accent-line-${slide.id}`, type: 'shape' as const,
+        x: 80, y: 140, width: 3, height: 600, zIndex: 2,
+        shapeType: 'decorative' as const,
+        fill: accentColor, opacity: 0.8,
+      })
+      fixed.elements.push({
+        id: `autofix-blob-${slide.id}`, type: 'shape' as const,
+        x: -120, y: -80, width: 500, height: 500, zIndex: 1,
+        shapeType: 'decorative' as const,
+        fill: `radial-gradient(circle, ${accentColor}15 0%, transparent 70%)`,
+        borderRadius: 250, opacity: 0.15,
+      })
+      continue
+    }
+
     if (issue.category === 'text-text-overlap') {
       const el = fixed.elements[elIndex]
       if (isTextElement(el)) {
@@ -628,6 +662,31 @@ export function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDe
           regularTitles[i].element.y = alt.y
         }
       }
+    }
+  }
+
+  // === Break runs of 4+ consecutive solid backgrounds ===
+  const colors = _designSystem.colors
+  let solidRun = 0
+  for (let i = 0; i < slides.length; i++) {
+    const bg = slides[i].background
+    if (bg.type === 'solid') {
+      solidRun++
+      if (solidRun >= 4) {
+        // Convert this slide's background to a subtle gradient
+        const gradStart = colors.gradientStart || colors.background || '#1a1a2e'
+        const gradEnd = colors.gradientEnd || colors.primary || '#16213e'
+        slides[i] = {
+          ...slides[i],
+          background: {
+            type: 'gradient',
+            value: `linear-gradient(135deg, ${gradStart} 0%, ${gradEnd} 100%)`,
+          },
+        }
+        solidRun = 0 // reset run
+      }
+    } else {
+      solidRun = 0
     }
   }
 

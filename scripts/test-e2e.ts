@@ -145,6 +145,38 @@ async function main() {
     ).length
     console.log(`  Content images: ${contentImgSlides}/${presentation.slides.length}`)
 
+    // === Depth & Effects Analysis ===
+    console.log('\n' + '─'.repeat(60))
+    console.log('🌊 DEPTH & EFFECTS ANALYSIS')
+    const boxShadowSlides = presentation.slides.filter(s =>
+      s.elements.some(e => (e as any).boxShadow)
+    ).length
+    const textShadowSlides = presentation.slides.filter(s =>
+      s.elements.some(e => (e as any).textShadow)
+    ).length
+    const filterSlides = presentation.slides.filter(s =>
+      s.elements.some(e => (e as any).filter)
+    ).length
+    const backdropSlides = presentation.slides.filter(s =>
+      s.elements.some(e => (e as any).backdropFilter)
+    ).length
+    const decorativeCount = presentation.slides.map(s => {
+      const deco = s.elements.filter(e =>
+        (e.type === 'shape' && ((e as any).shapeType === 'decorative' || (e as any).shapeType === 'divider')) ||
+        (e.type === 'text' && (e as any).role === 'decorative')
+      )
+      return deco.length
+    })
+    const lowDecoSlides = decorativeCount.filter(c => c < 2).length
+    const gradientBgSlides = presentation.slides.filter(s => s.background.type === 'gradient').length
+
+    console.log(`  boxShadow: ${boxShadowSlides}/${presentation.slides.length} slides`)
+    console.log(`  textShadow: ${textShadowSlides}/${presentation.slides.length} slides`)
+    console.log(`  filter (images): ${filterSlides}/${presentation.slides.length} slides`)
+    console.log(`  backdropFilter (glass): ${backdropSlides}/${presentation.slides.length} slides`)
+    console.log(`  Low decoration (<2): ${lowDecoSlides}/${presentation.slides.length} slides`)
+    console.log(`  Gradient backgrounds: ${gradientBgSlides}/${presentation.slides.length} slides`)
+
     // === Render HTML ===
     console.log('\n🖼️  Rendering HTML...')
     renderHTML(presentation)
@@ -198,7 +230,9 @@ function renderHTML(presentation: any) {
         const border = el.border ? `border:${el.border};` : ''
         const clip = el.clipPath ? `clip-path:${el.clipPath};` : ''
         const bgProp = fill.includes('gradient') || fill.includes('url') ? `background:${fill};` : `background-color:${fill};`
-        return `<div style="${base} ${bgProp} ${br} ${border} ${clip}"></div>`
+        const shadow = el.boxShadow ? `box-shadow:${el.boxShadow};` : ''
+        const bdFilter = el.backdropFilter ? `backdrop-filter:${el.backdropFilter}; -webkit-backdrop-filter:${el.backdropFilter};` : ''
+        return `<div style="${base} ${bgProp} ${br} ${border} ${clip} ${shadow} ${bdFilter}"></div>`
       }
 
       if (el.type === 'text') {
@@ -209,13 +243,17 @@ function renderHTML(presentation: any) {
         const lineHeight = el.lineHeight || 1.2
         const letterSpacing = el.letterSpacing ? `letter-spacing:${el.letterSpacing}px;` : ''
         const stroke = el.textStroke ? `-webkit-text-stroke:${el.textStroke.width}px ${el.textStroke.color};` : ''
-        return `<div style="${base} color:${color}; font-size:${fontSize}px; font-weight:${fontWeight}; text-align:${textAlign}; line-height:${lineHeight}; font-family:'Heebo',sans-serif; direction:rtl; overflow:hidden; ${letterSpacing} ${stroke}">${el.content || ''}</div>`
+        const tShadow = el.textShadow ? `text-shadow:${el.textShadow};` : ''
+        const bShadow = el.boxShadow ? `box-shadow:${el.boxShadow};` : ''
+        return `<div style="${base} color:${color}; font-size:${fontSize}px; font-weight:${fontWeight}; text-align:${textAlign}; line-height:${lineHeight}; font-family:'Heebo',sans-serif; direction:rtl; overflow:hidden; ${letterSpacing} ${stroke} ${tShadow} ${bShadow}">${el.content || ''}</div>`
       }
 
       if (el.type === 'image') {
         const fit = el.objectFit || 'cover'
         const br = el.borderRadius ? `border-radius:${el.borderRadius}px;` : ''
-        return `<div style="${base} ${br} overflow:hidden;"><img src="${el.src || ''}" alt="${el.alt || ''}" style="width:100%; height:100%; object-fit:${fit};" onerror="this.style.display='none'" /></div>`
+        const shadow = el.boxShadow ? `box-shadow:${el.boxShadow};` : ''
+        const imgFilter = el.filter ? `filter:${el.filter};` : ''
+        return `<div style="${base} ${br} ${shadow} overflow:hidden;"><img src="${el.src || ''}" alt="${el.alt || ''}" style="width:100%; height:100%; object-fit:${fit}; ${imgFilter}" onerror="this.style.display='none'" /></div>`
       }
 
       return ''
@@ -288,7 +326,9 @@ function renderHTML(presentation: any) {
         const border = el.border ? `border:${el.border};` : ''
         const clip = el.clipPath ? `clip-path:${el.clipPath};` : ''
         const bgProp = fill.includes('gradient') || fill.includes('url') ? `background:${fill};` : `background-color:${fill};`
-        return `<div style="${base} ${bgProp} ${br} ${border} ${clip}"></div>`
+        const shadow = el.boxShadow ? `box-shadow:${el.boxShadow};` : ''
+        const bdFilter = el.backdropFilter ? `backdrop-filter:${el.backdropFilter}; -webkit-backdrop-filter:${el.backdropFilter};` : ''
+        return `<div style="${base} ${bgProp} ${br} ${border} ${clip} ${shadow} ${bdFilter}"></div>`
       }
 
       if (el.type === 'text') {
@@ -299,13 +339,17 @@ function renderHTML(presentation: any) {
         const lineHeight = el.lineHeight || 1.2
         const letterSpacing = el.letterSpacing ? `letter-spacing:${el.letterSpacing}px;` : ''
         const stroke = el.textStroke ? `-webkit-text-stroke:${el.textStroke.width}px ${el.textStroke.color};` : ''
-        return `<div style="${base} color:${color}; font-size:${fontSize}px; font-weight:${fontWeight}; text-align:${textAlign}; line-height:${lineHeight}; font-family:'Heebo',sans-serif; direction:rtl; overflow:hidden; ${letterSpacing} ${stroke}">${el.content || ''}</div>`
+        const tShadow = el.textShadow ? `text-shadow:${el.textShadow};` : ''
+        const bShadow = el.boxShadow ? `box-shadow:${el.boxShadow};` : ''
+        return `<div style="${base} color:${color}; font-size:${fontSize}px; font-weight:${fontWeight}; text-align:${textAlign}; line-height:${lineHeight}; font-family:'Heebo',sans-serif; direction:rtl; overflow:hidden; ${letterSpacing} ${stroke} ${tShadow} ${bShadow}">${el.content || ''}</div>`
       }
 
       if (el.type === 'image') {
         const fit = el.objectFit || 'cover'
         const br = el.borderRadius ? `border-radius:${el.borderRadius}px;` : ''
-        return `<div style="${base} ${br} overflow:hidden;"><img src="${el.src || ''}" alt="${el.alt || ''}" style="width:100%; height:100%; object-fit:${fit};" onerror="this.style.display='none'" /></div>`
+        const shadow = el.boxShadow ? `box-shadow:${el.boxShadow};` : ''
+        const imgFilter = el.filter ? `filter:${el.filter};` : ''
+        return `<div style="${base} ${br} ${shadow} overflow:hidden;"><img src="${el.src || ''}" alt="${el.alt || ''}" style="width:100%; height:100%; object-fit:${fit}; ${imgFilter}" onerror="this.style.display='none'" /></div>`
       }
       return ''
     }).join('\n      ')
