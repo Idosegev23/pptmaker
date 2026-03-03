@@ -203,6 +203,7 @@ ${cdSection}
 CRITICAL: Not every field is needed. A great insight slide might only need title + keyNumber + bodyText.
 A cover slide might only need title + tagline. Use ONLY what serves the slide. Empty fields are BETTER than weak content.
 UNIQUE CONTENT: Each slide MUST have unique card titles and body text. NEVER reuse the same cards or phrases across different slides. Each slideType covers a different topic — mine the raw data for unique details per slide.
+NO REPETITION: NEVER repeat the same phrase, sentence, or word pattern more than once. If you catch yourself looping on a phrase — stop, rephrase, and move on. Varied language is mandatory.
 </rules>
 
 <slides_to_curate>
@@ -212,33 +213,69 @@ ${slidesXml}
   const [model, systemPrompt] = await Promise.all([getCuratorModel(), getCuratorSystemPrompt()])
 
   try {
-    // ~500 tokens per slide × 6 = 3000, with buffer → 4096
-    const tokensPerBatch = Math.min(4096, slides.length * 700)
-    const aiResult = await callAI({
-      model,
-      prompt,
-      systemPrompt,
-      geminiConfig: {
-        systemInstruction: systemPrompt,
-        responseMimeType: 'application/json',
-        responseSchema: CURATED_SLIDE_SCHEMA,
-        maxOutputTokens: tokensPerBatch,
-        temperature: 0.3, // Low temp to prevent repetitive loops
-      },
-      responseSchema: CURATED_SLIDE_SCHEMA as Record<string, unknown>,
-      thinkingLevel: 'LOW',
-      maxOutputTokens: tokensPerBatch,
-      callerId: requestId,
-    })
-    if (aiResult.switched) console.warn(`[ContentCurator][${requestId}] 🔄 Switched to Claude`)
+    const MAX_RETRIES = 2
+    let raw = ''
+    let aiResult: Awaited<ReturnType<typeof callAI>> | null = null
 
-    const raw = aiResult.text || ''
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const retryTemp = 0.6 + attempt * 0.15 // 0.6 → 0.75 → 0.9 on retries
+      if (attempt > 0) {
+        console.warn(`[ContentCurator][${requestId}] Retry ${attempt}/${MAX_RETRIES} with temp=${retryTemp.toFixed(2)}`)
+      }
+      aiResult = await callAI({
+        model,
+        prompt,
+        systemPrompt,
+        geminiConfig: {
+          systemInstruction: systemPrompt,
+          responseMimeType: 'application/json',
+          responseSchema: CURATED_SLIDE_SCHEMA,
+          maxOutputTokens: 32000,
+          temperature: retryTemp,
+          frequencyPenalty: 0.5 + attempt * 0.2, // 0.5 → 0.7 → 0.9
+        },
+        responseSchema: CURATED_SLIDE_SCHEMA as Record<string, unknown>,
+        thinkingLevel: 'LOW',
+        maxOutputTokens: 32000,
+        callerId: `${requestId}-a${attempt}`,
+      })
+      if (aiResult.switched) console.warn(`[ContentCurator][${requestId}] Switched to Claude`)
+
+      raw = aiResult.text || ''
+      console.log(`[ContentCurator][${requestId}] Attempt ${attempt}: ${raw.length} chars, provider: ${aiResult.provider}, model: ${aiResult.model}`)
+
+      // Check for empty response
+      if (raw.length < 10) {
+        console.warn(`[ContentCurator][${requestId}] Empty/tiny response (${raw.length} chars), will retry`)
+        continue
+      }
+
+      // Check for repetition loop: if the last 200 chars contain a repeated 30+ char phrase
+      const tail = raw.slice(-200)
+      const repMatch = tail.match(/(.{30,})\1/)
+      if (repMatch) {
+        console.warn(`[ContentCurator][${requestId}] Repetition loop detected: "${repMatch[1].slice(0, 50)}…", will retry`)
+        continue
+      }
+
+      // Looks good — break out of retry loop
+      break
+    }
+
+    console.log(`[ContentCurator][${requestId}] Raw first 500: ${raw.slice(0, 500)}`)
+    console.log(`[ContentCurator][${requestId}] Raw last 300: ${raw.slice(-300)}`)
+
+    if (raw.length < 10) {
+      throw new Error(`Curator returned empty response after ${MAX_RETRIES + 1} attempts`)
+    }
+
     let parsed: { slides: CuratedSlideContent[] }
 
     try {
       parsed = JSON.parse(raw)
-    } catch {
-      console.warn(`[ContentCurator][${requestId}] JSON.parse failed (${raw.length} chars), trying robust parser`)
+    } catch (e) {
+      console.warn(`[ContentCurator][${requestId}] JSON.parse failed (${raw.length} chars): ${e instanceof Error ? e.message : e}`)
+      console.warn(`[ContentCurator][${requestId}] trying robust parser`)
       const { parseGeminiJson } = await import('@/lib/utils/json-cleanup')
       try {
         const fallback = parseGeminiJson<{ slides: CuratedSlideContent[] }>(raw)

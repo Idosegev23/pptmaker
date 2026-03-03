@@ -6,6 +6,7 @@ import type { BrandColors } from '@/lib/gemini/color-extractor'
 import { generateSmartImages } from '@/lib/gemini/israeli-image-generator'
 import type { BrandResearch } from '@/lib/gemini/brand-research'
 import { createClient } from '@/lib/supabase/server'
+import { compositeLogo } from '@/lib/utils/image-compositor'
 
 /**
  * POST /api/generate-visual-assets
@@ -282,7 +283,37 @@ export async function POST(request: NextRequest) {
 
       const { legacyMapping, images: allSmartImages } = smartImageSet
 
-      // Upload images to Supabase Storage
+      // ─── Fetch client logo buffer for compositing onto generated images ───
+      let clientLogoBuffer: Buffer | null = null
+      if (logoUrl) {
+        try {
+          console.log(`[Visual Assets][${requestId}] Fetching client logo for compositing: ${logoUrl}`)
+          const logoRes = await fetch(logoUrl, { signal: AbortSignal.timeout(8000) })
+          if (logoRes.ok) {
+            clientLogoBuffer = Buffer.from(await logoRes.arrayBuffer())
+            console.log(`[Visual Assets][${requestId}] Client logo buffer: ${clientLogoBuffer.length} bytes`)
+          }
+        } catch (logoErr) {
+          console.warn(`[Visual Assets][${requestId}] Logo fetch for compositing failed:`, logoErr)
+        }
+      }
+
+      // Helper: composite brand logo onto image, then upload
+      const compositeAndUpload = async (imageBuffer: Buffer, fileName: string): Promise<string | null> => {
+        let finalBuffer = imageBuffer
+        if (clientLogoBuffer) {
+          finalBuffer = await compositeLogo(imageBuffer, {
+            logoBuffer: clientLogoBuffer,
+            logoWidthRatio: 0.12,
+            corner: 'bottom-right',
+            padding: 40,
+            opacity: 0.82,
+          })
+        }
+        return uploadImageToStorage(finalBuffer, fileName)
+      }
+
+      // Upload images to Supabase Storage (with logo composited)
       const timestamp = Date.now()
       // Supabase storage keys must be ASCII-only
       const brandPrefix = brandName
@@ -294,25 +325,25 @@ export async function POST(request: NextRequest) {
       // Upload legacy-mapped images (cover, brand, audience, activity)
       if (legacyMapping.cover) {
         uploadPromises.push(
-          uploadImageToStorage(legacyMapping.cover.imageData, `proposals/${brandPrefix}/cover_${timestamp}.png`)
+          compositeAndUpload(legacyMapping.cover.imageData, `proposals/${brandPrefix}/cover_${timestamp}.png`)
             .then(url => { if (url) imageUrls.coverImage = url })
         )
       }
       if (legacyMapping.brand) {
         uploadPromises.push(
-          uploadImageToStorage(legacyMapping.brand.imageData, `proposals/${brandPrefix}/brand_${timestamp}.png`)
+          compositeAndUpload(legacyMapping.brand.imageData, `proposals/${brandPrefix}/brand_${timestamp}.png`)
             .then(url => { if (url) imageUrls.brandImage = url })
         )
       }
       if (legacyMapping.audience) {
         uploadPromises.push(
-          uploadImageToStorage(legacyMapping.audience.imageData, `proposals/${brandPrefix}/audience_${timestamp}.png`)
+          compositeAndUpload(legacyMapping.audience.imageData, `proposals/${brandPrefix}/audience_${timestamp}.png`)
             .then(url => { if (url) imageUrls.audienceImage = url })
         )
       }
       if (legacyMapping.activity) {
         uploadPromises.push(
-          uploadImageToStorage(legacyMapping.activity.imageData, `proposals/${brandPrefix}/activity_${timestamp}.png`)
+          compositeAndUpload(legacyMapping.activity.imageData, `proposals/${brandPrefix}/activity_${timestamp}.png`)
             .then(url => { if (url) imageUrls.activityImage = url })
         )
       }
@@ -325,7 +356,7 @@ export async function POST(request: NextRequest) {
       const extras = allSmartImages.filter(img => !legacyIds.includes(img.id))
       for (const img of extras) {
         uploadPromises.push(
-          uploadImageToStorage(img.imageData, `proposals/${brandPrefix}/${img.id}_${timestamp}.png`)
+          compositeAndUpload(img.imageData, `proposals/${brandPrefix}/${img.id}_${timestamp}.png`)
             .then(url => {
               if (url) extraImageUrls.push({ id: img.id, url, placement: img.placement })
             })

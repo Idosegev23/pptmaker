@@ -5,12 +5,6 @@
 import type { Slide, ImageElement } from '@/types/presentation'
 import { hexToLuminance } from './color-utils'
 
-function getAppBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
-  return 'http://localhost:3000'
-}
-
 function extractDominantColor(bg: Slide['background']): string {
   if (bg.type === 'solid') return bg.value
   if (bg.type === 'gradient') {
@@ -21,9 +15,9 @@ function extractDominantColor(bg: Slide['background']): string {
 }
 
 export function injectLeadersLogo(slides: Slide[]): Slide[] {
-  const baseUrl = getAppBaseUrl()
-  const whiteLogoUrl = `${baseUrl}/logo.png`
-  const blackLogoUrl = `${baseUrl}/logoblack.png`
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')
+  const whiteLogoUrl = `${supabaseUrl}/storage/v1/object/public/assets/logos/leaders-logo-white.png`
+  const blackLogoUrl = `${supabaseUrl}/storage/v1/object/public/assets/logos/leaders-logo-black.png`
 
   return slides.map(slide => {
     const bgColor = extractDominantColor(slide.background)
@@ -58,12 +52,14 @@ const CLIENT_LOGO_SLIDES: Record<string, { x: number; y: number; width: number; 
   closing: { x: 810, y: 100, width: 300, height: 110, opacity: 1.0 },
 }
 
+// Default placement for all other slide types — top-right, small, subtle
+const DEFAULT_CLIENT_LOGO = { x: 1700, y: 30, width: 160, height: 58, opacity: 0.75 }
+
 export function injectClientLogo(slides: Slide[], clientLogoUrl: string): Slide[] {
   if (!clientLogoUrl) return slides
 
   return slides.map(slide => {
-    const placement = CLIENT_LOGO_SLIDES[slide.slideType]
-    if (!placement) return slide
+    const placement = CLIENT_LOGO_SLIDES[slide.slideType] ?? DEFAULT_CLIENT_LOGO
 
     const logoElement: ImageElement = {
       id: `client-logo-${slide.id}`,
