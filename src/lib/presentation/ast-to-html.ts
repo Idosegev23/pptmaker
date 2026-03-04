@@ -107,7 +107,14 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
       styles.push(`text-shadow: ${el.textShadow}`)
     }
   }
-  if (el.boxShadow) styles.push(`box-shadow: ${el.boxShadow}`)
+  if (el.boxShadow) {
+    if (pdfMode) {
+      const simplified = el.boxShadow.replace(/(\d+px\s+\d+px)\s+\d+px/g, '$1 0px')
+      styles.push(`box-shadow: ${simplified}`)
+    } else {
+      styles.push(`box-shadow: ${el.boxShadow}`)
+    }
+  }
   if (useGradient) {
     styles.push(`background: ${el.gradientFill}`)
     styles.push(`-webkit-background-clip: text`)
@@ -117,7 +124,7 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
   return `<div style="${styles.join('; ')}">${escapeHtml(el.content)}</div>`
 }
 
-function renderImageElement(el: ImageElement): string {
+function renderImageElement(el: ImageElement, pdfMode = false): string {
   const containerStyles = [
     `position: absolute`,
     `left: ${el.x}px`,
@@ -141,7 +148,8 @@ function renderImageElement(el: ImageElement): string {
     `object-fit: ${el.objectFit || 'cover'}`,
     `display: block`,
   ]
-  if (el.filter) imgStyles.push(`filter: ${el.filter}`)
+  // filter on images can cause rasterization in PDF — skip to keep image as separate object
+  if (!pdfMode && el.filter) imgStyles.push(`filter: ${el.filter}`)
 
   return `<div style="${containerStyles.join('; ')}"><img src="${sanitizeUrl(el.src)}" alt="${escapeHtml(el.alt || '')}" style="${imgStyles.join('; ')}" onerror="this.style.display='none'" /></div>`
 }
@@ -169,8 +177,17 @@ function renderShapeElement(el: ShapeElement, pdfMode = false): string {
   if (el.border) styles.push(`border: ${el.border}`)
   if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
   if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
-  if (el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
-  if (el.boxShadow) styles.push(`box-shadow: ${el.boxShadow}`)
+  // mixBlendMode causes layer rasterization → skip in PDF to keep objects selectable in Canva
+  if (!pdfMode && el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
+  if (el.boxShadow) {
+    if (pdfMode) {
+      // Strip blur from boxShadow to prevent rasterization — keep offset+color only
+      const simplified = el.boxShadow.replace(/(\d+px\s+\d+px)\s+\d+px/g, '$1 0px')
+      styles.push(`box-shadow: ${simplified}`)
+    } else {
+      styles.push(`box-shadow: ${el.boxShadow}`)
+    }
+  }
   if (!pdfMode && el.backdropFilter) {
     styles.push(`backdrop-filter: ${el.backdropFilter}`)
     styles.push(`-webkit-backdrop-filter: ${el.backdropFilter}`)
@@ -184,7 +201,7 @@ function renderElement(el: SlideElement, defaultFont: string, pdfMode = false): 
     case 'text':
       return renderTextElement(el, defaultFont, pdfMode)
     case 'image':
-      return renderImageElement(el)
+      return renderImageElement(el, pdfMode)
     case 'shape':
       return renderShapeElement(el, pdfMode)
     default:
