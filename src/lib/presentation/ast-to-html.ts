@@ -54,9 +54,13 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
   const overflowVisible = ['title', 'subtitle', 'decorative'].includes(el.role || '')
 
   // In PDF mode, skip gradient text (causes rasterization in Chromium's print engine)
-  // and force full opacity so text stays as vector for Canva editability
   const useGradient = isGradientText && !pdfMode
-  const effectiveOpacity = pdfMode ? Math.max(el.opacity ?? 1, 0.85) : (el.opacity ?? 1)
+  // In PDF mode: decorative elements keep original opacity (watermarks should stay subtle);
+  // readable text gets minimum 0.85 opacity for legibility
+  const isDecorative = el.role === 'decorative'
+  const effectiveOpacity = pdfMode
+    ? (isDecorative ? (el.opacity ?? 1) : Math.max(el.opacity ?? 1, 0.85))
+    : (el.opacity ?? 1)
 
   const styles = [
     `position: absolute`,
@@ -86,8 +90,23 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
   if (el.borderRadius) styles.push(`border-radius: ${el.borderRadius}px`)
   if (el.padding) styles.push(`padding: ${el.padding}px`)
   if (!pdfMode && el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
-  if (el.textStroke) styles.push(`-webkit-text-stroke: ${el.textStroke.width}px ${el.textStroke.color}`)
-  if (el.textShadow) styles.push(`text-shadow: ${el.textShadow}`)
+  // textStroke: in PDF only keep for decorative elements (watermarks) — on readable text it creates ugly outline
+  if (el.textStroke) {
+    if (!pdfMode || isDecorative) {
+      styles.push(`-webkit-text-stroke: ${el.textStroke.width}px ${el.textStroke.color}`)
+    }
+  }
+  // textShadow: in PDF the blur renders as hard "double text" — strip blur, keep minimal offset
+  if (el.textShadow) {
+    if (pdfMode) {
+      // Only add a subtle non-blur shadow for readability, skip decorative
+      if (!isDecorative) {
+        styles.push(`text-shadow: 0 1px 0 rgba(0,0,0,0.25)`)
+      }
+    } else {
+      styles.push(`text-shadow: ${el.textShadow}`)
+    }
+  }
   if (el.boxShadow) styles.push(`box-shadow: ${el.boxShadow}`)
   if (useGradient) {
     styles.push(`background: ${el.gradientFill}`)
@@ -175,10 +194,13 @@ function renderElement(el: SlideElement, defaultFont: string, pdfMode = false): 
 
 /**
  * Convert a single Slide AST to a self-contained HTML document.
- * When pdfMode=true, optimizes for vector text output (Canva editability):
- * - Disables gradient text fill (causes rasterization)
- * - Forces minimum text opacity
+ * When pdfMode=true, optimizes for PDF rendering:
+ * - Disables gradient text fill (causes rasterization in Chromium print)
+ * - Forces minimum 0.85 opacity on readable text (keeps decorative as-is)
  * - Skips blend modes on text
+ * - Strips textShadow blur (renders as hard "double text" in PDF) — keeps minimal offset
+ * - Strips textStroke on non-decorative text (only watermarks keep outline)
+ * - Strips backdropFilter on shapes (glassmorphism doesn't render in print)
  */
 export function slideToHtml(slide: Slide, designSystem: DesignSystem, pdfMode = false): string {
   const headingFont = designSystem.fonts.heading || 'Heebo'
