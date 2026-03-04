@@ -125,7 +125,7 @@ function renderImageElement(el: ImageElement, _pdfMode = false): string {
   ]
   if (el.filter) imgStyles.push(`filter: ${el.filter}`)
 
-  return `<div style="${containerStyles.join('; ')}"><img src="${sanitizeUrl(el.src)}" alt="${escapeHtml(el.alt || '')}" style="${imgStyles.join('; ')}" crossorigin="anonymous" /></div>`
+  return `<div style="${containerStyles.join('; ')}"><img src="${sanitizeUrl(el.src)}" alt="${escapeHtml(el.alt || '')}" style="${imgStyles.join('; ')}" /></div>`
 }
 
 function renderShapeElement(el: ShapeElement, _pdfMode = false): string {

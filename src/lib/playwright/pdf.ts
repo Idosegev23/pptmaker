@@ -15,19 +15,22 @@ async function getBrowser() {
   // Check if running on Vercel/AWS Lambda
   const isServerless = process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL
 
+  // Common args to allow loading images from any origin
+  const extraArgs = ['--disable-web-security', '--allow-running-insecure-content']
+
   if (isServerless) {
     // Use @sparticuz/chromium for serverless environments
     const executablePath = await chromium.executablePath()
-    
+
     return puppeteer.launch({
-      args: chromium.args,
+      args: [...chromium.args, ...extraArgs],
       defaultViewport: { width: 1920, height: 1080 },
       executablePath,
       headless: true,
     })
   } else {
     // Local development - try to use local Chrome
-    const executablePath = process.platform === 'darwin' 
+    const executablePath = process.platform === 'darwin'
       ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
       : process.platform === 'win32'
         ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
@@ -36,7 +39,7 @@ async function getBrowser() {
     return puppeteer.launch({
       headless: true,
       executablePath,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', ...extraArgs],
     })
   }
 }
@@ -83,7 +86,9 @@ export async function generatePdf(
 
 /**
  * Generate multi-page PDF from array of HTML pages.
- * Uses a SINGLE browser instance for all pages (much faster).
+ * Uses SCREENSHOTS (not page.pdf) so the output matches the editor 1:1.
+ * Chrome's print engine (page.pdf) renders colors, blend modes, gradients,
+ * and backdrop-filter differently from the screen — screenshots avoid this.
  */
 export async function generateMultiPagePdf(
   htmlPages: string[],
@@ -92,21 +97,23 @@ export async function generateMultiPagePdf(
   const { PDFDocument } = await import('pdf-lib')
   const browser = await getBrowser()
 
+  // Slide dimensions in points (1px = 0.75pt at 96dpi)
+  const slideW = 1920
+  const slideH = 1080
+
   try {
     const mergedPdf = await PDFDocument.create()
-    const pdfOpts = options.format === '16:9'
-      ? { width: '1920px', height: '1080px', printBackground: true, preferCSSPageSize: true }
-      : { format: 'A4' as const, printBackground: true, preferCSSPageSize: true }
 
-    console.log(`[PDF] Rendering ${htmlPages.length} slides with single browser instance`)
+    console.log(`[PDF] Rendering ${htmlPages.length} slides via screenshots`)
 
     for (let i = 0; i < htmlPages.length; i++) {
       const page = await browser.newPage()
-      await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 2 })
+      // 2x deviceScaleFactor for crisp output
+      await page.setViewport({ width: slideW, height: slideH, deviceScaleFactor: 2 })
       await page.setContent(htmlPages[i], { waitUntil: 'networkidle0' })
       await page.evaluate(() => document.fonts?.ready)
 
-      // Wait for all images to actually load (or fail) — networkidle0 doesn't guarantee this
+      // Wait for all images to actually load (or fail)
       await page.evaluate(() => {
         const imgs = Array.from(document.querySelectorAll('img'))
         return Promise.all(imgs.map(img =>
@@ -115,7 +122,6 @@ export async function generateMultiPagePdf(
             : new Promise<void>(resolve => {
                 img.addEventListener('load', () => resolve(), { once: true })
                 img.addEventListener('error', () => resolve(), { once: true })
-                // Safety timeout per image
                 setTimeout(resolve, 8000)
               })
         ))
@@ -124,21 +130,31 @@ export async function generateMultiPagePdf(
       // First page: 1200ms for initial font load; rest: 400ms (fonts already cached)
       await new Promise(resolve => setTimeout(resolve, i === 0 ? 1200 : 400))
 
-      const pageBuffer = await page.pdf(pdfOpts)
+      // Take screenshot instead of page.pdf — this captures exactly what the screen shows
+      const screenshot = await page.screenshot({
+        type: 'png',
+        clip: { x: 0, y: 0, width: slideW, height: slideH },
+      })
       await page.close()
 
-      const pagePdf = await PDFDocument.load(pageBuffer)
-      const copiedPages = await mergedPdf.copyPages(pagePdf, pagePdf.getPageIndices())
-      copiedPages.forEach(p => mergedPdf.addPage(p))
+      // Embed screenshot as a full-page image in the PDF
+      const pngImage = await mergedPdf.embedPng(screenshot)
+      const pdfPage = mergedPdf.addPage([slideW, slideH])
+      pdfPage.drawImage(pngImage, {
+        x: 0,
+        y: 0,
+        width: slideW,
+        height: slideH,
+      })
     }
 
-    // Add rich metadata for better editability in external tools
+    // Add rich metadata
     mergedPdf.setTitle(options.title || 'Presentation')
     mergedPdf.setAuthor(options.brandName || 'Leaders')
     mergedPdf.setSubject('Proposal Presentation')
     mergedPdf.setKeywords(['proposal', 'presentation', options.brandName].filter(Boolean) as string[])
     mergedPdf.setCreator('Leaders pptmaker')
-    mergedPdf.setProducer('Leaders pptmaker - Puppeteer/pdf-lib')
+    mergedPdf.setProducer('Leaders pptmaker - Screenshot/pdf-lib')
     mergedPdf.setCreationDate(new Date())
     mergedPdf.setModificationDate(new Date())
 
