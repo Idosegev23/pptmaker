@@ -53,14 +53,9 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
   const fontFamily = el.fontFamily || defaultFont || 'Heebo'
   const overflowVisible = ['title', 'subtitle', 'decorative'].includes(el.role || '')
 
-  // In PDF mode, skip gradient text (causes rasterization in Chromium's print engine)
-  const useGradient = isGradientText && !pdfMode
-  // In PDF mode: decorative elements keep original opacity (watermarks should stay subtle);
-  // readable text gets minimum 0.85 opacity for legibility
-  const isDecorative = el.role === 'decorative'
-  const effectiveOpacity = pdfMode
-    ? (isDecorative ? (el.opacity ?? 1) : Math.max(el.opacity ?? 1, 0.85))
-    : (el.opacity ?? 1)
+  // Keep gradient text in PDF — it renders correctly via screenshot, rasterization is acceptable
+  const useGradient = isGradientText
+  const effectiveOpacity = el.opacity ?? 1
 
   const styles = [
     `position: absolute`,
@@ -89,32 +84,12 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
   if (el.backgroundColor) styles.push(`background-color: ${el.backgroundColor}`)
   if (el.borderRadius) styles.push(`border-radius: ${el.borderRadius}px`)
   if (el.padding) styles.push(`padding: ${el.padding}px`)
-  if (!pdfMode && el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
-  // textStroke: in PDF only keep for decorative elements (watermarks) — on readable text it creates ugly outline
+  if (el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
   if (el.textStroke) {
-    if (!pdfMode || isDecorative) {
-      styles.push(`-webkit-text-stroke: ${el.textStroke.width}px ${el.textStroke.color}`)
-    }
+    styles.push(`-webkit-text-stroke: ${el.textStroke.width}px ${el.textStroke.color}`)
   }
-  // textShadow: in PDF the blur renders as hard "double text" — strip blur, keep minimal offset
-  if (el.textShadow) {
-    if (pdfMode) {
-      // Only add a subtle non-blur shadow for readability, skip decorative
-      if (!isDecorative) {
-        styles.push(`text-shadow: 0 1px 0 rgba(0,0,0,0.25)`)
-      }
-    } else {
-      styles.push(`text-shadow: ${el.textShadow}`)
-    }
-  }
-  if (el.boxShadow) {
-    if (pdfMode) {
-      const simplified = el.boxShadow.replace(/(\d+px\s+\d+px)\s+\d+px/g, '$1 0px')
-      styles.push(`box-shadow: ${simplified}`)
-    } else {
-      styles.push(`box-shadow: ${el.boxShadow}`)
-    }
-  }
+  if (el.textShadow) styles.push(`text-shadow: ${el.textShadow}`)
+  if (el.boxShadow) styles.push(`box-shadow: ${el.boxShadow}`)
   if (useGradient) {
     styles.push(`background: ${el.gradientFill}`)
     styles.push(`-webkit-background-clip: text`)
@@ -124,7 +99,7 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
   return `<div style="${styles.join('; ')}">${escapeHtml(el.content)}</div>`
 }
 
-function renderImageElement(el: ImageElement, pdfMode = false): string {
+function renderImageElement(el: ImageElement, _pdfMode = false): string {
   const containerStyles = [
     `position: absolute`,
     `left: ${el.x}px`,
@@ -148,13 +123,12 @@ function renderImageElement(el: ImageElement, pdfMode = false): string {
     `object-fit: ${el.objectFit || 'cover'}`,
     `display: block`,
   ]
-  // filter on images can cause rasterization in PDF — skip to keep image as separate object
-  if (!pdfMode && el.filter) imgStyles.push(`filter: ${el.filter}`)
+  if (el.filter) imgStyles.push(`filter: ${el.filter}`)
 
-  return `<div style="${containerStyles.join('; ')}"><img src="${sanitizeUrl(el.src)}" alt="${escapeHtml(el.alt || '')}" style="${imgStyles.join('; ')}" onerror="this.style.display='none'" /></div>`
+  return `<div style="${containerStyles.join('; ')}"><img src="${sanitizeUrl(el.src)}" alt="${escapeHtml(el.alt || '')}" style="${imgStyles.join('; ')}" crossorigin="anonymous" /></div>`
 }
 
-function renderShapeElement(el: ShapeElement, pdfMode = false): string {
+function renderShapeElement(el: ShapeElement, _pdfMode = false): string {
   const styles = [
     `position: absolute`,
     `left: ${el.x}px`,
@@ -177,18 +151,9 @@ function renderShapeElement(el: ShapeElement, pdfMode = false): string {
   if (el.border) styles.push(`border: ${el.border}`)
   if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
   if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
-  // mixBlendMode causes layer rasterization → skip in PDF to keep objects selectable in Canva
-  if (!pdfMode && el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
-  if (el.boxShadow) {
-    if (pdfMode) {
-      // Strip blur from boxShadow to prevent rasterization — keep offset+color only
-      const simplified = el.boxShadow.replace(/(\d+px\s+\d+px)\s+\d+px/g, '$1 0px')
-      styles.push(`box-shadow: ${simplified}`)
-    } else {
-      styles.push(`box-shadow: ${el.boxShadow}`)
-    }
-  }
-  if (!pdfMode && el.backdropFilter) {
+  if (el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
+  if (el.boxShadow) styles.push(`box-shadow: ${el.boxShadow}`)
+  if (el.backdropFilter) {
     styles.push(`backdrop-filter: ${el.backdropFilter}`)
     styles.push(`-webkit-backdrop-filter: ${el.backdropFilter}`)
   }
@@ -211,13 +176,10 @@ function renderElement(el: SlideElement, defaultFont: string, pdfMode = false): 
 
 /**
  * Convert a single Slide AST to a self-contained HTML document.
- * When pdfMode=true, optimizes for PDF rendering:
- * - Disables gradient text fill (causes rasterization in Chromium print)
- * - Forces minimum 0.85 opacity on readable text (keeps decorative as-is)
- * - Skips blend modes on text
- * - Strips textShadow blur (renders as hard "double text" in PDF) — keeps minimal offset
- * - Strips textStroke on non-decorative text (only watermarks keep outline)
- * - Strips backdropFilter on shapes (glassmorphism doesn't render in print)
+ * pdfMode is accepted for API compatibility but all visual effects are now
+ * rendered identically to the editor — the PDF is generated via Puppeteer
+ * screenshot/page.pdf which supports all CSS effects (gradients, blend modes,
+ * backdrop-filter, shadows, etc.) so stripping them caused visual mismatches.
  */
 export function slideToHtml(slide: Slide, designSystem: DesignSystem, pdfMode = false): string {
   const headingFont = designSystem.fonts.heading || 'Heebo'

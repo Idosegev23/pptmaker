@@ -105,6 +105,22 @@ export async function generateMultiPagePdf(
       await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 2 })
       await page.setContent(htmlPages[i], { waitUntil: 'networkidle0' })
       await page.evaluate(() => document.fonts?.ready)
+
+      // Wait for all images to actually load (or fail) — networkidle0 doesn't guarantee this
+      await page.evaluate(() => {
+        const imgs = Array.from(document.querySelectorAll('img'))
+        return Promise.all(imgs.map(img =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>(resolve => {
+                img.addEventListener('load', () => resolve(), { once: true })
+                img.addEventListener('error', () => resolve(), { once: true })
+                // Safety timeout per image
+                setTimeout(resolve, 8000)
+              })
+        ))
+      })
+
       // First page: 1200ms for initial font load; rest: 400ms (fonts already cached)
       await new Promise(resolve => setTimeout(resolve, i === 0 ? 1200 : 400))
 
@@ -182,6 +198,21 @@ export async function renderSlidesToImages(
       await page.setViewport({ width: 1920, height: 1080 })
       await page.setContent(htmlSlides[i], { waitUntil: 'networkidle0' })
       await page.evaluate(() => document.fonts?.ready)
+
+      // Wait for all images to actually load
+      await page.evaluate(() => {
+        const imgs = Array.from(document.querySelectorAll('img'))
+        return Promise.all(imgs.map(img =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>(resolve => {
+                img.addEventListener('load', () => resolve(), { once: true })
+                img.addEventListener('error', () => resolve(), { once: true })
+                setTimeout(resolve, 8000)
+              })
+        ))
+      })
+
       await new Promise(resolve => setTimeout(resolve, i === 0 ? 800 : 300))
 
       const screenshot = await page.screenshot({
