@@ -54,7 +54,7 @@ export default function PresentationEditorPage() {
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [imageModalElementId, setImageModalElementId] = useState<string | null>(null)
   const [imageModalTab, setImageModalTab] = useState<'upload' | 'url' | 'ai'>('upload')
-  const [imageModalMode, setImageModalMode] = useState<'replace' | 'add'>('replace')
+  const [imageModalMode, setImageModalMode] = useState<'replace' | 'add' | 'mockup-content'>('replace')
   const [aiRewriteState, setAiRewriteState] = useState<{ elementId: string; loading: boolean } | null>(null)
   const [aiDesignInstruction, setAiDesignInstruction] = useState('')
   const [isRegenerating, setIsRegenerating] = useState(false)
@@ -582,6 +582,10 @@ export default function PresentationEditorPage() {
         src: url, alt: '', objectFit: 'cover', borderRadius: 12,
       }
       editor.addElement(element)
+    } else if (imageModalMode === 'mockup-content' && elementId) {
+      // Update mockup element content
+      editor.updateElement(elementId, { contentSrc: url, contentType: 'image' } as Partial<SlideElement>)
+      console.log('[Editor] Mockup content updated:', elementId)
     } else if (elementId) {
       editor.updateElement(elementId, { src: url } as Partial<SlideElement>)
       console.log('[Editor] Image element updated:', elementId)
@@ -1005,6 +1009,7 @@ export default function PresentationEditorPage() {
             onBackgroundUpdate={editor.updateSlideBackground}
             onClose={() => setShowProperties(false)}
             onImageReplace={(elementId, tab) => { setImageModalMode('replace'); setImageModalElementId(elementId); setImageModalTab(tab || 'upload') }}
+            onMockupContentReplace={(elementId) => { setImageModalMode('mockup-content'); setImageModalElementId(elementId); setImageModalTab('upload') }}
             onAIRewrite={handleAIRewrite}
             onRegenerateSlide={() => handleRegenerateSlide()}
             aiDesignInstruction={aiDesignInstruction}

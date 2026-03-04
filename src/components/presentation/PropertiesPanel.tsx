@@ -37,6 +37,7 @@ interface PropertiesPanelProps {
   onBackgroundUpdate: (bg: SlideBackground) => void
   onClose: () => void
   onImageReplace?: (elementId: string, tab?: 'upload' | 'url' | 'ai') => void
+  onMockupContentReplace?: (elementId: string) => void
   onAIRewrite?: (elementId: string, currentText: string) => void
   onRegenerateSlide?: () => void
   aiDesignInstruction?: string
@@ -53,6 +54,7 @@ export default function PropertiesPanel({
   onBackgroundUpdate,
   onClose,
   onImageReplace,
+  onMockupContentReplace,
   onAIRewrite,
   onRegenerateSlide,
   aiDesignInstruction,
@@ -113,6 +115,7 @@ export default function PropertiesPanel({
               <MockupProperties
                 element={selectedElement}
                 onChange={(changes) => onElementUpdate(selectedElement.id, changes)}
+                onContentReplace={onMockupContentReplace ? () => onMockupContentReplace(selectedElement.id) : undefined}
               />
             )}
             {isCompareElement(selectedElement) && (
@@ -485,15 +488,54 @@ const COLOR_LABELS: Record<string, string> = {
   red: 'אדום', yellow: 'צהוב', green: 'ירוק', blue: 'כחול',
 }
 
-function MockupProperties({ element, onChange }: {
+function MockupProperties({ element, onChange, onContentReplace }: {
   element: MockupElement
   onChange: (changes: Partial<MockupElement>) => void
+  onContentReplace?: () => void
 }) {
   const availableColors = MOCKUP_DEVICE_COLORS[element.deviceType] || []
+  const hasContent = element.contentType !== 'color' && !!element.contentSrc
 
   return (
     <div className="space-y-3">
       <SectionLabel>מוקאפ</SectionLabel>
+
+      {/* Content upload button — prominent */}
+      <div>
+        <MiniLabel>תוכן המסך</MiniLabel>
+        {onContentReplace && (
+          <button
+            onClick={onContentReplace}
+            className="w-full py-3 rounded-lg border-2 border-dashed border-white/20 hover:border-white/40 bg-white/5 hover:bg-white/10 transition-all flex flex-col items-center gap-1.5 group"
+          >
+            {hasContent ? (
+              <>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/60 group-hover:text-white/80">
+                  <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" /><path d="M12 12v9" /><path d="m16 16-4-4-4 4" />
+                </svg>
+                <span className="text-white/60 group-hover:text-white/80 text-xs">החלף תמונה / וידאו</span>
+              </>
+            ) : (
+              <>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/40 group-hover:text-white/70">
+                  <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                </svg>
+                <span className="text-white/40 group-hover:text-white/70 text-xs font-medium">הוסף תמונה או וידאו למסך</span>
+              </>
+            )}
+          </button>
+        )}
+        {/* Manual URL input */}
+        <input type="text" value={(element.contentType !== 'color' && element.contentSrc) || ''} onChange={(e) => onChange({ contentSrc: e.target.value, contentType: 'image' })} placeholder="או הדבק URL ישירות..." className="w-full mt-2 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-[10px] focus:outline-none focus:border-white/30 font-mono" dir="ltr" />
+        {/* Content type toggle */}
+        {hasContent && (
+          <div className="flex gap-1 mt-2">
+            <button onClick={() => onChange({ contentType: 'image' })} className={`flex-1 py-1 rounded text-xs ${element.contentType === 'image' ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>תמונה</button>
+            <button onClick={() => onChange({ contentType: 'video' })} className={`flex-1 py-1 rounded text-xs ${element.contentType === 'video' ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>וידאו</button>
+          </div>
+        )}
+      </div>
+
       <div>
         <MiniLabel>מכשיר</MiniLabel>
         <select value={element.deviceType} onChange={(e) => onChange({ deviceType: e.target.value as MockupDeviceType, deviceColor: undefined })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30">
@@ -517,10 +559,6 @@ function MockupProperties({ element, onChange }: {
           <input type="checkbox" checked={element.landscape || false} onChange={(e) => onChange({ landscape: e.target.checked })} className="rounded bg-white/10 border-white/20" />
           מצב לרוחב (Landscape)
         </label>
-      </div>
-      <div>
-        <MiniLabel>תמונת תוכן</MiniLabel>
-        <input type="text" value={element.contentSrc || ''} onChange={(e) => onChange({ contentSrc: e.target.value, contentType: 'image' })} placeholder="URL תמונה" className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-[10px] focus:outline-none focus:border-white/30 font-mono" dir="ltr" />
       </div>
       <div>
         <MiniLabel>שקיפות</MiniLabel>

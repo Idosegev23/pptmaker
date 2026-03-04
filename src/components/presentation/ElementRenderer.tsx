@@ -299,19 +299,36 @@ function VideoElementView({ element, isEditing }: { element: VideoElement; isEdi
 // ─── Mockup Element ─────────────────────────────────
 
 function MockupElementView({ element }: { element: MockupElement }) {
+  const hasRealContent = element.contentType !== 'color' && !!element.contentSrc
+
   // For MagicUI devices, pass image/video via props (not children)
-  const imageSrc = element.contentType === 'image' ? element.contentSrc : undefined
-  const videoSrc = element.contentType === 'video' ? element.contentSrc : undefined
+  const imageSrc = element.contentType === 'image' && element.contentSrc ? element.contentSrc : undefined
+  const videoSrc = element.contentType === 'video' && element.contentSrc ? element.contentSrc : undefined
 
   // For frameset devices, render content as children
-  const content = element.contentType === 'color'
-    ? <div style={{ width: '100%', height: '100%', background: element.contentSrc || '#1a1a2e' }} />
-    : element.contentType === 'image'
+  const content = hasRealContent
+    ? element.contentType === 'image'
       ? (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img src={element.contentSrc} alt="mockup content" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} draggable={false} />
       )
       : <div style={{ width: '100%', height: '100%', background: '#000' }} />
+    : (
+      // Empty state placeholder
+      <div style={{
+        width: '100%', height: '100%',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        gap: 8, color: 'rgba(255,255,255,0.3)',
+      }}>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+        </svg>
+        <span style={{ fontSize: 11, fontFamily: 'Heebo, sans-serif' }}>בחר תוכן בפאנל הצד</span>
+      </div>
+    )
 
   return (
     <DeviceMockup
