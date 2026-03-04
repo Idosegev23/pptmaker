@@ -490,8 +490,8 @@ export default function PresentationEditorPage() {
         const el: MockupElement = {
           id: generateId('el'), type: 'mockup',
           x: 560, y: 140, width: 400, height: 700, zIndex: 60,
-          deviceType: 'iphone', deviceVariant: 'front',
-          contentType: 'color', contentSrc: '#1a1a2e', deviceColor: 'black',
+          deviceType: 'iPhone 15 Pro',
+          contentType: 'color', contentSrc: '#1a1a2e',
         }
         element = el
         break

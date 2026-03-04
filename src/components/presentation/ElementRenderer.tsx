@@ -299,6 +299,11 @@ function VideoElementView({ element, isEditing }: { element: VideoElement; isEdi
 // ─── Mockup Element ─────────────────────────────────
 
 function MockupElementView({ element }: { element: MockupElement }) {
+  // For MagicUI devices, pass image/video via props (not children)
+  const imageSrc = element.contentType === 'image' ? element.contentSrc : undefined
+  const videoSrc = element.contentType === 'video' ? element.contentSrc : undefined
+
+  // For frameset devices, render content as children
   const content = element.contentType === 'color'
     ? <div style={{ width: '100%', height: '100%', background: element.contentSrc || '#1a1a2e' }} />
     : element.contentType === 'image'
@@ -311,10 +316,10 @@ function MockupElementView({ element }: { element: MockupElement }) {
   return (
     <DeviceMockup
       deviceType={element.deviceType}
-      deviceVariant={element.deviceVariant}
       deviceColor={element.deviceColor}
-      width={element.width}
-      height={element.height}
+      landscape={element.landscape}
+      imageSrc={imageSrc}
+      videoSrc={videoSrc}
     >
       {content}
     </DeviceMockup>

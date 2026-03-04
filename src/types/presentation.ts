@@ -271,16 +271,28 @@ export function extractVimeoId(url: string): string | null {
 // DEVICE MOCKUP ELEMENT
 // ============================================================
 
-export type MockupDeviceType = 'iphone' | 'ipad' | 'macbook' | 'browser' | 'tv' | 'phone-generic'
-export type MockupVariant = 'front' | 'tilted' | 'side' | 'flat'
+// MagicUI high-fidelity SVG mockups
+export type MagicUIDevice = 'iPhone 15 Pro' | 'Safari' | 'Android'
+// react-device-frameset CSS mockups
+export type FramesetDevice =
+  | 'iPhone X' | 'iPhone 8' | 'iPhone 8 Plus' | 'iPhone 5s' | 'iPhone 5c' | 'iPhone 4s'
+  | 'iPad Mini' | 'MacBook Pro'
+  | 'Galaxy Note 8' | 'Samsung Galaxy S5' | 'Nexus 5'
+  | 'HTC One' | 'Lumia 920'
+
+export type MockupDeviceType = MagicUIDevice | FramesetDevice
+
+export type MockupDeviceColor = 'black' | 'silver' | 'gold' | 'white' | 'red' | 'yellow' | 'green' | 'blue'
+
+export const MAGICUI_DEVICES: MagicUIDevice[] = ['iPhone 15 Pro', 'Safari', 'Android']
 
 export interface MockupElement extends BaseElement {
   type: 'mockup'
   deviceType: MockupDeviceType
-  deviceVariant?: MockupVariant
+  deviceColor?: MockupDeviceColor
+  landscape?: boolean
   contentType: 'image' | 'video' | 'color'
   contentSrc: string              // image URL, video URL, or color value
-  deviceColor?: string            // device frame color (black/white/silver)
   borderRadius?: BorderRadius
 }
 

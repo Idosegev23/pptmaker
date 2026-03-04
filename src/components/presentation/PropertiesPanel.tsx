@@ -19,7 +19,7 @@ import type {
   MaskConfig,
   MaskType,
   MockupDeviceType,
-  MockupVariant,
+  MockupDeviceColor,
 } from '@/types/presentation'
 import { isTextElement, isImageElement, isShapeElement, isVideoElement, isMockupElement, isCompareElement, isLogoStripElement, isMapElement, MASK_CLIP_PATHS } from '@/types/presentation'
 
@@ -445,50 +445,78 @@ function VideoProperties({ element, onChange }: {
 
 // ─── Mockup Properties ──────────────────────────────
 
-const DEVICE_OPTIONS: { type: MockupDeviceType; label: string }[] = [
-  { type: 'iphone', label: 'iPhone' },
-  { type: 'ipad', label: 'iPad' },
-  { type: 'macbook', label: 'MacBook' },
-  { type: 'browser', label: 'דפדפן' },
-  { type: 'tv', label: 'טלוויזיה' },
-  { type: 'phone-generic', label: 'טלפון כללי' },
+const DEVICE_OPTIONS: { type: MockupDeviceType; label: string; group?: string }[] = [
+  // MagicUI — premium SVG mockups
+  { type: 'iPhone 15 Pro', label: '✦ iPhone 15 Pro', group: 'פרימיום' },
+  { type: 'Safari', label: '✦ Safari Browser', group: 'פרימיום' },
+  { type: 'Android', label: '✦ Android', group: 'פרימיום' },
+  // Frameset devices
+  { type: 'iPhone X', label: 'iPhone X', group: 'Apple' },
+  { type: 'iPhone 8', label: 'iPhone 8', group: 'Apple' },
+  { type: 'iPhone 8 Plus', label: 'iPhone 8 Plus', group: 'Apple' },
+  { type: 'iPad Mini', label: 'iPad Mini', group: 'Apple' },
+  { type: 'MacBook Pro', label: 'MacBook Pro', group: 'Apple' },
+  { type: 'Galaxy Note 8', label: 'Galaxy Note 8', group: 'Android' },
+  { type: 'Samsung Galaxy S5', label: 'Samsung Galaxy S5', group: 'Android' },
+  { type: 'Nexus 5', label: 'Nexus 5', group: 'Android' },
+  { type: 'HTC One', label: 'HTC One', group: 'Other' },
+  { type: 'Lumia 920', label: 'Lumia 920', group: 'Other' },
 ]
 
-const VARIANT_OPTIONS: { type: MockupVariant; label: string }[] = [
-  { type: 'front', label: 'חזית' },
-  { type: 'tilted', label: 'נטוי' },
-  { type: 'side', label: 'צד' },
-  { type: 'flat', label: 'שטוח' },
-]
+// Colors available per device (from react-device-frameset)
+const MOCKUP_DEVICE_COLORS: Record<string, MockupDeviceColor[]> = {
+  'iPhone X': [],
+  'iPhone 8': ['black', 'silver', 'gold'],
+  'iPhone 8 Plus': ['black', 'silver', 'gold'],
+  'iPhone 5s': ['black', 'silver', 'gold'],
+  'iPhone 5c': ['white', 'red', 'yellow', 'green', 'blue'],
+  'iPhone 4s': ['black', 'silver'],
+  'iPad Mini': [],
+  'MacBook Pro': [],
+  'Galaxy Note 8': [],
+  'Samsung Galaxy S5': [],
+  'Nexus 5': [],
+  'HTC One': [],
+  'Lumia 920': ['black', 'white', 'yellow', 'red', 'blue'],
+}
+
+const COLOR_LABELS: Record<string, string> = {
+  black: 'שחור', silver: 'כסוף', gold: 'זהב', white: 'לבן',
+  red: 'אדום', yellow: 'צהוב', green: 'ירוק', blue: 'כחול',
+}
 
 function MockupProperties({ element, onChange }: {
   element: MockupElement
   onChange: (changes: Partial<MockupElement>) => void
 }) {
+  const availableColors = MOCKUP_DEVICE_COLORS[element.deviceType] || []
+
   return (
     <div className="space-y-3">
       <SectionLabel>מוקאפ</SectionLabel>
       <div>
         <MiniLabel>מכשיר</MiniLabel>
-        <select value={element.deviceType} onChange={(e) => onChange({ deviceType: e.target.value as MockupDeviceType })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30">
+        <select value={element.deviceType} onChange={(e) => onChange({ deviceType: e.target.value as MockupDeviceType, deviceColor: undefined })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30">
           {DEVICE_OPTIONS.map(d => <option key={d.type} value={d.type}>{d.label}</option>)}
         </select>
       </div>
-      <div>
-        <MiniLabel>זווית</MiniLabel>
-        <select value={element.deviceVariant || 'front'} onChange={(e) => onChange({ deviceVariant: e.target.value as MockupVariant })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30">
-          {VARIANT_OPTIONS.map(v => <option key={v.type} value={v.type}>{v.label}</option>)}
-        </select>
-      </div>
-      <div>
-        <MiniLabel>צבע מכשיר</MiniLabel>
-        <div className="flex gap-1">
-          {['black', 'white', 'silver'].map(c => (
-            <button key={c} onClick={() => onChange({ deviceColor: c })} className={`flex-1 py-1.5 rounded text-xs ${element.deviceColor === c || (!element.deviceColor && c === 'black') ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>
-              {c === 'black' ? 'שחור' : c === 'white' ? 'לבן' : 'כסוף'}
-            </button>
-          ))}
+      {availableColors.length > 0 && (
+        <div>
+          <MiniLabel>צבע מכשיר</MiniLabel>
+          <div className="flex flex-wrap gap-1">
+            {availableColors.map(c => (
+              <button key={c} onClick={() => onChange({ deviceColor: c as MockupDeviceColor })} className={`px-2 py-1.5 rounded text-xs ${element.deviceColor === c ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>
+                {COLOR_LABELS[c] || c}
+              </button>
+            ))}
+          </div>
         </div>
+      )}
+      <div>
+        <label className="flex items-center gap-2 text-gray-400 text-xs cursor-pointer">
+          <input type="checkbox" checked={element.landscape || false} onChange={(e) => onChange({ landscape: e.target.checked })} className="rounded bg-white/10 border-white/20" />
+          מצב לרוחב (Landscape)
+        </label>
       </div>
       <div>
         <MiniLabel>תמונת תוכן</MiniLabel>

@@ -210,12 +210,14 @@ function renderMockupElement(el: MockupElement): string {
   if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
   if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
 
-  const frameColor = el.deviceColor === 'white' ? '#f5f5f7' : el.deviceColor === 'silver' ? '#e0e0e0' : '#1d1d1f'
+  const frameColor = (el.deviceColor === 'white' || el.deviceColor === 'gold') ? '#f5f5f7' : el.deviceColor === 'silver' ? '#e0e0e0' : '#1d1d1f'
+  const isPhone = el.deviceType.includes('iPhone') || el.deviceType.includes('Galaxy') || el.deviceType.includes('Nexus') || el.deviceType.includes('Lumia') || el.deviceType.includes('HTC') || el.deviceType.includes('Samsung')
+  const borderRadius = isPhone ? el.width * 0.12 : el.deviceType.includes('MacBook') ? el.width * 0.02 : el.width * 0.04
   const content = el.contentType === 'image' && el.contentSrc
     ? `<img src="${sanitizeUrl(el.contentSrc)}" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block;" />`
     : `<div style="width: 100%; height: 100%; background: ${el.contentSrc || '#1a1a2e'};"></div>`
 
-  return `<div style="${styles.join('; ')}"><div style="width: 100%; height: 100%; background: ${frameColor}; border-radius: ${el.width * 0.08}px; padding: 4%; box-shadow: 0 20px 60px rgba(0,0,0,0.4); display: flex;"><div style="flex: 1; border-radius: ${el.width * 0.04}px; overflow: hidden; background: #000;">${content}</div></div></div>`
+  return `<div style="${styles.join('; ')}"><div style="width: 100%; height: 100%; background: ${frameColor}; border-radius: ${borderRadius}px; padding: 4%; box-shadow: 0 20px 60px rgba(0,0,0,0.4); display: flex;"><div style="flex: 1; border-radius: ${borderRadius * 0.5}px; overflow: hidden; background: #000;">${content}</div></div></div>`
 }
 
 function renderCompareElement(el: CompareElement): string {

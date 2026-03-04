@@ -46,7 +46,11 @@ export async function POST(request: NextRequest) {
 
     if (uploadError) {
       console.error('[video-upload] Storage error:', uploadError)
-      return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+      // Common: bucket doesn't exist
+      if (uploadError.message?.includes('not found') || uploadError.message?.includes('Bucket')) {
+        return NextResponse.json({ error: 'Storage bucket "videos" not configured. Create it in Supabase Dashboard → Storage.' }, { status: 500 })
+      }
+      return NextResponse.json({ error: `Upload failed: ${uploadError.message}` }, { status: 500 })
     }
 
     const { data: { publicUrl } } = supabase.storage
