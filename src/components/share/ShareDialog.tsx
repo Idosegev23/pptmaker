@@ -42,7 +42,14 @@ export default function ShareDialog({ isOpen, onClose, documentId }: ShareDialog
       })
       const data = await res.json()
       if (res.ok) {
-        setShare({ shareToken: data.shareToken, shareId: data.shareId, shareUrl: data.shareUrl })
+        const shareData = { shareToken: data.shareToken, shareId: data.shareId, shareUrl: data.shareUrl }
+        setShare(shareData)
+        // Auto-copy link
+        const url = `${window.location.origin}${shareData.shareUrl}`
+        navigator.clipboard.writeText(url).then(() => {
+          setCopied(true)
+          setTimeout(() => setCopied(false), 3000)
+        }).catch(() => {})
       }
     } catch (err) {
       console.error('Error creating share:', err)
@@ -126,22 +133,39 @@ export default function ShareDialog({ isOpen, onClose, documentId }: ShareDialog
             ) : (
               <>
                 {/* Share link */}
-                <div className="bg-white/5 rounded-lg p-3">
+                <div className={`rounded-xl p-4 transition-all ${copied ? 'bg-green-500/10 ring-1 ring-green-500/30' : 'bg-white/5'}`}>
+                  {copied && (
+                    <div className="flex items-center gap-2 mb-2 text-green-400 text-xs font-medium">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      הקישור הועתק ללוח!
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
                       readOnly
                       value={fullUrl}
-                      className="flex-1 bg-transparent text-white/80 text-xs font-mono outline-none"
+                      onClick={(e) => { (e.target as HTMLInputElement).select(); copyLink() }}
+                      className="flex-1 bg-white/5 rounded-lg px-3 py-2 text-white/80 text-xs font-mono outline-none cursor-pointer hover:bg-white/10 transition-colors"
                       dir="ltr"
                     />
                     <button
                       onClick={copyLink}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                        copied ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white hover:bg-white/20'
+                      className={`px-4 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                        copied ? 'bg-green-500/20 text-green-400' : 'bg-white text-black hover:bg-gray-200'
                       }`}
                     >
-                      {copied ? 'הועתק!' : 'העתק'}
+                      {copied ? (
+                        <>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                          הועתק
+                        </>
+                      ) : (
+                        <>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                          העתק קישור
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
