@@ -77,6 +77,7 @@ export default function PresentationMode({
 
   const content = (
     <div
+      dir="ltr"
       className="fixed inset-0 z-[9999] bg-black flex items-center justify-center cursor-none"
       onClick={goNext}
       onMouseMove={() => setShowControls(true)}

@@ -166,7 +166,8 @@ export default function SharedPresentationViewer({ data, shareToken }: SharedPre
     return (
       <div
         ref={containerRef}
-        className="h-screen bg-[#0a0a0f] flex flex-col items-center justify-center overflow-hidden cursor-default select-none"
+        dir="ltr"
+        className="h-screen w-screen bg-[#0a0a0f] flex flex-col items-center justify-center overflow-hidden cursor-default select-none"
         onMouseMove={resetControlsTimer}
         onClick={(e) => {
           // Click left half = prev, right half = next
@@ -332,7 +333,8 @@ export default function SharedPresentationViewer({ data, shareToken }: SharedPre
   return (
     <div
       ref={containerRef}
-      className="min-h-screen bg-[#0a0a0f]"
+      dir="ltr"
+      className="min-h-screen w-screen bg-[#0a0a0f]"
     >
       {/* Reading time header */}
       <div className="sticky top-0 z-50 bg-black/60 backdrop-blur-md border-b border-white/5">
