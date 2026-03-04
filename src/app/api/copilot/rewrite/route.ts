@@ -12,13 +12,26 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { currentText, instruction, elementRole, slideLabel, brandName } = body
+    const {
+      currentText,
+      instruction,
+      elementRole,
+      slideLabel,
+      brandName,
+      // Context-aware fields
+      slideType,
+      slidePurpose,
+      slideTextSummary,
+      industry,
+      targetAudience,
+      brandPersonality,
+    } = body
 
     if (!currentText) {
       return NextResponse.json({ error: 'currentText is required' }, { status: 400 })
     }
 
-    console.log(`[${requestId}] Rewriting text: role=${elementRole}, slide=${slideLabel}`)
+    console.log(`[${requestId}] Rewriting text: role=${elementRole}, slide=${slideLabel}, brand=${brandName}`)
 
     const roleGuidance: Record<string, string> = {
       title: 'כותרת קצרה וחזקה (3-6 מילים)',
@@ -33,21 +46,45 @@ export async function POST(request: NextRequest) {
 
     const guidance = roleGuidance[elementRole || ''] || 'טקסט מקצועי'
 
+    // Build context-aware prompt
+    const contextParts: string[] = []
+
+    if (brandName || industry || targetAudience || brandPersonality) {
+      contextParts.push(`<presentation_context>`)
+      if (brandName) contextParts.push(`מותג: ${brandName}`)
+      if (industry) contextParts.push(`תעשייה: ${industry}`)
+      if (targetAudience) contextParts.push(`קהל יעד: ${targetAudience}`)
+      if (brandPersonality) contextParts.push(`אישיות מותג: ${brandPersonality}`)
+      contextParts.push(`</presentation_context>`)
+    }
+
+    if (slideType || slideLabel || slidePurpose || slideTextSummary) {
+      contextParts.push(`<slide_context>`)
+      if (slideType) contextParts.push(`סוג שקף: ${slideType}`)
+      if (slideLabel) contextParts.push(`תווית: ${slideLabel}`)
+      if (slidePurpose) contextParts.push(`מטרת השקף: ${slidePurpose}`)
+      if (slideTextSummary) contextParts.push(`תוכן נוכחי בשקף: ${slideTextSummary}`)
+      contextParts.push(`</slide_context>`)
+    }
+
+    const contextBlock = contextParts.length > 0 ? contextParts.join('\n') + '\n\n' : ''
+
     const prompt = `אתה קופירייטר ישראלי מקצועי שמתמחה במצגות עסקיות.
 
-המשימה: שכתב את הטקסט הבא בהתאם להנחיות.
-
+${contextBlock}<element>
+תפקיד: ${guidance}
 טקסט נוכחי: "${currentText}"
-${instruction ? `הנחיה: ${instruction}` : ''}
-סוג אלמנט: ${guidance}
-${slideLabel ? `שקף: ${slideLabel}` : ''}
-${brandName ? `מותג: ${brandName}` : ''}
+</element>
+
+${instruction ? `הוראת המשתמש: ${instruction}` : 'שפר את הטקסט — שמור על תמציתיות, רלוונטיות למותג, ועברית תקנית.'}
 
 כללים:
 - כתוב בעברית תקינה ומקצועית
 - שמור על אורך מתאים לסוג האלמנט
 - ${elementRole === 'title' ? 'כותרת חייבת להיות קצרה וחזקה' : 'שמור על טון מקצועי'}
 - אל תוסיף גרשיים או סימנים מיוחדים מיותרים
+${brandName ? `- השתמש בשפה שמתאימה למותג ${brandName}` : ''}
+${targetAudience ? `- כתוב בשפה שמדברת ל${targetAudience}` : ''}
 
 החזר JSON:
 { "text": "הטקסט המשוכתב" }`

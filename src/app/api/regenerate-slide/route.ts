@@ -48,14 +48,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Get slide type config for the requested slide
-    const currentSlide = presentation.slides[slideIndex] as { slideType?: string; label?: string } | undefined
+    const currentSlide = presentation.slides[slideIndex] as { slideType?: string; label?: string; archetype?: string } | undefined
     const slideType = currentSlide?.slideType || 'brief'
     const slideLabel = currentSlide?.label || ''
 
     // Build content context from document data
     const brandName = (documentData.brandName as string) || ''
-    const logoUrl = (documentData.brandLogoFile as string) || undefined
-    const scrapedAssets = documentData._scraped as { logoUrl?: string } | undefined
+
+    // Adjacent slides context for variety
+    const prevSlide = slideIndex > 0 ? presentation.slides[slideIndex - 1] as { label?: string; archetype?: string } : null
+    const nextSlide = slideIndex < presentation.slides.length - 1 ? presentation.slides[slideIndex + 1] as { label?: string; archetype?: string } : null
+
+    const adjacentContext = [
+      prevSlide ? `השקף הקודם: ${prevSlide.label || ''}${prevSlide.archetype ? ` (${prevSlide.archetype})` : ''}` : null,
+      nextSlide ? `השקף הבא: ${nextSlide.label || ''}${nextSlide.archetype ? ` (${nextSlide.archetype})` : ''}` : null,
+    ].filter(Boolean).join('. ')
+
+    const enrichedInstruction = [
+      instruction,
+      adjacentContext ? `הקשר שקפים סמוכים: ${adjacentContext}. בחר archetype שונה מהשכנים.` : null,
+    ].filter(Boolean).join('\n')
 
     const slideContent = {
       slideType,
@@ -63,7 +75,7 @@ export async function POST(request: NextRequest) {
       content: documentData,
     }
 
-    console.log(`[${requestId}] Regenerating: type=${slideType}, label=${slideLabel}`)
+    console.log(`[${requestId}] Regenerating: type=${slideType}, label=${slideLabel}, adjacent=${adjacentContext}`)
 
     const newSlide = await regenerateSingleSlide(
       presentation.designSystem,
@@ -71,7 +83,7 @@ export async function POST(request: NextRequest) {
       brandName,
       undefined,
       undefined,
-      instruction,
+      enrichedInstruction || undefined,
     )
 
     console.log(`[${requestId}] Regenerated slide with ${newSlide.elements.length} elements`)

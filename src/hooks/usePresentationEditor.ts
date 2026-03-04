@@ -13,9 +13,14 @@ import type {
 type EditorAction =
   | { type: 'SELECT_SLIDE'; index: number }
   | { type: 'SELECT_ELEMENT'; elementId: string | null }
+  | { type: 'SELECT_ELEMENTS'; elementIds: string[] }
+  | { type: 'ADD_TO_SELECTION'; elementId: string }
+  | { type: 'REMOVE_FROM_SELECTION'; elementId: string }
   | { type: 'UPDATE_ELEMENT'; slideIndex: number; elementId: string; changes: Partial<SlideElement> }
+  | { type: 'UPDATE_ELEMENTS'; slideIndex: number; elementIds: string[]; changes: Partial<SlideElement> }
   | { type: 'ADD_ELEMENT'; slideIndex: number; element: SlideElement }
   | { type: 'DELETE_ELEMENT'; slideIndex: number; elementId: string }
+  | { type: 'DELETE_ELEMENTS'; slideIndex: number; elementIds: string[] }
   | { type: 'DUPLICATE_ELEMENT'; slideIndex: number; elementId: string }
   | { type: 'UPDATE_SLIDE_BACKGROUND'; slideIndex: number; background: SlideBackground }
   | { type: 'REPLACE_SLIDE'; slideIndex: number; slide: Slide }
@@ -24,6 +29,10 @@ type EditorAction =
   | { type: 'DELETE_SLIDE'; slideIndex: number }
   | { type: 'REORDER_SLIDES'; fromIndex: number; toIndex: number }
   | { type: 'SET_PRESENTATION'; presentation: Presentation }
+  | { type: 'BRING_TO_FRONT'; slideIndex: number; elementId: string }
+  | { type: 'SEND_TO_BACK'; slideIndex: number; elementId: string }
+  | { type: 'MOVE_LAYER_UP'; slideIndex: number; elementId: string }
+  | { type: 'MOVE_LAYER_DOWN'; slideIndex: number; elementId: string }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'MARK_SAVED' }
@@ -34,6 +43,7 @@ interface EditorState {
   presentation: Presentation
   selectedSlideIndex: number
   selectedElementId: string | null
+  selectedElementIds: string[]
   undoStack: Presentation[]
   redoStack: Presentation[]
   isDirty: boolean
@@ -63,13 +73,42 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         selectedSlideIndex: action.index,
         selectedElementId: null,
+        selectedElementIds: [],
       }
 
     case 'SELECT_ELEMENT':
       return {
         ...state,
         selectedElementId: action.elementId,
+        selectedElementIds: action.elementId ? [action.elementId] : [],
       }
+
+    case 'SELECT_ELEMENTS':
+      return {
+        ...state,
+        selectedElementId: action.elementIds[0] || null,
+        selectedElementIds: action.elementIds,
+      }
+
+    case 'ADD_TO_SELECTION': {
+      const newIds = state.selectedElementIds.includes(action.elementId)
+        ? state.selectedElementIds
+        : [...state.selectedElementIds, action.elementId]
+      return {
+        ...state,
+        selectedElementId: action.elementId,
+        selectedElementIds: newIds,
+      }
+    }
+
+    case 'REMOVE_FROM_SELECTION': {
+      const filtered = state.selectedElementIds.filter(id => id !== action.elementId)
+      return {
+        ...state,
+        selectedElementId: filtered[filtered.length - 1] || null,
+        selectedElementIds: filtered,
+      }
+    }
 
     case 'UPDATE_ELEMENT': {
       const newPresentation = structuredClone(state.presentation)
@@ -116,6 +155,44 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         ...state,
         presentation: newPresentation,
         selectedElementId: state.selectedElementId === action.elementId ? null : state.selectedElementId,
+        ...pushUndo(state),
+        isDirty: true,
+      }
+    }
+
+    case 'UPDATE_ELEMENTS': {
+      const newPresentation = structuredClone(state.presentation)
+      const slide = newPresentation.slides[action.slideIndex]
+      if (!slide) return state
+
+      for (const elId of action.elementIds) {
+        const elIndex = slide.elements.findIndex(e => e.id === elId)
+        if (elIndex !== -1) {
+          slide.elements[elIndex] = { ...slide.elements[elIndex], ...action.changes } as SlideElement
+        }
+      }
+
+      return {
+        ...state,
+        presentation: newPresentation,
+        ...pushUndo(state),
+        isDirty: true,
+      }
+    }
+
+    case 'DELETE_ELEMENTS': {
+      const newPresentation = structuredClone(state.presentation)
+      const slide = newPresentation.slides[action.slideIndex]
+      if (!slide) return state
+
+      const idsSet = new Set(action.elementIds)
+      slide.elements = slide.elements.filter(e => !idsSet.has(e.id))
+
+      return {
+        ...state,
+        presentation: newPresentation,
+        selectedElementId: null,
+        selectedElementIds: [],
         ...pushUndo(state),
         isDirty: true,
       }
@@ -254,10 +331,67 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         presentation: action.presentation,
         selectedSlideIndex: 0,
         selectedElementId: null,
+        selectedElementIds: [],
         undoStack: [],
         redoStack: [],
         isDirty: false,
       }
+
+    case 'BRING_TO_FRONT': {
+      const newPresentation = structuredClone(state.presentation)
+      const slide = newPresentation.slides[action.slideIndex]
+      if (!slide) return state
+      const maxZ = Math.max(...slide.elements.map(e => e.zIndex), 0)
+      const el = slide.elements.find(e => e.id === action.elementId)
+      if (el) el.zIndex = maxZ + 1
+      return { ...state, presentation: newPresentation, ...pushUndo(state), isDirty: true }
+    }
+
+    case 'SEND_TO_BACK': {
+      const newPresentation = structuredClone(state.presentation)
+      const slide = newPresentation.slides[action.slideIndex]
+      if (!slide) return state
+      const minZ = Math.min(...slide.elements.map(e => e.zIndex), 0)
+      const el = slide.elements.find(e => e.id === action.elementId)
+      if (el) el.zIndex = minZ - 1
+      return { ...state, presentation: newPresentation, ...pushUndo(state), isDirty: true }
+    }
+
+    case 'MOVE_LAYER_UP': {
+      const newPresentation = structuredClone(state.presentation)
+      const slide = newPresentation.slides[action.slideIndex]
+      if (!slide) return state
+      const sorted = [...slide.elements].sort((a, b) => a.zIndex - b.zIndex)
+      const idx = sorted.findIndex(e => e.id === action.elementId)
+      if (idx < sorted.length - 1) {
+        const el = slide.elements.find(e => e.id === action.elementId)
+        const above = slide.elements.find(e => e.id === sorted[idx + 1].id)
+        if (el && above) {
+          const tmp = el.zIndex
+          el.zIndex = above.zIndex
+          above.zIndex = tmp
+        }
+      }
+      return { ...state, presentation: newPresentation, ...pushUndo(state), isDirty: true }
+    }
+
+    case 'MOVE_LAYER_DOWN': {
+      const newPresentation = structuredClone(state.presentation)
+      const slide = newPresentation.slides[action.slideIndex]
+      if (!slide) return state
+      const sorted = [...slide.elements].sort((a, b) => a.zIndex - b.zIndex)
+      const idx = sorted.findIndex(e => e.id === action.elementId)
+      if (idx > 0) {
+        const el = slide.elements.find(e => e.id === action.elementId)
+        const below = slide.elements.find(e => e.id === sorted[idx - 1].id)
+        if (el && below) {
+          const tmp = el.zIndex
+          el.zIndex = below.zIndex
+          below.zIndex = tmp
+        }
+      }
+      return { ...state, presentation: newPresentation, ...pushUndo(state), isDirty: true }
+    }
 
     case 'UNDO': {
       if (state.undoStack.length === 0) return state
@@ -298,6 +432,7 @@ export function usePresentationEditor(initialPresentation: Presentation) {
     presentation: initialPresentation,
     selectedSlideIndex: 0,
     selectedElementId: null,
+    selectedElementIds: [],
     undoStack: [],
     redoStack: [],
     isDirty: false,
@@ -349,6 +484,60 @@ export function usePresentationEditor(initialPresentation: Presentation) {
       slideIndex: state.selectedSlideIndex,
       elementId,
     })
+  }, [state.selectedSlideIndex])
+
+  // ─── Multi-select Actions
+  const selectElements = useCallback((elementIds: string[]) => {
+    dispatch({ type: 'SELECT_ELEMENTS', elementIds })
+  }, [])
+
+  const addToSelection = useCallback((elementId: string) => {
+    dispatch({ type: 'ADD_TO_SELECTION', elementId })
+  }, [])
+
+  const removeFromSelection = useCallback((elementId: string) => {
+    dispatch({ type: 'REMOVE_FROM_SELECTION', elementId })
+  }, [])
+
+  const selectAllElements = useCallback(() => {
+    const slide = state.presentation.slides[state.selectedSlideIndex]
+    if (slide) {
+      dispatch({ type: 'SELECT_ELEMENTS', elementIds: slide.elements.map(e => e.id) })
+    }
+  }, [state.presentation.slides, state.selectedSlideIndex])
+
+  const updateElements = useCallback((elementIds: string[], changes: Partial<SlideElement>) => {
+    dispatch({
+      type: 'UPDATE_ELEMENTS',
+      slideIndex: state.selectedSlideIndex,
+      elementIds,
+      changes,
+    })
+  }, [state.selectedSlideIndex])
+
+  const deleteElements = useCallback((elementIds: string[]) => {
+    dispatch({
+      type: 'DELETE_ELEMENTS',
+      slideIndex: state.selectedSlideIndex,
+      elementIds,
+    })
+  }, [state.selectedSlideIndex])
+
+  // ─── Layer Actions
+  const bringToFront = useCallback((elementId: string) => {
+    dispatch({ type: 'BRING_TO_FRONT', slideIndex: state.selectedSlideIndex, elementId })
+  }, [state.selectedSlideIndex])
+
+  const sendToBack = useCallback((elementId: string) => {
+    dispatch({ type: 'SEND_TO_BACK', slideIndex: state.selectedSlideIndex, elementId })
+  }, [state.selectedSlideIndex])
+
+  const moveLayerUp = useCallback((elementId: string) => {
+    dispatch({ type: 'MOVE_LAYER_UP', slideIndex: state.selectedSlideIndex, elementId })
+  }, [state.selectedSlideIndex])
+
+  const moveLayerDown = useCallback((elementId: string) => {
+    dispatch({ type: 'MOVE_LAYER_DOWN', slideIndex: state.selectedSlideIndex, elementId })
   }, [state.selectedSlideIndex])
 
   // ─── Slide Actions
@@ -425,6 +614,7 @@ export function usePresentationEditor(initialPresentation: Presentation) {
     presentation: state.presentation,
     selectedSlideIndex: state.selectedSlideIndex,
     selectedElementId: state.selectedElementId,
+    selectedElementIds: state.selectedElementIds,
     selectedSlide,
     selectedElement,
     isDirty: state.isDirty,
@@ -438,6 +628,20 @@ export function usePresentationEditor(initialPresentation: Presentation) {
     addElement,
     deleteElement,
     duplicateElement,
+
+    // Multi-select Actions
+    selectElements,
+    addToSelection,
+    removeFromSelection,
+    selectAllElements,
+    updateElements,
+    deleteElements,
+
+    // Layer Actions
+    bringToFront,
+    sendToBack,
+    moveLayerUp,
+    moveLayerDown,
 
     // Slide Actions
     updateSlideBackground,

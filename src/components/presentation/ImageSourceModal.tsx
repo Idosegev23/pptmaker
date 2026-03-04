@@ -2,8 +2,11 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import type { DesignSystem } from '@/types/presentation'
+import type { SlideContext } from '@/lib/editor/slide-context-builder'
+import { buildSmartImagePrompt, getImageSuggestions } from '@/lib/editor/slide-context-builder'
 
 type Tab = 'upload' | 'url' | 'ai'
+type ImageStyle = 'photo' | 'illustration' | 'abstract' | '3d'
 
 interface ImageSourceModalProps {
   isOpen: boolean
@@ -13,6 +16,7 @@ interface ImageSourceModalProps {
   documentId: string
   slideLabel?: string
   initialTab?: Tab
+  slideContext?: SlideContext
 }
 
 export default function ImageSourceModal({
@@ -23,6 +27,7 @@ export default function ImageSourceModal({
   documentId,
   slideLabel,
   initialTab,
+  slideContext,
 }: ImageSourceModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab || 'upload')
   const [loading, setLoading] = useState(false)
@@ -109,6 +114,7 @@ export default function ImageSourceModal({
               designSystem={designSystem}
               documentId={documentId}
               slideLabel={slideLabel}
+              slideContext={slideContext}
             />
           )}
         </div>
@@ -269,7 +275,7 @@ function UrlTab({ onImageSelected }: {
 
 // ─── AI Tab ──────────────────────────────────────────
 
-function AiTab({ loading, setLoading, setError, onImageSelected, designSystem, documentId, slideLabel }: {
+function AiTab({ loading, setLoading, setError, onImageSelected, designSystem, documentId, slideLabel, slideContext }: {
   loading: boolean
   setLoading: (v: boolean) => void
   setError: (v: string | null) => void
@@ -277,15 +283,40 @@ function AiTab({ loading, setLoading, setError, onImageSelected, designSystem, d
   designSystem: DesignSystem
   documentId: string
   slideLabel?: string
+  slideContext?: SlideContext
 }) {
-  const [prompt, setPrompt] = useState('')
+  // Auto-fill prompt from slide context
+  const smartDefault = slideContext ? buildSmartImagePrompt(slideContext) : ''
+  const [prompt, setPrompt] = useState(smartDefault)
+  const [imageStyle, setImageStyle] = useState<ImageStyle>('photo')
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null)
 
+  // Update default prompt when context changes
+  useEffect(() => {
+    if (slideContext && !prompt) {
+      setPrompt(buildSmartImagePrompt(slideContext))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slideContext])
+
+  // Smart suggestions based on slide type
+  const suggestions = slideContext
+    ? getImageSuggestions(slideContext.slideType)
+    : ['רקע אבסטרקטי מודרני', 'נוף עירוני מקצועי', 'אלמנטים גיאומטריים', 'טכנולוגיה ודיגיטל']
+
   const contextChips = [
-    slideLabel && `שקף: ${slideLabel}`,
+    slideContext?.brandName && `מותג: ${slideContext.brandName}`,
+    (slideContext?.slideLabel || slideLabel) && `שקף: ${slideContext?.slideLabel || slideLabel}`,
+    slideContext?.industry && `תעשייה: ${slideContext.industry}`,
     `צבע ראשי: ${designSystem.colors.primary}`,
-    `סגנון: מקצועי`,
   ].filter(Boolean)
+
+  const styleLabels: Record<ImageStyle, string> = {
+    photo: 'צילום',
+    illustration: 'אילוסטרציה',
+    abstract: 'אבסטרקט',
+    '3d': '3D',
+  }
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return
@@ -294,7 +325,15 @@ function AiTab({ loading, setLoading, setError, onImageSelected, designSystem, d
     setGeneratedUrl(null)
 
     try {
-      const fullPrompt = `Professional presentation image. ${prompt}. Style: modern, clean, corporate. Colors inspired by ${designSystem.colors.primary} and ${designSystem.colors.secondary}. High quality, 16:9 aspect ratio.`
+      const styleInstructions: Record<ImageStyle, string> = {
+        photo: 'Photorealistic, high quality photography, natural lighting',
+        illustration: 'Clean vector illustration, flat design, modern',
+        abstract: 'Abstract art, geometric shapes, artistic composition',
+        '3d': '3D rendered, volumetric lighting, modern 3D graphics',
+      }
+
+      const brandContext = slideContext?.brandName ? ` for brand "${slideContext.brandName}"` : ''
+      const fullPrompt = `Professional presentation image${brandContext}. ${prompt}. Style: ${styleInstructions[imageStyle]}. Colors inspired by ${designSystem.colors.primary} and ${designSystem.colors.secondary}. High quality, 16:9 aspect ratio.`
 
       const res = await fetch('/api/image', {
         method: 'POST',
@@ -335,21 +374,36 @@ function AiTab({ loading, setLoading, setError, onImageSelected, designSystem, d
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="לדוגמה: תמונת רקע עם גראדיאנט כחול-סגול ואלמנטים גיאומטריים מודרניים"
+          placeholder="הפרומפט ממולא אוטומטית לפי תוכן השקף..."
           rows={3}
           className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/30 resize-none"
           dir="rtl"
         />
       </div>
 
-      {/* Quick prompts */}
+      {/* Image style selector */}
+      <div>
+        <label className="text-gray-500 text-[10px] block mb-1">סגנון תמונה</label>
+        <div className="flex gap-1">
+          {(Object.entries(styleLabels) as [ImageStyle, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setImageStyle(key)}
+              className={`flex-1 py-1.5 rounded text-[10px] font-medium transition-colors ${
+                imageStyle === key
+                  ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/30'
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Smart suggestions */}
       <div className="flex flex-wrap gap-1.5">
-        {[
-          'רקע אבסטרקטי מודרני',
-          'נוף עירוני מקצועי',
-          'אלמנטים גיאומטריים',
-          'טכנולוגיה ודיגיטל',
-        ].map((q) => (
+        {suggestions.map((q) => (
           <button
             key={q}
             onClick={() => setPrompt(q)}

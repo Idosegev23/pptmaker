@@ -16,9 +16,15 @@ interface SlideEditorProps {
   designSystem: DesignSystem
   scale: number
   selectedElementId: string | null
+  selectedElementIds?: string[]
   onElementSelect: (id: string | null) => void
+  onAddToSelection?: (id: string) => void
+  onRemoveFromSelection?: (id: string) => void
+  onSelectElements?: (ids: string[]) => void
   onElementUpdate: (id: string, changes: Partial<SlideElement>) => void
+  onUpdateElements?: (ids: string[], changes: Partial<SlideElement>) => void
   onElementDelete?: (id: string) => void
+  onDeleteElements?: (ids: string[]) => void
   onDuplicateElement?: (id: string) => void
   gridSize?: number
   snapToGrid?: boolean
@@ -90,9 +96,15 @@ export default function SlideEditor({
   designSystem,
   scale,
   selectedElementId,
+  selectedElementIds = [],
   onElementSelect,
+  onAddToSelection,
+  onRemoveFromSelection,
+  onSelectElements,
   onElementUpdate,
+  onUpdateElements,
   onElementDelete,
+  onDeleteElements,
   onDuplicateElement,
   gridSize = 80,
   snapToGrid = false,
@@ -101,6 +113,8 @@ export default function SlideEditor({
   const [editingTextId, setEditingTextId] = useState<string | null>(null)
   const [activeGuides, setActiveGuides] = useState<GuideLine[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
+  const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null)
+  const isMultiSelected = selectedElementIds.length > 1
 
   const sortedElements = [...slide.elements].sort((a, b) => a.zIndex - b.zIndex)
 
@@ -109,8 +123,21 @@ export default function SlideEditor({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (editingTextId) return // Don't handle keys while editing text
 
-      // Delete/Backspace — delete selected element
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElementId) {
+      // Delete/Backspace — delete selected element(s)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElementIds.length > 0) {
+        const unlocked = selectedElementIds.filter(id => {
+          const el = slide.elements.find(el => el.id === id)
+          return el && !el.locked
+        })
+        if (unlocked.length > 0) {
+          e.preventDefault()
+          if (unlocked.length > 1 && onDeleteElements) {
+            onDeleteElements(unlocked)
+          } else {
+            onElementDelete?.(unlocked[0])
+          }
+        }
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElementId) {
         const el = slide.elements.find(el => el.id === selectedElementId)
         if (el && !el.locked) {
           e.preventDefault()
@@ -124,26 +151,36 @@ export default function SlideEditor({
         setEditingTextId(null)
       }
 
+      // Ctrl+A — select all elements
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+        e.preventDefault()
+        onSelectElements?.(slide.elements.map(e => e.id))
+      }
+
       // Ctrl+D — duplicate selected element
       if ((e.metaKey || e.ctrlKey) && e.key === 'd' && selectedElementId) {
         e.preventDefault()
         onDuplicateElement?.(selectedElementId)
       }
 
-      // Arrow keys — nudge selected element (Shift = bigger step, with snap uses gridSize)
-      if (selectedElementId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        const el = slide.elements.find(el => el.id === selectedElementId)
-        if (el && !el.locked) {
-          e.preventDefault()
-          const step = e.shiftKey ? (snapToGrid ? gridSize : 10) : 1
-          const changes: Partial<SlideElement> = {}
-          switch (e.key) {
-            case 'ArrowUp': changes.y = el.y - step; break
-            case 'ArrowDown': changes.y = el.y + step; break
-            case 'ArrowLeft': changes.x = el.x - step; break
-            case 'ArrowRight': changes.x = el.x + step; break
+      // Arrow keys — nudge selected element(s)
+      if ((selectedElementId || selectedElementIds.length > 0) && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        const idsToNudge = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : [])
+        const step = e.shiftKey ? (snapToGrid ? gridSize : 10) : 1
+
+        for (const id of idsToNudge) {
+          const el = slide.elements.find(el => el.id === id)
+          if (el && !el.locked) {
+            e.preventDefault()
+            const changes: Partial<SlideElement> = {}
+            switch (e.key) {
+              case 'ArrowUp': changes.y = el.y - step; break
+              case 'ArrowDown': changes.y = el.y + step; break
+              case 'ArrowLeft': changes.x = el.x - step; break
+              case 'ArrowRight': changes.x = el.x + step; break
+            }
+            onElementUpdate(id, changes)
           }
-          onElementUpdate(selectedElementId, changes)
         }
       }
     }
@@ -158,11 +195,62 @@ export default function SlideEditor({
     }
   }, [onElementSelect])
 
+  // Selection box (rubber band)
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.target !== e.currentTarget && !(e.target as HTMLElement).dataset?.canvas) return
+    if (e.button !== 0) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = (e.clientX - rect.left) / scale
+    const y = (e.clientY - rect.top) / scale
+    setSelectionBox({ startX: x, startY: y, endX: x, endY: y })
+  }, [scale])
+
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!selectionBox) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = (e.clientX - rect.left) / scale
+    const y = (e.clientY - rect.top) / scale
+    setSelectionBox(prev => prev ? { ...prev, endX: x, endY: y } : null)
+  }, [selectionBox, scale])
+
+  const handleCanvasMouseUp = useCallback(() => {
+    if (!selectionBox) return
+    const left = Math.min(selectionBox.startX, selectionBox.endX)
+    const right = Math.max(selectionBox.startX, selectionBox.endX)
+    const top = Math.min(selectionBox.startY, selectionBox.endY)
+    const bottom = Math.max(selectionBox.startY, selectionBox.endY)
+
+    // Only select if the box is big enough (>5px)
+    if (right - left > 5 && bottom - top > 5) {
+      const selected = slide.elements
+        .filter(el => {
+          const elRight = el.x + el.width
+          const elBottom = el.y + el.height
+          return el.x < right && elRight > left && el.y < bottom && elBottom > top
+        })
+        .map(el => el.id)
+
+      if (selected.length > 0 && onSelectElements) {
+        onSelectElements(selected)
+      }
+    }
+    setSelectionBox(null)
+  }, [selectionBox, slide.elements, onSelectElements])
+
   const handleElementClick = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    onElementSelect(id)
+    if (e.shiftKey && onAddToSelection) {
+      // Shift+Click: toggle in multi-selection
+      if (selectedElementIds.includes(id)) {
+        onRemoveFromSelection?.(id)
+      } else {
+        onAddToSelection(id)
+      }
+    } else {
+      onElementSelect(id)
+    }
     setEditingTextId(null)
-  }, [onElementSelect])
+  }, [onElementSelect, onAddToSelection, onRemoveFromSelection, selectedElementIds])
 
   const handleElementDoubleClick = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -178,6 +266,50 @@ export default function SlideEditor({
     setEditingTextId(null)
   }, [onElementUpdate])
 
+  // ─── Rotation handle ─────────────────────────────
+  const [isRotating, setIsRotating] = useState(false)
+  const rotationRef = useRef<{ elementId: string; centerX: number; centerY: number; startAngle: number } | null>(null)
+
+  const handleRotationStart = useCallback((elementId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const element = slide.elements.find(el => el.id === elementId)
+    if (!element) return
+
+    const centerX = (element.x + element.width / 2) * scale
+    const centerY = (element.y + element.height / 2) * scale
+
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    const startAngle = Math.atan2(mouseY - centerY, mouseX - centerX) * (180 / Math.PI)
+
+    rotationRef.current = { elementId, centerX, centerY, startAngle: startAngle - (element.rotation || 0) }
+    setIsRotating(true)
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!rotationRef.current || !rect) return
+      const mx = ev.clientX - rect.left
+      const my = ev.clientY - rect.top
+      let angle = Math.atan2(my - rotationRef.current.centerY, mx - rotationRef.current.centerX) * (180 / Math.PI) - rotationRef.current.startAngle
+      // Snap to 15deg with Shift
+      if (ev.shiftKey) angle = Math.round(angle / 15) * 15
+      onElementUpdate(rotationRef.current.elementId, { rotation: Math.round(angle) } as Partial<SlideElement>)
+    }
+
+    const handleMouseUp = () => {
+      setIsRotating(false)
+      rotationRef.current = null
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }, [slide.elements, scale, onElementUpdate])
+
   return (
     <div
       ref={containerRef}
@@ -192,6 +324,10 @@ export default function SlideEditor({
       <div
         data-canvas="true"
         onClick={handleCanvasClick}
+        onMouseDown={handleCanvasMouseDown}
+        onMouseMove={handleCanvasMouseMove}
+        onMouseUp={handleCanvasMouseUp}
+        onMouseLeave={() => selectionBox && setSelectionBox(null)}
         style={{
           width: CANVAS_WIDTH,
           height: CANVAS_HEIGHT,
@@ -225,8 +361,25 @@ export default function SlideEditor({
           />
         ))}
 
+        {/* Selection box (rubber band) */}
+        {selectionBox && (
+          <div
+            style={{
+              position: 'absolute',
+              left: Math.min(selectionBox.startX, selectionBox.endX),
+              top: Math.min(selectionBox.startY, selectionBox.endY),
+              width: Math.abs(selectionBox.endX - selectionBox.startX),
+              height: Math.abs(selectionBox.endY - selectionBox.startY),
+              border: '1px dashed #3b82f6',
+              background: 'rgba(59, 130, 246, 0.1)',
+              zIndex: 9999,
+              pointerEvents: 'none' as const,
+            }}
+          />
+        )}
+
         {sortedElements.map((element) => {
-          const isSelected = selectedElementId === element.id
+          const isSelected = selectedElementId === element.id || selectedElementIds.includes(element.id)
           const isEditingText = editingTextId === element.id
           const isLocked = element.locked
 
@@ -290,6 +443,27 @@ export default function SlideEditor({
                   isEditing={isEditingText}
                   onTextChange={(content) => handleTextChange(element.id, content)}
                 />
+                {/* Rotation handle */}
+                {isSelected && !isLocked && !isEditingText && !isMultiSelected && (
+                  <div
+                    onMouseDown={(e) => handleRotationStart(element.id, e)}
+                    style={{
+                      position: 'absolute',
+                      top: -30,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      background: '#22c55e',
+                      border: '2px solid white',
+                      cursor: 'grab',
+                      zIndex: 1000,
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                    }}
+                    title={`סיבוב: ${element.rotation || 0}°`}
+                  />
+                )}
               </div>
             </Rnd>
           )

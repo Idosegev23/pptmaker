@@ -1,7 +1,22 @@
 'use client'
 
 import React, { useState } from 'react'
-import type { SlideElement, ShapeType, DesignSystem } from '@/types/presentation'
+import type { SlideElement, ShapeType, TextElement, DesignSystem } from '@/types/presentation'
+import { isTextElement } from '@/types/presentation'
+
+interface StylePreset {
+  label: string
+  fontSize: number
+  fontWeight: number
+  opacity?: number
+}
+
+const STYLE_PRESETS: StylePreset[] = [
+  { label: 'כותרת ראשית', fontSize: 64, fontWeight: 700 },
+  { label: 'כותרת משנית', fontSize: 36, fontWeight: 600 },
+  { label: 'גוף טקסט', fontSize: 20, fontWeight: 400 },
+  { label: 'הערה קטנה', fontSize: 14, fontWeight: 300, opacity: 0.7 },
+]
 
 interface EditorToolbarProps {
   onAddText: () => void
@@ -14,6 +29,10 @@ interface EditorToolbarProps {
   onToggleGrid?: () => void
   snapToGrid?: boolean
   onToggleSnap?: () => void
+  onApplyStylePreset?: (preset: Partial<TextElement>) => void
+  formatBrush?: Partial<TextElement> | null
+  onCopyFormat?: () => void
+  onCancelFormat?: () => void
 }
 
 export default function EditorToolbar({
@@ -27,8 +46,14 @@ export default function EditorToolbar({
   onToggleGrid,
   snapToGrid,
   onToggleSnap,
+  onApplyStylePreset,
+  formatBrush,
+  onCopyFormat,
+  onCancelFormat,
 }: EditorToolbarProps) {
   const [showShapeMenu, setShowShapeMenu] = useState(false)
+  const [showStyleMenu, setShowStyleMenu] = useState(false)
+  const isText = selectedElement && isTextElement(selectedElement)
 
   return (
     <div
@@ -174,6 +199,75 @@ export default function EditorToolbar({
                 }
                 label="הצמד"
                 active={snapToGrid}
+              />
+            )}
+          </>
+        )}
+
+        {/* Style presets (text elements only) */}
+        {onApplyStylePreset && isText && (
+          <>
+            <div className="w-px h-5 bg-white/10 mx-1" />
+            <div className="relative">
+              <ToolbarButton
+                onClick={() => setShowStyleMenu(prev => !prev)}
+                title="סגנונות מהירים"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 3v18M3 12h18M5.636 5.636l12.728 12.728M18.364 5.636L5.636 18.364" />
+                  </svg>
+                }
+                label="סגנון"
+                hasDropdown
+              />
+              {showStyleMenu && (
+                <div className="absolute top-full right-0 mt-1 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl z-50 py-1 min-w-[140px]">
+                  {STYLE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      onClick={() => {
+                        onApplyStylePreset({ fontSize: preset.fontSize, fontWeight: preset.fontWeight as TextElement['fontWeight'], opacity: preset.opacity } as Partial<TextElement>)
+                        setShowStyleMenu(false)
+                      }}
+                      className="w-full px-3 py-1.5 text-right text-xs text-gray-300 hover:bg-white/10 hover:text-white"
+                    >
+                      <span style={{ fontSize: Math.min(preset.fontSize / 4, 14), fontWeight: preset.fontWeight }}>
+                        {preset.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Format painter */}
+        {onCopyFormat && isText && (
+          <>
+            {formatBrush ? (
+              <ToolbarButton
+                onClick={onCancelFormat || (() => {})}
+                title="בטל העתקת עיצוב (ESC)"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                }
+                label="בטל"
+                active
+              />
+            ) : (
+              <ToolbarButton
+                onClick={onCopyFormat}
+                title="העתק עיצוב"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2l4 4-9 9H3v-4L12 2z" />
+                    <line x1="14" y1="6" x2="18" y2="2" />
+                  </svg>
+                }
+                label="העתק עיצוב"
               />
             )}
           </>

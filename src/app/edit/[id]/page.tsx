@@ -1,17 +1,21 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import type { Presentation, Slide, SlideElement, TextElement, ShapeElement, ImageElement, ShapeType } from '@/types/presentation'
 import { isTextElement } from '@/types/presentation'
 import { usePresentationEditor } from '@/hooks/usePresentationEditor'
+import { buildSlideContext, getSlidePurpose } from '@/lib/editor/slide-context-builder'
 import FlowStepper from '@/components/flow-stepper'
 import SlideEditor from '@/components/presentation/SlideEditor'
 import SlideViewer from '@/components/presentation/SlideViewer'
 import PropertiesPanel from '@/components/presentation/PropertiesPanel'
 import ImageSourceModal from '@/components/presentation/ImageSourceModal'
 import EditorToolbar from '@/components/presentation/EditorToolbar'
+import AlignmentToolbar from '@/components/presentation/AlignmentToolbar'
+import LayerPanel from '@/components/presentation/LayerPanel'
+import TextFormatBar from '@/components/presentation/TextFormatBar'
 import GoogleDriveSaveButton from '@/components/google-drive-save-button'
 import FeedbackDialog from '@/components/feedback-dialog'
 import PresentationMode from '@/components/presentation/PresentationMode'
@@ -57,11 +61,24 @@ export default function PresentationEditorPage() {
   const [clipboardElement, setClipboardElement] = useState<SlideElement | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const dragSrcIndex = useRef<number | null>(null)
+  const [layerPanelOpen, setLayerPanelOpen] = useState(false)
+  const [formatBrush, setFormatBrush] = useState<Partial<TextElement> | null>(null)
 
   const editor = usePresentationEditor(EMPTY_PRESENTATION)
   const slideContainerRef = useRef<HTMLDivElement>(null)
   const thumbnailsRef = useRef<HTMLDivElement>(null)
   const [slideScale, setSlideScale] = useState(0.5)
+  const [documentData, setDocumentData] = useState<Record<string, unknown> | null>(null)
+
+  // Memoized slide context — feeds all AI operations
+  const slideContext = useMemo(() => {
+    if (!editor.selectedSlide) return undefined
+    return buildSlideContext(
+      editor.presentation,
+      editor.selectedSlideIndex,
+      documentData || undefined,
+    )
+  }, [editor.presentation, editor.selectedSlideIndex, editor.selectedSlide, documentData])
 
   // ─── Load document ───────────────────────────────────
   useEffect(() => {
@@ -80,6 +97,7 @@ export default function PresentationEditorPage() {
       const doc = data.document
       const docData = doc.data as Record<string, unknown>
       setBrandName((docData.brandName as string) || doc.title || 'הצעת מחיר')
+      setDocumentData(docData)
 
       const existing = docData._presentation as Presentation | undefined
       if (existing && existing.slides?.length > 0) {
@@ -232,10 +250,20 @@ export default function PresentationEditorPage() {
         e.preventDefault()
         setGridVisible(prev => !prev)
       }
-      // Delete / Backspace — delete selected element
-      if ((e.key === 'Delete' || e.key === 'Backspace') && !isTyping && editor.selectedElementId) {
+      // Delete / Backspace — delete selected element(s)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isTyping) {
+        if (editor.selectedElementIds.length > 1) {
+          e.preventDefault()
+          editor.deleteElements(editor.selectedElementIds)
+        } else if (editor.selectedElementId) {
+          e.preventDefault()
+          editor.deleteElement(editor.selectedElementId)
+        }
+      }
+      // Ctrl+A — select all elements
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !isTyping) {
         e.preventDefault()
-        editor.deleteElement(editor.selectedElementId)
+        editor.selectAllElements()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -304,6 +332,13 @@ export default function PresentationEditorPage() {
           elementRole: role,
           slideLabel: editor.selectedSlide?.label,
           brandName,
+          // Context-aware fields
+          slideType: slideContext?.slideType,
+          slidePurpose: slideContext ? getSlidePurpose(slideContext.slideType) : undefined,
+          slideTextSummary: slideContext?.slideTextSummary,
+          industry: slideContext?.industry,
+          targetAudience: slideContext?.targetAudience,
+          brandPersonality: slideContext?.brandPersonality,
         }),
       })
 
@@ -316,7 +351,7 @@ export default function PresentationEditorPage() {
     } finally {
       setAiRewriteState(null)
     }
-  }, [editor, brandName])
+  }, [editor, brandName, slideContext])
 
   // ─── Regenerate slide with AI ────────────────────────
   const handleRegenerateSlide = useCallback(async (instruction?: string) => {
@@ -344,8 +379,33 @@ export default function PresentationEditorPage() {
     }
   }, [documentId, editor, aiDesignInstruction])
 
-  // ─── Toolbar: Add elements ───────────────────────────
+  // ─── Format painter: apply on element select ───────
+  useEffect(() => {
+    if (formatBrush && editor.selectedElementId && editor.selectedElement && isTextElement(editor.selectedElement)) {
+      editor.updateElement(editor.selectedElementId, formatBrush as Partial<SlideElement>)
+      setFormatBrush(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.selectedElementId])
+
+  // ─── ESC to cancel format brush ────────────────────
+  useEffect(() => {
+    if (!formatBrush) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFormatBrush(null)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [formatBrush])
+
+  // ─── Computed values ────────────────────────────────
   const designSystem = editor.presentation.designSystem
+  const selectedElements = useMemo(() => {
+    if (!editor.selectedSlide) return []
+    return editor.selectedSlide.elements.filter(e => editor.selectedElementIds.includes(e.id))
+  }, [editor.selectedSlide, editor.selectedElementIds])
+
+  const selectedTextElement = editor.selectedElement && isTextElement(editor.selectedElement) ? editor.selectedElement : null
 
   const handleAddText = useCallback(() => {
     const element: TextElement = {
@@ -668,7 +728,36 @@ export default function PresentationEditorPage() {
         onToggleGrid={() => setGridVisible(prev => !prev)}
         snapToGrid={snapToGrid}
         onToggleSnap={() => setSnapToGrid(prev => !prev)}
+        onApplyStylePreset={(preset) => {
+          if (editor.selectedElementId) {
+            editor.updateElement(editor.selectedElementId, preset as Partial<SlideElement>)
+          }
+        }}
+        formatBrush={formatBrush}
+        onCopyFormat={() => {
+          if (selectedTextElement) {
+            setFormatBrush({
+              fontSize: selectedTextElement.fontSize,
+              fontWeight: selectedTextElement.fontWeight,
+              color: selectedTextElement.color,
+              fontFamily: selectedTextElement.fontFamily,
+              textAlign: selectedTextElement.textAlign,
+              lineHeight: selectedTextElement.lineHeight,
+            })
+          }
+        }}
+        onCancelFormat={() => setFormatBrush(null)}
       />
+
+      {/* ── Alignment bar (multi-select) ──────────── */}
+      {selectedElements.length >= 2 && (
+        <div className="flex-shrink-0 px-4 py-1 bg-[#0a0a14] border-b border-blue-500/10" dir="rtl">
+          <AlignmentToolbar
+            selectedElements={selectedElements}
+            onUpdateElement={editor.updateElement}
+          />
+        </div>
+      )}
 
       {/* ── Main content ─────────────────────────────── */}
       <div className="flex-1 flex min-h-0" dir="ltr">
@@ -756,7 +845,24 @@ export default function PresentationEditorPage() {
         </div>
 
         {/* Main slide area */}
-        <div ref={slideContainerRef} className="flex-1 flex items-center justify-center overflow-hidden" style={{ background: '#0a0a0f' }}>
+        <div ref={slideContainerRef} className="flex-1 flex items-center justify-center overflow-hidden relative" style={{ background: '#0a0a0f' }}>
+          {/* Layer Panel */}
+          {editor.selectedSlide && (
+            <LayerPanel
+              slide={editor.selectedSlide}
+              selectedElementId={editor.selectedElementId}
+              selectedElementIds={editor.selectedElementIds}
+              onElementSelect={editor.selectElement}
+              onBringToFront={editor.bringToFront}
+              onSendToBack={editor.sendToBack}
+              onMoveUp={editor.moveLayerUp}
+              onMoveDown={editor.moveLayerDown}
+              onToggleLock={(id, locked) => editor.updateElement(id, { locked } as Partial<SlideElement>)}
+              isOpen={layerPanelOpen}
+              onToggle={() => setLayerPanelOpen(p => !p)}
+            />
+          )}
+
           {editor.selectedSlide && (
             <div
               className="rounded-xl shadow-2xl shadow-black/60"
@@ -764,21 +870,39 @@ export default function PresentationEditorPage() {
                 width: Math.round(1920 * slideScale),
                 height: Math.round(1080 * slideScale),
                 position: 'relative',
-                overflow: 'hidden',
+                overflow: 'visible',
               }}
             >
-              <SlideEditor
-                slide={editor.selectedSlide}
-                designSystem={designSystem}
-                scale={slideScale}
-                selectedElementId={editor.selectedElementId}
-                onElementSelect={editor.selectElement}
-                onElementUpdate={editor.updateElement}
-                onElementDelete={editor.deleteElement}
-                onDuplicateElement={editor.duplicateElement}
-                gridVisible={gridVisible}
-                snapToGrid={snapToGrid}
-              />
+              {/* Text Format Bar (floating above selected text element) */}
+              {selectedTextElement && (
+                <TextFormatBar
+                  element={selectedTextElement}
+                  designSystem={designSystem}
+                  scale={slideScale}
+                  onChange={(changes) => editor.updateElement(selectedTextElement.id, changes as Partial<SlideElement>)}
+                />
+              )}
+
+              <div style={{ width: '100%', height: '100%', overflow: 'hidden', borderRadius: 'inherit' }}>
+                <SlideEditor
+                  slide={editor.selectedSlide}
+                  designSystem={designSystem}
+                  scale={slideScale}
+                  selectedElementId={editor.selectedElementId}
+                  selectedElementIds={editor.selectedElementIds}
+                  onElementSelect={editor.selectElement}
+                  onAddToSelection={editor.addToSelection}
+                  onRemoveFromSelection={editor.removeFromSelection}
+                  onSelectElements={editor.selectElements}
+                  onElementUpdate={editor.updateElement}
+                  onUpdateElements={editor.updateElements}
+                  onElementDelete={editor.deleteElement}
+                  onDeleteElements={editor.deleteElements}
+                  onDuplicateElement={editor.duplicateElement}
+                  gridVisible={gridVisible}
+                  snapToGrid={snapToGrid}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -812,6 +936,7 @@ export default function PresentationEditorPage() {
         documentId={documentId}
         slideLabel={editor.selectedSlide?.label}
         initialTab={imageModalTab}
+        slideContext={slideContext}
       />
 
       <FeedbackDialog
