@@ -345,6 +345,8 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
 13. influencers — רק אם יש scrapedInfluencers או recommendations
 14. כל שקף צריך emotionalTone שמתאים לסיפור הכולל
 15. המצגת היא מסע: פתיחה דרמטית → בניית צורך → פתרון → הוכחה → סגירה
+16. COVER: רק כותרת + כותרת משנה קצרה (עד 8 מילים). אין bodyText בcover! זה שקף פתיחה ויזואלי, לא מקום לפרגרף. דוגמה טובה: title="${brandName} — הסטנדרט החדש", subtitle="הקלאסיקה החדשה של המטבח הישראלי"
+17. CLOSING: רק כותרת + tagline קצר. אין הנחיות או הערות! כתוב רק תוכן שהקהל רואה. דוגמה: title="בואו נתחיל", tagline="Leaders × ${brandName}"
 </task>`
 
   const models = await getDesignSystemModels()
@@ -382,6 +384,28 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
       }
 
       if (parsed?.slides?.length >= 5) {
+        // Post-process: sanitize plan content
+        for (const slide of parsed.slides) {
+          // Cover: strip bodyText (cover should be visual, not a paragraph)
+          if (slide.slideType === 'cover') {
+            delete slide.bodyText
+            delete slide.bulletPoints
+            delete slide.cards
+          }
+          // Closing: strip instruction leaks
+          if (slide.slideType === 'closing') {
+            if (slide.bodyText && /הנחי[הי]|הערה|הוראה|instruction/i.test(slide.bodyText)) {
+              delete slide.bodyText
+            }
+            if (slide.tagline && /הנחי[הי]|הערה|הוראה|instruction/i.test(slide.tagline)) {
+              delete slide.tagline
+            }
+          }
+          // General: strip any text that looks like system instructions
+          if (slide.bodyText && /^הנחי[הי]\s*(נוספת|:)/i.test(slide.bodyText.trim())) {
+            delete slide.bodyText
+          }
+        }
         console.log(`[SlideDesigner][${requestId}] Plan ready: ${parsed.slides.length} slides (model: ${model})`)
         console.log(`[SlideDesigner][${requestId}]   Types: ${parsed.slides.map(s => s.slideType).join(', ')}`)
         return parsed.slides
