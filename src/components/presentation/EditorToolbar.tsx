@@ -18,10 +18,14 @@ const STYLE_PRESETS: StylePreset[] = [
   { label: 'הערה קטנה', fontSize: 14, fontWeight: 300, opacity: 0.7 },
 ]
 
+export type AdvancedElementType = 'mockup' | 'compare' | 'logo-strip' | 'map'
+
 interface EditorToolbarProps {
   onAddText: () => void
   onAddShape: (shapeType: ShapeType) => void
   onAddImage: () => void
+  onAddVideo?: () => void
+  onAddAdvancedElement?: (type: AdvancedElementType) => void
   onDuplicate: () => void
   onDelete: () => void
   selectedElement: SlideElement | null
@@ -39,6 +43,8 @@ export default function EditorToolbar({
   onAddText,
   onAddShape,
   onAddImage,
+  onAddVideo,
+  onAddAdvancedElement,
   onDuplicate,
   onDelete,
   selectedElement,
@@ -52,12 +58,13 @@ export default function EditorToolbar({
   onCancelFormat,
 }: EditorToolbarProps) {
   const [showShapeMenu, setShowShapeMenu] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [showStyleMenu, setShowStyleMenu] = useState(false)
   const isText = selectedElement && isTextElement(selectedElement)
 
   return (
     <div
-      className="flex-shrink-0 bg-[#0f0f18]/80 backdrop-blur-sm border-b border-white/5 px-4 py-1.5"
+      className="flex-shrink-0 bg-[#0f0f18]/80 backdrop-blur-sm border-b border-white/5 px-4 py-1.5 relative z-30"
       dir="rtl"
     >
       <div className="flex items-center gap-1">
@@ -134,6 +141,58 @@ export default function EditorToolbar({
           }
           label="תמונה"
         />
+
+        {/* Add Video */}
+        {onAddVideo && (
+          <ToolbarButton
+            onClick={onAddVideo}
+            title="הוסף וידאו"
+            icon={
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="4" width="15" height="16" rx="2" />
+                <polygon points="22 8 17 12 22 16 22 8" />
+              </svg>
+            }
+            label="וידאו"
+          />
+        )}
+
+        {/* More Elements */}
+        {onAddAdvancedElement && (
+          <div className="relative">
+            <ToolbarButton
+              onClick={() => setShowMoreMenu(prev => !prev)}
+              title="אלמנטים מתקדמים"
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
+                </svg>
+              }
+              label="עוד"
+              hasDropdown
+            />
+            {showMoreMenu && (
+              <div className="absolute top-full right-0 mt-1 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl z-50 py-1 min-w-[140px]">
+                <button onClick={() => { onAddAdvancedElement('mockup'); setShowMoreMenu(false) }} className="w-full px-3 py-1.5 text-right text-xs text-gray-300 hover:bg-white/10 hover:text-white flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="3" /></svg>
+                  מוקאפ
+                </button>
+                <button onClick={() => { onAddAdvancedElement('compare'); setShowMoreMenu(false) }} className="w-full px-3 py-1.5 text-right text-xs text-gray-300 hover:bg-white/10 hover:text-white flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="3" x2="12" y2="21" /><polyline points="8 8 4 12 8 16" /><polyline points="16 8 20 12 16 16" /></svg>
+                  לפני/אחרי
+                </button>
+                <button onClick={() => { onAddAdvancedElement('logo-strip'); setShowMoreMenu(false) }} className="w-full px-3 py-1.5 text-right text-xs text-gray-300 hover:bg-white/10 hover:text-white flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="5" height="10" rx="1" /><rect x="9" y="7" width="5" height="10" rx="1" /><rect x="16" y="7" width="5" height="10" rx="1" /></svg>
+                  רצועת לוגו
+                </button>
+                <button onClick={() => { onAddAdvancedElement('map'); setShowMoreMenu(false) }} className="w-full px-3 py-1.5 text-right text-xs text-gray-300 hover:bg-white/10 hover:text-white flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></svg>
+                  מפה
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Separator */}
         <div className="w-px h-5 bg-white/10 mx-1" />

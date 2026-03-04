@@ -7,11 +7,21 @@ import type {
   TextElement,
   ImageElement,
   ShapeElement,
+  VideoElement,
+  MockupElement,
+  CompareElement,
+  LogoStripElement,
+  MapElement,
   SlideBackground,
   DesignSystem,
   FontWeight,
+  BorderRadius,
+  MaskConfig,
+  MaskType,
+  MockupDeviceType,
+  MockupVariant,
 } from '@/types/presentation'
-import { isTextElement, isImageElement, isShapeElement } from '@/types/presentation'
+import { isTextElement, isImageElement, isShapeElement, isVideoElement, isMockupElement, isCompareElement, isLogoStripElement, isMapElement, MASK_CLIP_PATHS } from '@/types/presentation'
 
 const HEBREW_FONTS = [
   'Heebo', 'Rubik', 'Assistant', 'Noto Sans Hebrew', 'Open Sans',
@@ -93,6 +103,36 @@ export default function PropertiesPanel({
                 onChange={(changes) => onElementUpdate(selectedElement.id, changes)}
               />
             )}
+            {isVideoElement(selectedElement) && (
+              <VideoProperties
+                element={selectedElement}
+                onChange={(changes) => onElementUpdate(selectedElement.id, changes)}
+              />
+            )}
+            {isMockupElement(selectedElement) && (
+              <MockupProperties
+                element={selectedElement}
+                onChange={(changes) => onElementUpdate(selectedElement.id, changes)}
+              />
+            )}
+            {isCompareElement(selectedElement) && (
+              <CompareProperties
+                element={selectedElement}
+                onChange={(changes) => onElementUpdate(selectedElement.id, changes)}
+              />
+            )}
+            {isLogoStripElement(selectedElement) && (
+              <LogoStripProperties
+                element={selectedElement}
+                onChange={(changes) => onElementUpdate(selectedElement.id, changes)}
+              />
+            )}
+            {isMapElement(selectedElement) && (
+              <MapProperties
+                element={selectedElement}
+                onChange={(changes) => onElementUpdate(selectedElement.id, changes)}
+              />
+            )}
             <PositionProperties
               element={selectedElement}
               onChange={(changes) => onElementUpdate(selectedElement.id, changes)}
@@ -125,7 +165,12 @@ function getElementTitle(el: SlideElement): string {
     return roleLabels[el.role || ''] || 'טקסט'
   }
   if (isImageElement(el)) return 'תמונה'
+  if (isVideoElement(el)) return 'וידאו'
   if (isShapeElement(el)) return 'צורה'
+  if (isMockupElement(el)) return 'מוקאפ'
+  if (isCompareElement(el)) return 'לפני/אחרי'
+  if (isLogoStripElement(el)) return 'רצועת לוגו'
+  if (isMapElement(el)) return 'מפה'
   return 'אלמנט'
 }
 
@@ -260,20 +305,24 @@ function ImageProperties({ element, onChange, onReplace }: {
 
       <SectionLabel>הגדרות</SectionLabel>
 
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <MiniLabel>התאמה</MiniLabel>
-          <select value={element.objectFit} onChange={(e) => onChange({ objectFit: e.target.value as ImageElement['objectFit'] })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30">
-            <option value="cover">מילוי (cover)</option>
-            <option value="contain">התאמה (contain)</option>
-            <option value="fill">מתיחה (fill)</option>
-          </select>
-        </div>
-        <div>
-          <MiniLabel>עיגול פינות</MiniLabel>
-          <input type="number" value={element.borderRadius || 0} onChange={(e) => onChange({ borderRadius: Math.max(0, parseInt(e.target.value) || 0) })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="ltr" />
-        </div>
+      <div>
+        <MiniLabel>התאמה</MiniLabel>
+        <select value={element.objectFit} onChange={(e) => onChange({ objectFit: e.target.value as ImageElement['objectFit'] })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30">
+          <option value="cover">מילוי (cover)</option>
+          <option value="contain">התאמה (contain)</option>
+          <option value="fill">מתיחה (fill)</option>
+        </select>
       </div>
+
+      <BorderRadiusControl
+        borderRadius={element.borderRadius}
+        onChange={(br) => onChange({ borderRadius: br })}
+      />
+
+      <MaskControl
+        mask={element.mask}
+        onChange={(mask) => onChange({ mask })}
+      />
 
       <div>
         <MiniLabel>שקיפות</MiniLabel>
@@ -309,16 +358,265 @@ function ShapeProperties({ element, onChange }: {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <MiniLabel>עיגול פינות</MiniLabel>
-          <input type="number" value={element.borderRadius || 0} onChange={(e) => onChange({ borderRadius: Math.max(0, parseInt(e.target.value) || 0) })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="ltr" />
-        </div>
-        <div>
-          <MiniLabel>שקיפות</MiniLabel>
-          <input type="range" min={0} max={1} step={0.05} value={element.opacity ?? 1} onChange={(e) => onChange({ opacity: parseFloat(e.target.value) })} className="w-full mt-1" />
+      <BorderRadiusControl
+        borderRadius={element.borderRadius}
+        onChange={(br) => onChange({ borderRadius: br })}
+      />
+
+      <MaskControl
+        mask={element.mask}
+        onChange={(mask) => onChange({ mask })}
+      />
+
+      <div>
+        <MiniLabel>שקיפות</MiniLabel>
+        <input type="range" min={0} max={1} step={0.05} value={element.opacity ?? 1} onChange={(e) => onChange({ opacity: parseFloat(e.target.value) })} className="w-full mt-1" />
+      </div>
+    </div>
+  )
+}
+
+// ─── Video Properties ────────────────────────────────
+
+function VideoProperties({ element, onChange }: {
+  element: VideoElement
+  onChange: (changes: Partial<VideoElement>) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <SectionLabel>וידאו</SectionLabel>
+
+      <div>
+        <MiniLabel>מקור</MiniLabel>
+        <input type="text" value={element.src} onChange={(e) => onChange({ src: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-[10px] focus:outline-none focus:border-white/30 font-mono" dir="ltr" />
+      </div>
+
+      <div>
+        <MiniLabel>תמונת פוסטר</MiniLabel>
+        <input type="text" value={element.posterImage || ''} onChange={(e) => onChange({ posterImage: e.target.value || undefined })} placeholder="URL תמונה" className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-[10px] focus:outline-none focus:border-white/30 font-mono" dir="ltr" />
+      </div>
+
+      <SectionLabel>הגדרות</SectionLabel>
+
+      <div>
+        <MiniLabel>התאמה</MiniLabel>
+        <select value={element.objectFit || 'cover'} onChange={(e) => onChange({ objectFit: e.target.value as VideoElement['objectFit'] })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30">
+          <option value="cover">מילוי (cover)</option>
+          <option value="contain">התאמה (contain)</option>
+          <option value="fill">מתיחה (fill)</option>
+        </select>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <label className="flex items-center gap-1.5 text-gray-400 text-[10px] cursor-pointer">
+          <input type="checkbox" checked={element.autoPlay !== false} onChange={(e) => onChange({ autoPlay: e.target.checked })} className="rounded" />
+          הפעל אוטומטית
+        </label>
+        <label className="flex items-center gap-1.5 text-gray-400 text-[10px] cursor-pointer">
+          <input type="checkbox" checked={element.muted !== false} onChange={(e) => onChange({ muted: e.target.checked })} className="rounded" />
+          מושתק
+        </label>
+        <label className="flex items-center gap-1.5 text-gray-400 text-[10px] cursor-pointer">
+          <input type="checkbox" checked={element.loop !== false} onChange={(e) => onChange({ loop: e.target.checked })} className="rounded" />
+          לולאה
+        </label>
+      </div>
+
+      <BorderRadiusControl
+        borderRadius={element.borderRadius}
+        onChange={(br) => onChange({ borderRadius: br })}
+      />
+
+      <MaskControl
+        mask={element.mask}
+        onChange={(mask) => onChange({ mask })}
+      />
+
+      <div>
+        <MiniLabel>שקיפות</MiniLabel>
+        <div className="flex items-center gap-2">
+          <input type="range" min={0} max={1} step={0.05} value={element.opacity ?? 1} onChange={(e) => onChange({ opacity: parseFloat(e.target.value) })} className="flex-1" />
+          <span className="text-gray-500 text-[10px] w-8 text-left" dir="ltr">{Math.round((element.opacity ?? 1) * 100)}%</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Mockup Properties ──────────────────────────────
+
+const DEVICE_OPTIONS: { type: MockupDeviceType; label: string }[] = [
+  { type: 'iphone', label: 'iPhone' },
+  { type: 'ipad', label: 'iPad' },
+  { type: 'macbook', label: 'MacBook' },
+  { type: 'browser', label: 'דפדפן' },
+  { type: 'tv', label: 'טלוויזיה' },
+  { type: 'phone-generic', label: 'טלפון כללי' },
+]
+
+const VARIANT_OPTIONS: { type: MockupVariant; label: string }[] = [
+  { type: 'front', label: 'חזית' },
+  { type: 'tilted', label: 'נטוי' },
+  { type: 'side', label: 'צד' },
+  { type: 'flat', label: 'שטוח' },
+]
+
+function MockupProperties({ element, onChange }: {
+  element: MockupElement
+  onChange: (changes: Partial<MockupElement>) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <SectionLabel>מוקאפ</SectionLabel>
+      <div>
+        <MiniLabel>מכשיר</MiniLabel>
+        <select value={element.deviceType} onChange={(e) => onChange({ deviceType: e.target.value as MockupDeviceType })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30">
+          {DEVICE_OPTIONS.map(d => <option key={d.type} value={d.type}>{d.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <MiniLabel>זווית</MiniLabel>
+        <select value={element.deviceVariant || 'front'} onChange={(e) => onChange({ deviceVariant: e.target.value as MockupVariant })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30">
+          {VARIANT_OPTIONS.map(v => <option key={v.type} value={v.type}>{v.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <MiniLabel>צבע מכשיר</MiniLabel>
+        <div className="flex gap-1">
+          {['black', 'white', 'silver'].map(c => (
+            <button key={c} onClick={() => onChange({ deviceColor: c })} className={`flex-1 py-1.5 rounded text-xs ${element.deviceColor === c || (!element.deviceColor && c === 'black') ? 'bg-white/20 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}>
+              {c === 'black' ? 'שחור' : c === 'white' ? 'לבן' : 'כסוף'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <MiniLabel>תמונת תוכן</MiniLabel>
+        <input type="text" value={element.contentSrc || ''} onChange={(e) => onChange({ contentSrc: e.target.value, contentType: 'image' })} placeholder="URL תמונה" className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-[10px] focus:outline-none focus:border-white/30 font-mono" dir="ltr" />
+      </div>
+      <div>
+        <MiniLabel>שקיפות</MiniLabel>
+        <div className="flex items-center gap-2">
+          <input type="range" min={0} max={1} step={0.05} value={element.opacity ?? 1} onChange={(e) => onChange({ opacity: parseFloat(e.target.value) })} className="flex-1" />
+          <span className="text-gray-500 text-[10px] w-8 text-left" dir="ltr">{Math.round((element.opacity ?? 1) * 100)}%</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Compare Properties ─────────────────────────────
+
+function CompareProperties({ element, onChange }: {
+  element: CompareElement
+  onChange: (changes: Partial<CompareElement>) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <SectionLabel>השוואה לפני/אחרי</SectionLabel>
+      <div>
+        <MiniLabel>תמונת &quot;לפני&quot;</MiniLabel>
+        <input type="text" value={element.beforeImage || ''} onChange={(e) => onChange({ beforeImage: e.target.value })} placeholder="URL" className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-[10px] focus:outline-none focus:border-white/30 font-mono" dir="ltr" />
+      </div>
+      <div>
+        <MiniLabel>תמונת &quot;אחרי&quot;</MiniLabel>
+        <input type="text" value={element.afterImage || ''} onChange={(e) => onChange({ afterImage: e.target.value })} placeholder="URL" className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-[10px] focus:outline-none focus:border-white/30 font-mono" dir="ltr" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <MiniLabel>תווית לפני</MiniLabel>
+          <input type="text" value={element.beforeLabel || ''} onChange={(e) => onChange({ beforeLabel: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="rtl" />
+        </div>
+        <div>
+          <MiniLabel>תווית אחרי</MiniLabel>
+          <input type="text" value={element.afterLabel || ''} onChange={(e) => onChange({ afterLabel: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="rtl" />
+        </div>
+      </div>
+      <div>
+        <MiniLabel>מיקום התחלתי ({element.initialPosition || 50}%)</MiniLabel>
+        <input type="range" min={10} max={90} value={element.initialPosition || 50} onChange={(e) => onChange({ initialPosition: parseInt(e.target.value) })} className="w-full" />
+      </div>
+    </div>
+  )
+}
+
+// ─── Logo Strip Properties ──────────────────────────
+
+function LogoStripProperties({ element, onChange }: {
+  element: LogoStripElement
+  onChange: (changes: Partial<LogoStripElement>) => void
+}) {
+  const [newLogo, setNewLogo] = useState('')
+
+  const addLogo = () => {
+    if (!newLogo.trim()) return
+    onChange({ logos: [...(element.logos || []), newLogo.trim()] })
+    setNewLogo('')
+  }
+
+  const removeLogo = (idx: number) => {
+    const logos = [...(element.logos || [])]
+    logos.splice(idx, 1)
+    onChange({ logos })
+  }
+
+  return (
+    <div className="space-y-3">
+      <SectionLabel>רצועת לוגו</SectionLabel>
+      <div>
+        <MiniLabel>לוגואים ({(element.logos || []).length})</MiniLabel>
+        <div className="space-y-1 max-h-32 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+          {(element.logos || []).map((logo, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <input type="text" value={logo} onChange={(e) => { const logos = [...(element.logos || [])]; logos[i] = e.target.value; onChange({ logos }) }} className="flex-1 bg-white/5 border border-white/10 rounded px-1.5 py-1 text-white text-[9px] focus:outline-none font-mono" dir="ltr" />
+              <button onClick={() => removeLogo(i)} className="text-red-400/60 hover:text-red-400 text-xs px-1">×</button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-1 mt-1">
+          <input type="text" value={newLogo} onChange={(e) => setNewLogo(e.target.value)} placeholder="URL לוגו חדש" className="flex-1 bg-white/5 border border-white/10 rounded px-1.5 py-1 text-white text-[9px] focus:outline-none font-mono" dir="ltr" onKeyDown={(e) => e.key === 'Enter' && addLogo()} />
+          <button onClick={addLogo} className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">+</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <MiniLabel>מהירות</MiniLabel>
+          <input type="number" value={element.speed || 40} onChange={(e) => onChange({ speed: parseInt(e.target.value) || 40 })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="ltr" min={10} max={200} />
+        </div>
+        <div>
+          <MiniLabel>רווח</MiniLabel>
+          <input type="number" value={element.gap || 60} onChange={(e) => onChange({ gap: parseInt(e.target.value) || 60 })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="ltr" min={10} />
+        </div>
+      </div>
+      <label className="flex items-center gap-2 text-gray-400 text-[10px] cursor-pointer">
+        <input type="checkbox" checked={element.grayscale || false} onChange={(e) => onChange({ grayscale: e.target.checked })} className="rounded" />
+        אפור + צבע בהובר
+      </label>
+    </div>
+  )
+}
+
+// ─── Map Properties ─────────────────────────────────
+
+function MapProperties({ element, onChange }: {
+  element: MapElement
+  onChange: (changes: Partial<MapElement>) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <SectionLabel>מפה</SectionLabel>
+      <div>
+        <MiniLabel>כתובת</MiniLabel>
+        <input type="text" value={element.address || ''} onChange={(e) => onChange({ address: e.target.value })} placeholder="תל אביב, ישראל" className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="rtl" />
+      </div>
+      <div>
+        <MiniLabel>זום ({element.zoom || 15})</MiniLabel>
+        <input type="range" min={5} max={20} value={element.zoom || 15} onChange={(e) => onChange({ zoom: parseInt(e.target.value) })} className="w-full" />
+      </div>
+      <BorderRadiusControl
+        borderRadius={element.borderRadius}
+        onChange={(br) => onChange({ borderRadius: br })}
+      />
     </div>
   )
 }
@@ -438,4 +736,133 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function MiniLabel({ children }: { children: React.ReactNode }) {
   return <label className="text-gray-500 text-[10px] block mb-0.5">{children}</label>
+}
+
+// ─── Border Radius Control (per-corner) ──────────────
+
+function BorderRadiusControl({ borderRadius, onChange }: {
+  borderRadius: BorderRadius | undefined
+  onChange: (br: BorderRadius) => void
+}) {
+  const [linked, setLinked] = useState(true)
+
+  // Extract uniform value or individual corners
+  const isObject = typeof borderRadius === 'object' && borderRadius !== null
+  const uniform = isObject ? 0 : (borderRadius || 0)
+  const corners = isObject
+    ? borderRadius
+    : { topLeft: uniform, topRight: uniform, bottomRight: uniform, bottomLeft: uniform }
+
+  const handleUniform = (val: number) => {
+    onChange(val)
+  }
+
+  const handleCorner = (corner: keyof typeof corners, val: number) => {
+    if (linked) {
+      onChange(val)
+    } else {
+      onChange({ ...corners, [corner]: val })
+    }
+  }
+
+  const inputClass = "w-full bg-white/5 border border-white/10 rounded px-1.5 py-1 text-white text-[10px] focus:outline-none focus:border-white/30 text-center"
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <MiniLabel>עיגול פינות</MiniLabel>
+        <button
+          onClick={() => {
+            const newLinked = !linked
+            setLinked(newLinked)
+            if (newLinked && isObject) {
+              // Switch to uniform: use average
+              const avg = Math.round((corners.topLeft + corners.topRight + corners.bottomRight + corners.bottomLeft) / 4)
+              onChange(avg)
+            } else if (!newLinked && !isObject) {
+              // Switch to per-corner
+              onChange({ topLeft: uniform, topRight: uniform, bottomRight: uniform, bottomLeft: uniform })
+            }
+          }}
+          className={`text-[9px] px-1.5 py-0.5 rounded transition-colors ${linked ? 'text-blue-400 bg-blue-500/15' : 'text-gray-500 hover:text-gray-300'}`}
+          title={linked ? 'פינות מקושרות — לחץ להפרדה' : 'פינות נפרדות — לחץ לקישור'}
+        >
+          {linked ? '🔗' : '✂️'}
+        </button>
+      </div>
+
+      {linked ? (
+        <input
+          type="number"
+          value={uniform}
+          onChange={(e) => handleUniform(Math.max(0, parseInt(e.target.value) || 0))}
+          className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30"
+          dir="ltr"
+          min={0}
+        />
+      ) : (
+        <div className="grid grid-cols-2 gap-1">
+          <div>
+            <span className="text-gray-600 text-[8px]">שמאל-עליון</span>
+            <input type="number" value={corners.topLeft} onChange={(e) => handleCorner('topLeft', Math.max(0, parseInt(e.target.value) || 0))} className={inputClass} dir="ltr" min={0} />
+          </div>
+          <div>
+            <span className="text-gray-600 text-[8px]">ימין-עליון</span>
+            <input type="number" value={corners.topRight} onChange={(e) => handleCorner('topRight', Math.max(0, parseInt(e.target.value) || 0))} className={inputClass} dir="ltr" min={0} />
+          </div>
+          <div>
+            <span className="text-gray-600 text-[8px]">שמאל-תחתון</span>
+            <input type="number" value={corners.bottomLeft} onChange={(e) => handleCorner('bottomLeft', Math.max(0, parseInt(e.target.value) || 0))} className={inputClass} dir="ltr" min={0} />
+          </div>
+          <div>
+            <span className="text-gray-600 text-[8px]">ימין-תחתון</span>
+            <input type="number" value={corners.bottomRight} onChange={(e) => handleCorner('bottomRight', Math.max(0, parseInt(e.target.value) || 0))} className={inputClass} dir="ltr" min={0} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Mask Control ────────────────────────────────────
+
+const MASK_OPTIONS: { type: MaskType; label: string; icon: string }[] = [
+  { type: 'none', label: 'ללא', icon: '▢' },
+  { type: 'circle', label: 'עיגול', icon: '⬤' },
+  { type: 'ellipse', label: 'אליפסה', icon: '⬮' },
+  { type: 'diamond', label: 'יהלום', icon: '◆' },
+  { type: 'hexagon', label: 'משושה', icon: '⬡' },
+  { type: 'star', label: 'כוכב', icon: '★' },
+  { type: 'blob', label: 'כתם', icon: '◉' },
+  { type: 'arch', label: 'קשת', icon: '⌂' },
+]
+
+function MaskControl({ mask, onChange }: {
+  mask: MaskConfig | undefined
+  onChange: (mask: MaskConfig | undefined) => void
+}) {
+  const currentType = mask?.type || 'none'
+
+  return (
+    <div>
+      <MiniLabel>מסיכה</MiniLabel>
+      <div className="grid grid-cols-4 gap-1">
+        {MASK_OPTIONS.map((opt) => (
+          <button
+            key={opt.type}
+            onClick={() => onChange(opt.type === 'none' ? undefined : { type: opt.type })}
+            className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded transition-colors text-center ${
+              currentType === opt.type
+                ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+            }`}
+            title={opt.label}
+          >
+            <span className="text-sm leading-none">{opt.icon}</span>
+            <span className="text-[8px] leading-none">{opt.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }

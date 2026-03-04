@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import type { Presentation, Slide, SlideElement, TextElement, ShapeElement, ImageElement, ShapeType } from '@/types/presentation'
-import { isTextElement } from '@/types/presentation'
+import type { Presentation, Slide, SlideElement, TextElement, ShapeElement, ImageElement, VideoElement, MockupElement, CompareElement, LogoStripElement, MapElement, ShapeType, VideoProvider } from '@/types/presentation'
+import { isTextElement, detectVideoProvider, extractYouTubeId } from '@/types/presentation'
+import type { AdvancedElementType } from '@/components/presentation/EditorToolbar'
 import { usePresentationEditor } from '@/hooks/usePresentationEditor'
 import { buildSlideContext, getSlidePurpose } from '@/lib/editor/slide-context-builder'
 import FlowStepper from '@/components/flow-stepper'
@@ -19,6 +20,8 @@ import TextFormatBar from '@/components/presentation/TextFormatBar'
 import GoogleDriveSaveButton from '@/components/google-drive-save-button'
 import FeedbackDialog from '@/components/feedback-dialog'
 import PresentationMode from '@/components/presentation/PresentationMode'
+import ShareDialog from '@/components/share/ShareDialog'
+import VideoSourceModal from '@/components/presentation/VideoSourceModal'
 
 // ─── Empty presentation (placeholder while loading) ────────
 const EMPTY_PRESENTATION: Presentation = {
@@ -48,6 +51,7 @@ export default function PresentationEditorPage() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [showProperties, setShowProperties] = useState(true)
   const [showFeedback, setShowFeedback] = useState(false)
+  const [showShareDialog, setShowShareDialog] = useState(false)
   const [imageModalElementId, setImageModalElementId] = useState<string | null>(null)
   const [imageModalTab, setImageModalTab] = useState<'upload' | 'url' | 'ai'>('upload')
   const [imageModalMode, setImageModalMode] = useState<'replace' | 'add'>('replace')
@@ -57,6 +61,7 @@ export default function PresentationEditorPage() {
   const [gridVisible, setGridVisible] = useState(false)
   const [snapToGrid, setSnapToGrid] = useState(false)
   const [isPresentationMode, setIsPresentationMode] = useState(false)
+  const [showVideoModal, setShowVideoModal] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [clipboardElement, setClipboardElement] = useState<SlideElement | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
@@ -456,6 +461,74 @@ export default function PresentationEditorPage() {
     setImageModalTab('upload')
   }, [])
 
+  const handleAddVideo = useCallback(() => {
+    setShowVideoModal(true)
+  }, [])
+
+  const handleVideoSelected = useCallback((src: string, provider: VideoProvider, posterImage?: string) => {
+    const ytId = provider === 'youtube' ? extractYouTubeId(src) : null
+    const element: VideoElement = {
+      id: generateId('el'),
+      type: 'video',
+      x: 460, y: 240, width: 1000, height: 560, zIndex: 60,
+      src,
+      videoProvider: provider,
+      posterImage: posterImage || (ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : undefined),
+      autoPlay: true,
+      muted: true,
+      loop: true,
+      objectFit: 'cover',
+    }
+    editor.addElement(element)
+    setShowVideoModal(false)
+  }, [editor])
+
+  const handleAddAdvancedElement = useCallback((type: AdvancedElementType) => {
+    let element: SlideElement
+    switch (type) {
+      case 'mockup': {
+        const el: MockupElement = {
+          id: generateId('el'), type: 'mockup',
+          x: 560, y: 140, width: 400, height: 700, zIndex: 60,
+          deviceType: 'iphone', deviceVariant: 'front',
+          contentType: 'color', contentSrc: '#1a1a2e', deviceColor: 'black',
+        }
+        element = el
+        break
+      }
+      case 'compare': {
+        const el: CompareElement = {
+          id: generateId('el'), type: 'compare',
+          x: 360, y: 190, width: 1200, height: 700, zIndex: 60,
+          beforeImage: '', afterImage: '',
+          beforeLabel: 'לפני', afterLabel: 'אחרי',
+          orientation: 'horizontal', initialPosition: 50,
+        }
+        element = el
+        break
+      }
+      case 'logo-strip': {
+        const el: LogoStripElement = {
+          id: generateId('el'), type: 'logo-strip',
+          x: 60, y: 900, width: 1800, height: 120, zIndex: 60,
+          logos: [], speed: 40, direction: 'rtl', grayscale: true, gap: 60,
+        }
+        element = el
+        break
+      }
+      case 'map': {
+        const el: MapElement = {
+          id: generateId('el'), type: 'map',
+          x: 560, y: 290, width: 800, height: 500, zIndex: 60,
+          address: '', zoom: 15, borderRadius: 16,
+        }
+        element = el
+        break
+      }
+    }
+    editor.addElement(element)
+  }, [editor])
+
   const handleDuplicateElement = useCallback(() => {
     if (editor.selectedElementId) {
       editor.duplicateElement(editor.selectedElementId)
@@ -682,6 +755,18 @@ export default function PresentationEditorPage() {
               </button>
 
               <button
+                onClick={() => setShowShareDialog(true)}
+                className="px-3 py-1.5 text-xs font-medium text-blue-400 bg-blue-500/10 rounded-lg hover:bg-blue-500/20 transition-colors"
+                title="שתף מצגת"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline-block ml-1">
+                  <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                </svg>
+                שתף
+              </button>
+
+              <button
                 onClick={() => setIsPresentationMode(true)}
                 className="px-3 py-1.5 text-xs font-medium text-gray-300 bg-white/5 rounded-lg hover:bg-white/10 hover:text-white transition-colors"
                 title="מצב הצגה (F5)"
@@ -721,6 +806,8 @@ export default function PresentationEditorPage() {
         onAddText={handleAddText}
         onAddShape={handleAddShape}
         onAddImage={handleAddImage}
+        onAddVideo={handleAddVideo}
+        onAddAdvancedElement={handleAddAdvancedElement}
         onDuplicate={handleDuplicateElement}
         onDelete={handleDeleteElement}
         selectedElement={editor.selectedElement}
@@ -760,7 +847,7 @@ export default function PresentationEditorPage() {
       )}
 
       {/* ── Main content ─────────────────────────────── */}
-      <div className="flex-1 flex min-h-0" dir="ltr">
+      <div className="flex-1 flex min-h-0 relative z-10" dir="ltr">
         {/* Thumbnails sidebar */}
         <div
           className="w-[160px] flex-shrink-0 bg-[#0f0f18]/50 border-r border-white/5 overflow-y-auto py-3 px-2 flex flex-col"
@@ -944,6 +1031,19 @@ export default function PresentationEditorPage() {
         isOpen={showFeedback}
         onClose={() => setShowFeedback(false)}
       />
+
+      <ShareDialog
+        isOpen={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+        documentId={documentId}
+      />
+
+      {showVideoModal && (
+        <VideoSourceModal
+          onSelect={handleVideoSelected}
+          onClose={() => setShowVideoModal(false)}
+        />
+      )}
 
       {isPresentationMode && (
         <PresentationMode

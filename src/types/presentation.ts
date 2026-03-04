@@ -94,9 +94,65 @@ export interface SlideBackground {
 // ELEMENTS
 // ============================================================
 
+// ============================================================
+// SHARED VISUAL TYPES
+// ============================================================
+
+/** Per-corner border radius or uniform value */
+export type BorderRadius = number | {
+  topLeft: number
+  topRight: number
+  bottomRight: number
+  bottomLeft: number
+}
+
+export type MaskType = 'none' | 'circle' | 'ellipse' | 'diamond' | 'hexagon' | 'star' | 'blob' | 'arch' | 'custom'
+
+export interface MaskConfig {
+  type: MaskType
+  customClipPath?: string  // for type='custom'
+}
+
+/** Predefined clip-path values for each mask type */
+export const MASK_CLIP_PATHS: Record<Exclude<MaskType, 'none' | 'custom'>, string> = {
+  circle: 'circle(50% at 50% 50%)',
+  ellipse: 'ellipse(50% 40% at 50% 50%)',
+  diamond: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+  hexagon: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
+  star: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)',
+  blob: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
+  arch: 'polygon(0% 100%, 0% 30%, 5% 15%, 15% 5%, 30% 0%, 70% 0%, 85% 5%, 95% 15%, 100% 30%, 100% 100%)',
+}
+
+/** Convert BorderRadius to CSS string */
+export function borderRadiusToCss(br: BorderRadius | undefined): string | undefined {
+  if (br === undefined || br === null) return undefined
+  if (typeof br === 'number') return br ? `${br}px` : undefined
+  return `${br.topLeft}px ${br.topRight}px ${br.bottomRight}px ${br.bottomLeft}px`
+}
+
+/** Resolve mask config to CSS clip-path */
+export function maskToClipPath(mask: MaskConfig | undefined): string | undefined {
+  if (!mask || mask.type === 'none') return undefined
+  if (mask.type === 'custom') return mask.customClipPath || undefined
+  return MASK_CLIP_PATHS[mask.type]
+}
+
+// ============================================================
+// BASE ELEMENT
+// ============================================================
+
+export type EntranceAnimationType = 'none' | 'fade-up' | 'fade-down' | 'slide-right' | 'slide-left' | 'scale' | 'blur-in'
+
+export interface EntranceAnimation {
+  type: EntranceAnimationType
+  delay?: number    // ms, default 0
+  duration?: number // ms, default 400
+}
+
 export interface BaseElement {
   id: string
-  type: 'text' | 'image' | 'shape'
+  type: 'text' | 'image' | 'shape' | 'video' | 'mockup' | 'compare' | 'logo-strip' | 'map'
   x: number
   y: number
   width: number
@@ -106,6 +162,10 @@ export interface BaseElement {
   rotation?: number
   locked?: boolean
   boxShadow?: string
+  // Interactivity (Phase 2)
+  entranceAnimation?: EntranceAnimation
+  hidden?: boolean           // click-to-reveal: hidden in viewer until clicked
+  revealTrigger?: 'click'    // how to reveal hidden elements
 }
 
 export type TextRole =
@@ -150,8 +210,9 @@ export interface ImageElement extends BaseElement {
   src: string
   alt?: string
   objectFit: 'cover' | 'contain' | 'fill'
-  borderRadius?: number
+  borderRadius?: BorderRadius
   clipPath?: string
+  mask?: MaskConfig
   border?: string
   filter?: string // e.g. "brightness(0.85) contrast(1.1)"
 }
@@ -162,14 +223,109 @@ export interface ShapeElement extends BaseElement {
   type: 'shape'
   shapeType: ShapeType
   fill: string
-  borderRadius?: number
+  borderRadius?: BorderRadius
   clipPath?: string
+  mask?: MaskConfig
   border?: string
   mixBlendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'difference' | 'exclusion'
   backdropFilter?: string // e.g. "blur(16px) saturate(1.8)" for glassmorphism
 }
 
-export type SlideElement = TextElement | ImageElement | ShapeElement
+export type VideoProvider = 'youtube' | 'vimeo' | 'direct' | 'storage'
+
+export interface VideoElement extends BaseElement {
+  type: 'video'
+  src: string                    // URL or Supabase storage path
+  videoProvider?: VideoProvider
+  posterImage?: string           // thumbnail shown in editor / before play
+  autoPlay?: boolean             // default true in viewer
+  muted?: boolean                // default true (browsers block unmuted autoplay)
+  loop?: boolean
+  objectFit?: 'cover' | 'contain' | 'fill'
+  borderRadius?: BorderRadius
+  mask?: MaskConfig
+}
+
+/** Auto-detect video provider from URL */
+export function detectVideoProvider(url: string): VideoProvider {
+  if (!url) return 'direct'
+  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube'
+  if (url.includes('vimeo.com')) return 'vimeo'
+  if (url.includes('supabase.co/storage')) return 'storage'
+  return 'direct'
+}
+
+/** Extract YouTube video ID from URL */
+export function extractYouTubeId(url: string): string | null {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/)
+  return match ? match[1] : null
+}
+
+/** Extract Vimeo video ID from URL */
+export function extractVimeoId(url: string): string | null {
+  const match = url.match(/vimeo\.com\/(\d+)/)
+  return match ? match[1] : null
+}
+
+// ============================================================
+// DEVICE MOCKUP ELEMENT
+// ============================================================
+
+export type MockupDeviceType = 'iphone' | 'ipad' | 'macbook' | 'browser' | 'tv' | 'phone-generic'
+export type MockupVariant = 'front' | 'tilted' | 'side' | 'flat'
+
+export interface MockupElement extends BaseElement {
+  type: 'mockup'
+  deviceType: MockupDeviceType
+  deviceVariant?: MockupVariant
+  contentType: 'image' | 'video' | 'color'
+  contentSrc: string              // image URL, video URL, or color value
+  deviceColor?: string            // device frame color (black/white/silver)
+  borderRadius?: BorderRadius
+}
+
+// ============================================================
+// COMPARE (BEFORE/AFTER) ELEMENT
+// ============================================================
+
+export interface CompareElement extends BaseElement {
+  type: 'compare'
+  beforeImage: string
+  afterImage: string
+  beforeLabel?: string
+  afterLabel?: string
+  orientation: 'horizontal' | 'vertical'
+  initialPosition: number // 0-100, default 50
+}
+
+// ============================================================
+// LOGO STRIP ELEMENT
+// ============================================================
+
+export interface LogoStripElement extends BaseElement {
+  type: 'logo-strip'
+  logos: string[]          // array of image URLs
+  speed: number            // px per second, default 40
+  direction: 'rtl' | 'ltr'
+  grayscale?: boolean      // logos in grayscale, color on hover
+  gap?: number             // gap between logos in px, default 60
+}
+
+// ============================================================
+// MAP ELEMENT
+// ============================================================
+
+export interface MapElement extends BaseElement {
+  type: 'map'
+  address: string          // address or place name
+  lat?: number
+  lng?: number
+  zoom?: number            // default 15
+  mapStyle?: 'roadmap' | 'satellite'
+  borderRadius?: BorderRadius
+}
+
+export type SlideElement = TextElement | ImageElement | ShapeElement | VideoElement | MockupElement | CompareElement | LogoStripElement | MapElement
 
 // ============================================================
 // TYPE GUARDS
@@ -185,6 +341,26 @@ export function isImageElement(el: SlideElement): el is ImageElement {
 
 export function isShapeElement(el: SlideElement): el is ShapeElement {
   return el.type === 'shape'
+}
+
+export function isVideoElement(el: SlideElement): el is VideoElement {
+  return el.type === 'video'
+}
+
+export function isMockupElement(el: SlideElement): el is MockupElement {
+  return el.type === 'mockup'
+}
+
+export function isCompareElement(el: SlideElement): el is CompareElement {
+  return el.type === 'compare'
+}
+
+export function isLogoStripElement(el: SlideElement): el is LogoStripElement {
+  return el.type === 'logo-strip'
+}
+
+export function isMapElement(el: SlideElement): el is MapElement {
+  return el.type === 'map'
 }
 
 // ============================================================

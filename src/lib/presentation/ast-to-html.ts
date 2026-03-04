@@ -11,8 +11,14 @@ import type {
   TextElement,
   ImageElement,
   ShapeElement,
+  VideoElement,
+  MockupElement,
+  CompareElement,
+  LogoStripElement,
+  MapElement,
   DesignSystem,
 } from '@/types/presentation'
+import { borderRadiusToCss, maskToClipPath, extractYouTubeId, extractVimeoId } from '@/types/presentation'
 
 const W = 1920
 const H = 1080
@@ -82,7 +88,8 @@ function renderTextElement(el: TextElement, defaultFont: string, pdfMode = false
   if (effectiveOpacity !== 1) styles.push(`opacity: ${effectiveOpacity}`)
   if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
   if (el.backgroundColor) styles.push(`background-color: ${el.backgroundColor}`)
-  if (el.borderRadius) styles.push(`border-radius: ${el.borderRadius}px`)
+  const brCss = borderRadiusToCss(el.borderRadius)
+  if (brCss) styles.push(`border-radius: ${brCss}`)
   if (el.padding) styles.push(`padding: ${el.padding}px`)
   if (el.mixBlendMode && el.mixBlendMode !== 'normal') styles.push(`mix-blend-mode: ${el.mixBlendMode}`)
   if (el.textStroke) {
@@ -110,8 +117,10 @@ function renderImageElement(el: ImageElement, _pdfMode = false): string {
     `overflow: hidden`,
   ]
 
-  if (el.borderRadius) containerStyles.push(`border-radius: ${el.borderRadius}px`)
-  if (el.clipPath) containerStyles.push(`clip-path: ${el.clipPath}`)
+  const imgBrCss = borderRadiusToCss(el.borderRadius)
+  if (imgBrCss) containerStyles.push(`border-radius: ${imgBrCss}`)
+  const imgClipPath = maskToClipPath(el.mask) || el.clipPath
+  if (imgClipPath) containerStyles.push(`clip-path: ${imgClipPath}`)
   if (el.border) containerStyles.push(`border: ${el.border}`)
   if (el.opacity !== undefined && el.opacity !== 1) containerStyles.push(`opacity: ${el.opacity}`)
   if (el.rotation) containerStyles.push(`transform: rotate(${el.rotation}deg)`)
@@ -146,8 +155,10 @@ function renderShapeElement(el: ShapeElement, _pdfMode = false): string {
     styles.push(`background-color: ${fill}`)
   }
 
-  if (el.borderRadius) styles.push(`border-radius: ${el.borderRadius}px`)
-  if (el.clipPath) styles.push(`clip-path: ${el.clipPath}`)
+  const shapeBrCss = borderRadiusToCss(el.borderRadius)
+  if (shapeBrCss) styles.push(`border-radius: ${shapeBrCss}`)
+  const shapeClipPath = maskToClipPath(el.mask) || el.clipPath
+  if (shapeClipPath) styles.push(`clip-path: ${shapeClipPath}`)
   if (el.border) styles.push(`border: ${el.border}`)
   if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
   if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
@@ -161,6 +172,88 @@ function renderShapeElement(el: ShapeElement, _pdfMode = false): string {
   return `<div style="${styles.join('; ')}"></div>`
 }
 
+function renderVideoElement(el: VideoElement, _pdfMode = false): string {
+  const containerStyles = [
+    `position: absolute`,
+    `left: ${el.x}px`,
+    `top: ${el.y}px`,
+    `width: ${el.width}px`,
+    `height: ${el.height}px`,
+    `z-index: ${el.zIndex}`,
+    `overflow: hidden`,
+    `background: #000`,
+  ]
+
+  const brCss = borderRadiusToCss(el.borderRadius)
+  if (brCss) containerStyles.push(`border-radius: ${brCss}`)
+  const clipPath = maskToClipPath(el.mask)
+  if (clipPath) containerStyles.push(`clip-path: ${clipPath}`)
+  if (el.opacity !== undefined && el.opacity !== 1) containerStyles.push(`opacity: ${el.opacity}`)
+  if (el.rotation) containerStyles.push(`transform: rotate(${el.rotation}deg)`)
+
+  // For PDF: show poster image or YouTube thumbnail
+  const ytId = el.videoProvider === 'youtube' ? extractYouTubeId(el.src) : null
+  const poster = el.posterImage || (ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : '')
+
+  if (poster) {
+    return `<div style="${containerStyles.join('; ')}"><img src="${sanitizeUrl(poster)}" alt="video" style="width: 100%; height: 100%; object-fit: ${el.objectFit || 'cover'}; display: block;" /><div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3);"><div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,0.9); display: flex; align-items: center; justify-content: center;"><svg width="28" height="28" viewBox="0 0 24 24" fill="#000"><polygon points="6,3 20,12 6,21"/></svg></div></div></div>`
+  }
+
+  return `<div style="${containerStyles.join('; ')}"><div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1a1a2e, #16213e); color: #666; font-size: 14px;">וידאו</div></div>`
+}
+
+function renderMockupElement(el: MockupElement): string {
+  const styles = [
+    `position: absolute`, `left: ${el.x}px`, `top: ${el.y}px`,
+    `width: ${el.width}px`, `height: ${el.height}px`, `z-index: ${el.zIndex}`,
+  ]
+  if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
+  if (el.rotation) styles.push(`transform: rotate(${el.rotation}deg)`)
+
+  const frameColor = el.deviceColor === 'white' ? '#f5f5f7' : el.deviceColor === 'silver' ? '#e0e0e0' : '#1d1d1f'
+  const content = el.contentType === 'image' && el.contentSrc
+    ? `<img src="${sanitizeUrl(el.contentSrc)}" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block;" />`
+    : `<div style="width: 100%; height: 100%; background: ${el.contentSrc || '#1a1a2e'};"></div>`
+
+  return `<div style="${styles.join('; ')}"><div style="width: 100%; height: 100%; background: ${frameColor}; border-radius: ${el.width * 0.08}px; padding: 4%; box-shadow: 0 20px 60px rgba(0,0,0,0.4); display: flex;"><div style="flex: 1; border-radius: ${el.width * 0.04}px; overflow: hidden; background: #000;">${content}</div></div></div>`
+}
+
+function renderCompareElement(el: CompareElement): string {
+  const styles = [
+    `position: absolute`, `left: ${el.x}px`, `top: ${el.y}px`,
+    `width: ${el.width}px`, `height: ${el.height}px`, `z-index: ${el.zIndex}`,
+    `overflow: hidden`,
+  ]
+  if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
+  const pos = el.initialPosition || 50
+  return `<div style="${styles.join('; ')}"><img src="${sanitizeUrl(el.afterImage)}" alt="" style="width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0;" /><div style="position: absolute; inset: 0; clip-path: inset(0 ${100 - pos}% 0 0);"><img src="${sanitizeUrl(el.beforeImage)}" alt="" style="width: 100%; height: 100%; object-fit: cover;" /></div><div style="position: absolute; top: 0; bottom: 0; left: ${pos}%; transform: translateX(-50%); width: 3px; background: white; box-shadow: 0 0 8px rgba(0,0,0,0.5);"></div></div>`
+}
+
+function renderLogoStripElement(el: LogoStripElement): string {
+  const styles = [
+    `position: absolute`, `left: ${el.x}px`, `top: ${el.y}px`,
+    `width: ${el.width}px`, `height: ${el.height}px`, `z-index: ${el.zIndex}`,
+    `overflow: hidden`, `display: flex`, `align-items: center`,
+  ]
+  if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
+  const logos = (el.logos || []).map(logo =>
+    `<img src="${sanitizeUrl(logo)}" alt="" style="height: ${el.height * 0.6}px; width: auto; object-fit: contain; flex-shrink: 0;${el.grayscale ? ' filter: grayscale(100%);' : ''}" />`
+  ).join('')
+  return `<div style="${styles.join('; ')}"><div style="display: flex; align-items: center; gap: ${el.gap || 60}px;">${logos}</div></div>`
+}
+
+function renderMapElement(el: MapElement): string {
+  const styles = [
+    `position: absolute`, `left: ${el.x}px`, `top: ${el.y}px`,
+    `width: ${el.width}px`, `height: ${el.height}px`, `z-index: ${el.zIndex}`,
+    `overflow: hidden`, `background: #1a1a2e`,
+  ]
+  const brCss = borderRadiusToCss(el.borderRadius)
+  if (brCss) styles.push(`border-radius: ${brCss}`)
+  if (el.opacity !== undefined && el.opacity !== 1) styles.push(`opacity: ${el.opacity}`)
+  return `<div style="${styles.join('; ')}"><div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; font-size: 14px;">${escapeHtml(el.address || 'מפה')}</div></div>`
+}
+
 function renderElement(el: SlideElement, defaultFont: string, pdfMode = false): string {
   switch (el.type) {
     case 'text':
@@ -169,6 +262,16 @@ function renderElement(el: SlideElement, defaultFont: string, pdfMode = false): 
       return renderImageElement(el, pdfMode)
     case 'shape':
       return renderShapeElement(el, pdfMode)
+    case 'video':
+      return renderVideoElement(el as VideoElement, pdfMode)
+    case 'mockup':
+      return renderMockupElement(el as MockupElement)
+    case 'compare':
+      return renderCompareElement(el as CompareElement)
+    case 'logo-strip':
+      return renderLogoStripElement(el as LogoStripElement)
+    case 'map':
+      return renderMapElement(el as MapElement)
     default:
       return ''
   }
