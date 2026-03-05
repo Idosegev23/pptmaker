@@ -35,7 +35,12 @@ export default function PresentationMode({
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onExit(); return }
+      if (e.key === 'Escape') {
+        // If in fullscreen, browser handles ESC → fullscreenchange → onExit
+        // If not in fullscreen, we call onExit directly
+        if (!document.fullscreenElement) onExit()
+        return
+      }
       if (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'PageUp') { goPrev(); return }
       if (e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') { goNext(); return }
       if (e.key === 'Home') { setCurrentIndex(0); return }
@@ -59,11 +64,24 @@ export default function PresentationMode({
     return () => window.removeEventListener('resize', resize)
   }, [])
 
-  // Request fullscreen
+  // Request fullscreen + listen for fullscreen exit to trigger onExit
   useEffect(() => {
     document.documentElement.requestFullscreen?.().catch(() => {})
-    return () => { document.exitFullscreen?.().catch(() => {}) }
-  }, [])
+
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        onExit()
+      }
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {})
+      }
+    }
+  }, [onExit])
 
   // Auto-hide controls
   useEffect(() => {
