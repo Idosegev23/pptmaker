@@ -424,8 +424,6 @@ export default function SlideEditor({
               bounds="parent"
               style={{
                 zIndex: element.zIndex,
-                opacity: element.opacity ?? 1,
-                transform: build3DTransform(element),
                 outline: isSelected ? '2px solid #3b82f6' : 'none',
                 outlineOffset: '2px',
                 cursor: isLocked ? 'default' : isEditingText ? 'text' : 'move',
@@ -442,7 +440,12 @@ export default function SlideEditor({
               }}
             >
               <div
-                style={{ width: '100%', height: '100%', position: 'relative' }}
+                style={{
+                  width: '100%', height: '100%', position: 'relative',
+                  opacity: element.opacity ?? 1,
+                  transform: build3DTransform(element),
+                  transformStyle: 'preserve-3d',
+                }}
                 onClick={(e) => handleElementClick(element.id, e)}
                 onDoubleClick={(e) => handleElementDoubleClick(element.id, e)}
               >

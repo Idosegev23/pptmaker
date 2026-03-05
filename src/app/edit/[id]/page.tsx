@@ -570,9 +570,9 @@ export default function PresentationEditorPage() {
     imageModalElementIdRef.current = imageModalElementId
   }, [imageModalElementId])
 
-  const handleImageSelected = useCallback((url: string) => {
+  const handleImageSelected = useCallback((url: string, contentType?: 'image' | 'video') => {
     const elementId = imageModalElementIdRef.current
-    console.log('[Editor] handleImageSelected called:', { url: url?.slice(0, 60), elementId, mode: imageModalMode })
+    console.log('[Editor] handleImageSelected called:', { url: url?.slice(0, 60), elementId, mode: imageModalMode, contentType })
 
     if (imageModalMode === 'add') {
       const element: ImageElement = {
@@ -583,9 +583,10 @@ export default function PresentationEditorPage() {
       }
       editor.addElement(element)
     } else if (imageModalMode === 'mockup-content' && elementId) {
-      // Update mockup element content
-      editor.updateElement(elementId, { contentSrc: url, contentType: 'image' } as Partial<SlideElement>)
-      console.log('[Editor] Mockup content updated:', elementId)
+      // Update mockup element content — detect type from callback or URL
+      const type = contentType || (url.match(/\.(mp4|webm|mov|avi)(\?|$)/i) ? 'video' : 'image')
+      editor.updateElement(elementId, { contentSrc: url, contentType: type } as Partial<SlideElement>)
+      console.log('[Editor] Mockup content updated:', elementId, type)
     } else if (elementId) {
       editor.updateElement(elementId, { src: url } as Partial<SlideElement>)
       console.log('[Editor] Image element updated:', elementId)
@@ -1029,6 +1030,7 @@ export default function PresentationEditorPage() {
         slideLabel={editor.selectedSlide?.label}
         initialTab={imageModalTab}
         slideContext={slideContext}
+        allowVideo={imageModalMode === 'mockup-content'}
       />
 
       <FeedbackDialog

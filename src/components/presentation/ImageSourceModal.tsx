@@ -11,12 +11,13 @@ type ImageStyle = 'photo' | 'illustration' | 'abstract' | '3d'
 interface ImageSourceModalProps {
   isOpen: boolean
   onClose: () => void
-  onImageSelected: (url: string) => void
+  onImageSelected: (url: string, contentType?: 'image' | 'video') => void
   designSystem: DesignSystem
   documentId: string
   slideLabel?: string
   initialTab?: Tab
   slideContext?: SlideContext
+  allowVideo?: boolean
 }
 
 export default function ImageSourceModal({
@@ -28,6 +29,7 @@ export default function ImageSourceModal({
   slideLabel,
   initialTab,
   slideContext,
+  allowVideo,
 }: ImageSourceModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab || 'upload')
   const [loading, setLoading] = useState(false)
@@ -40,8 +42,8 @@ export default function ImageSourceModal({
 
   if (!isOpen) return null
 
-  const handleSelect = (url: string) => {
-    onImageSelected(url)
+  const handleSelect = (url: string, contentType?: 'image' | 'video') => {
+    onImageSelected(url, contentType)
     onClose()
   }
 
@@ -50,7 +52,7 @@ export default function ImageSourceModal({
       <div className="bg-[#12121f] border border-white/10 rounded-2xl w-[540px] max-h-[80vh] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-          <h3 className="text-white text-sm font-medium">החלפת תמונה</h3>
+          <h3 className="text-white text-sm font-medium">{allowVideo ? 'הוספת תמונה או וידאו' : 'החלפת תמונה'}</h3>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-white transition-colors p-1"
@@ -96,6 +98,7 @@ export default function ImageSourceModal({
               setLoading={setLoading}
               setError={setError}
               onImageSelected={handleSelect}
+              allowVideo={allowVideo}
             />
           )}
 
@@ -125,22 +128,27 @@ export default function ImageSourceModal({
 
 // ─── Upload Tab ──────────────────────────────────────
 
-function UploadTab({ loading, setLoading, setError, onImageSelected }: {
+function UploadTab({ loading, setLoading, setError, onImageSelected, allowVideo }: {
   loading: boolean
   setLoading: (v: boolean) => void
   setError: (v: string | null) => void
-  onImageSelected: (url: string) => void
+  onImageSelected: (url: string, contentType?: 'image' | 'video') => void
+  allowVideo?: boolean
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
 
   const uploadFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setError('יש לבחור קובץ תמונה בלבד')
+    const isImage = file.type.startsWith('image/')
+    const isVideo = file.type.startsWith('video/')
+
+    if (!isImage && !(allowVideo && isVideo)) {
+      setError(allowVideo ? 'יש לבחור קובץ תמונה או וידאו' : 'יש לבחור קובץ תמונה בלבד')
       return
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('גודל הקובץ חייב להיות עד 10MB')
+    const maxSize = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024
+    if (file.size > maxSize) {
+      setError(isVideo ? 'גודל הוידאו חייב להיות עד 100MB' : 'גודל הקובץ חייב להיות עד 10MB')
       return
     }
 
@@ -150,22 +158,23 @@ function UploadTab({ loading, setLoading, setError, onImageSelected }: {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('fieldId', 'slide-image')
+      formData.append('fieldId', isVideo ? 'slide-video' : 'slide-image')
 
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      const endpoint = isVideo ? '/api/upload/video' : '/api/upload'
+      const res = await fetch(endpoint, { method: 'POST', body: formData })
       const data = await res.json()
 
       if (!res.ok || !data.url) {
         throw new Error(data.error || 'שגיאה בהעלאה')
       }
 
-      onImageSelected(data.url)
+      onImageSelected(data.url, isVideo ? 'video' : 'image')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'שגיאה בהעלאה')
     } finally {
       setLoading(false)
     }
-  }, [setLoading, setError, onImageSelected])
+  }, [setLoading, setError, onImageSelected, allowVideo])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -195,14 +204,14 @@ function UploadTab({ loading, setLoading, setError, onImageSelected }: {
         {loading ? (
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-400 text-sm">מעלה תמונה...</p>
+            <p className="text-gray-400 text-sm">{allowVideo ? 'מעלה...' : 'מעלה תמונה...'}</p>
           </div>
         ) : (
           <>
             <div className="text-4xl mb-3">📁</div>
-            <p className="text-gray-300 text-sm mb-1">גרור תמונה לכאן</p>
+            <p className="text-gray-300 text-sm mb-1">{allowVideo ? 'גרור תמונה או וידאו לכאן' : 'גרור תמונה לכאן'}</p>
             <p className="text-gray-500 text-xs">או לחץ לבחירת קובץ</p>
-            <p className="text-gray-600 text-[10px] mt-3">PNG, JPG, WebP — עד 10MB</p>
+            <p className="text-gray-600 text-[10px] mt-3">{allowVideo ? 'PNG, JPG, WebP, MP4, WebM — תמונה עד 10MB, וידאו עד 100MB' : 'PNG, JPG, WebP — עד 10MB'}</p>
           </>
         )}
       </div>
@@ -210,7 +219,7 @@ function UploadTab({ loading, setLoading, setError, onImageSelected }: {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept={allowVideo ? 'image/*,video/*' : 'image/*'}
         onChange={handleFileChange}
         className="hidden"
       />
