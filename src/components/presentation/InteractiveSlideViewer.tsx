@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import type { Slide, DesignSystem, SlideElement, EntranceAnimationType } from '@/types/presentation'
+import type { Slide, DesignSystem, SlideElement, EntranceAnimationType, BaseElement } from '@/types/presentation'
 import { CANVAS_WIDTH, CANVAS_HEIGHT, isTextElement, isVideoElement } from '@/types/presentation'
 import ElementRenderer from './ElementRenderer'
 
@@ -11,6 +11,15 @@ interface InteractiveSlideViewerProps {
   scale?: number
   isActive?: boolean  // whether this slide is currently visible (for triggering animations)
   isLastSlide?: boolean // trigger confetti on last slide
+}
+
+function build3DTransform(el: BaseElement): string | undefined {
+  const parts: string[] = []
+  if (el.perspective) parts.push(`perspective(${el.perspective}px)`)
+  if (el.rotateX) parts.push(`rotateX(${el.rotateX}deg)`)
+  if (el.rotateY) parts.push(`rotateY(${el.rotateY}deg)`)
+  if (el.rotation) parts.push(`rotate(${el.rotation}deg)`)
+  return parts.length ? parts.join(' ') : undefined
 }
 
 function getBackgroundStyle(bg: Slide['background']): React.CSSProperties {
@@ -207,7 +216,7 @@ export default function InteractiveSlideViewer({
                 height: element.height,
                 zIndex: element.zIndex,
                 opacity: isHidden ? 0.15 : (element.opacity ?? 1),
-                transform: element.rotation ? `rotate(${element.rotation}deg)` : undefined,
+                transform: build3DTransform(element),
                 cursor: isHidden ? 'pointer' : undefined,
                 transition: `all ${animDuration}ms cubic-bezier(0.16, 1, 0.3, 1)`,
                 // Animation state

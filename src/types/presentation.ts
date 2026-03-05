@@ -159,7 +159,10 @@ export interface BaseElement {
   height: number
   zIndex: number
   opacity?: number
-  rotation?: number
+  rotation?: number    // rotateZ (2D, backward compatible)
+  rotateX?: number     // 3D tilt forward/back (-180 to 180)
+  rotateY?: number     // 3D spin left/right (-180 to 180)
+  perspective?: number // 3D depth of field (400-2000px, default 1200)
   locked?: boolean
   boxShadow?: string
   // Interactivity (Phase 2)

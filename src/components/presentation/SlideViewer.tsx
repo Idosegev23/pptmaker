@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import type { Slide, DesignSystem } from '@/types/presentation'
+import type { Slide, DesignSystem, BaseElement } from '@/types/presentation'
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '@/types/presentation'
 import ElementRenderer from './ElementRenderer'
 
@@ -10,6 +10,15 @@ interface SlideViewerProps {
   designSystem: DesignSystem
   scale?: number
   className?: string
+}
+
+function build3DTransform(el: BaseElement): string | undefined {
+  const parts: string[] = []
+  if (el.perspective) parts.push(`perspective(${el.perspective}px)`)
+  if (el.rotateX) parts.push(`rotateX(${el.rotateX}deg)`)
+  if (el.rotateY) parts.push(`rotateY(${el.rotateY}deg)`)
+  if (el.rotation) parts.push(`rotate(${el.rotation}deg)`)
+  return parts.length ? parts.join(' ') : undefined
 }
 
 function getBackgroundStyle(bg: Slide['background']): React.CSSProperties {
@@ -72,7 +81,7 @@ export default function SlideViewer({
               height: element.height,
               zIndex: element.zIndex,
               opacity: element.opacity ?? 1,
-              transform: element.rotation ? `rotate(${element.rotation}deg)` : undefined,
+              transform: build3DTransform(element),
             }}
           >
             <ElementRenderer element={element} designSystem={designSystem} />

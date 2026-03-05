@@ -312,7 +312,9 @@ function MockupElementView({ element }: { element: MockupElement }) {
         /* eslint-disable-next-line @next/next/no-img-element */
         <img src={element.contentSrc} alt="mockup content" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} draggable={false} />
       )
-      : <div style={{ width: '100%', height: '100%', background: '#000' }} />
+      : element.contentType === 'video'
+        ? <video src={element.contentSrc} autoPlay loop muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : <div style={{ width: '100%', height: '100%', background: '#000' }} />
     : (
       // Empty state placeholder
       <div style={{

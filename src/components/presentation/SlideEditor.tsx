@@ -2,10 +2,19 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { Rnd } from 'react-rnd'
-import type { Slide, SlideElement, DesignSystem } from '@/types/presentation'
+import type { Slide, SlideElement, DesignSystem, BaseElement } from '@/types/presentation'
 import { CANVAS_WIDTH, CANVAS_HEIGHT, isTextElement } from '@/types/presentation'
 import ElementRenderer from './ElementRenderer'
 import GridOverlay from './GridOverlay'
+
+function build3DTransform(el: BaseElement): string | undefined {
+  const parts: string[] = []
+  if (el.perspective) parts.push(`perspective(${el.perspective}px)`)
+  if (el.rotateX) parts.push(`rotateX(${el.rotateX}deg)`)
+  if (el.rotateY) parts.push(`rotateY(${el.rotateY}deg)`)
+  if (el.rotation) parts.push(`rotate(${el.rotation}deg)`)
+  return parts.length ? parts.join(' ') : undefined
+}
 
 function snapValue(value: number, gridSize: number): number {
   return Math.round(value / gridSize) * gridSize
@@ -416,7 +425,7 @@ export default function SlideEditor({
               style={{
                 zIndex: element.zIndex,
                 opacity: element.opacity ?? 1,
-                transform: element.rotation ? `rotate(${element.rotation}deg)` : undefined,
+                transform: build3DTransform(element),
                 outline: isSelected ? '2px solid #3b82f6' : 'none',
                 outlineOffset: '2px',
                 cursor: isLocked ? 'default' : isEditingText ? 'text' : 'move',

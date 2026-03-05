@@ -714,6 +714,13 @@ function PositionProperties({ element, onChange }: {
           </button>
         </div>
       </div>
+
+      {/* 3D Transform */}
+      <div className="grid grid-cols-3 gap-2">
+        <div><MiniLabel>סיבוב X</MiniLabel><input type="number" value={element.rotateX || 0} onChange={(e) => onChange({ rotateX: parseInt(e.target.value) || 0 })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="ltr" placeholder="0°" /></div>
+        <div><MiniLabel>סיבוב Y</MiniLabel><input type="number" value={element.rotateY || 0} onChange={(e) => onChange({ rotateY: parseInt(e.target.value) || 0 })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="ltr" placeholder="0°" /></div>
+        <div><MiniLabel>פרספקטיבה</MiniLabel><input type="number" value={element.perspective || 0} onChange={(e) => onChange({ perspective: parseInt(e.target.value) || 0 })} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-white text-xs focus:outline-none focus:border-white/30" dir="ltr" placeholder="1200" /></div>
+      </div>
     </div>
   )
 }

@@ -70,10 +70,11 @@ export function Android({
       )}
       {videoSrc && (
         <foreignObject
-          width="380"
-          height="820"
+          x="9"
+          y="14"
+          width="360"
+          height="800"
           clipPath="url(#clip0_514_20855)"
-          preserveAspectRatio="xMidYMid slice"
         >
           <video
             className="size-full object-cover"
