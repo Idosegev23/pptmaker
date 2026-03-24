@@ -1080,39 +1080,86 @@ export async function pipelineBatch(
       generateSlides,
     } = await import('@/lib/slide-engine')
 
-    // ── Step 1: AI Art Direction ──
+    // ── Step 1: AI Art Direction (GPT-5.4 primary, Gemini fallback) ──
     let artDirection: import('@/lib/slide-engine').ArtDirectionResult
     try {
       const artPrompt = buildArtDirectionPrompt(batchPlans, ds, foundation.brandName)
-      console.log(`[SlideDesigner][${requestId}] 📝 Art Direction prompt: ${artPrompt.length} chars`)
+      const fullPrompt = `${artPrompt}\n\nReturn a JSON object: { "slides": [ { "slideType": "...", "composition": "hero-center|hero-left|hero-right|split-screen|bento-grid|data-art|editorial|cards-float|full-bleed|timeline-flow", "heroElement": "title|number|image|quote|cards", "titlePlacement": "top|center|bottom", "titleScale": "md|lg|xl|xxl", "backgroundStyle": "solid|gradient|aurora|image-overlay", "gradientAngle": 135, "decorativeElement": "watermark|accent-line|motif-pattern|floating-shape|none", "colorEmphasis": "primary|accent|dark|light", "dramaticChoice": "One bold sentence" } ] }`
+      console.log(`[SlideDesigner][${requestId}] 📝 Art Direction prompt: ${fullPrompt.length} chars`)
 
-      const models = await getBatchModels()
-      const model = _proUnavailable ? (models[1] || models[0]) : models[0]
-      const thinkingLevel = await getBatchThinkingLevel()
-      const resolvedThinking = thinkingLevel === 'HIGH' ? ThinkingLevel.HIGH
-        : thinkingLevel === 'MEDIUM' ? ThinkingLevel.MEDIUM
-        : ThinkingLevel.LOW
+      let artResult: { text?: string | null }
 
-      console.log(`[SlideDesigner][${requestId}] 🤖 Calling ${model} for art direction (thinking: ${thinkingLevel})...`)
+      // Try GPT-5.4 first (best art direction quality)
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          console.log(`[SlideDesigner][${requestId}] 🤖 Calling GPT-5.4 for art direction (medium reasoning)...`)
+          const OpenAI = (await import('openai')).default
+          const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+          const completion = await openai.chat.completions.create({
+            model: 'gpt-5.4',
+            messages: [
+              { role: 'system', content: 'You are a senior art director at a top Israeli agency creating premium RTL Hebrew presentations. Each slide should feel like a different page in a luxury brand lookbook. Bold, unexpected, always readable. Return ONLY valid JSON.' },
+              { role: 'user', content: fullPrompt },
+            ],
+            max_completion_tokens: 8192,
+            reasoning_effort: 'medium',
+            response_format: { type: 'json_object' },
+          })
+          artResult = { text: completion.choices[0]?.message?.content }
+          console.log(`[SlideDesigner][${requestId}] ✅ GPT-5.4 responded: ${artResult.text?.length || 0} chars`)
+        } catch (gptErr) {
+          const gptMsg = gptErr instanceof Error ? gptErr.message : String(gptErr)
+          console.warn(`[SlideDesigner][${requestId}] ⚠️ GPT-5.4 failed (${gptMsg.slice(0, 80)}), trying Gemini...`)
 
-      const artResult = await callAI({
-        model,
-        prompt: artPrompt,
-        systemPrompt: 'You are a senior art director at a top Israeli agency creating premium RTL Hebrew presentations. Each slide should feel like a different page in a luxury brand lookbook. Bold, unexpected, always readable. Return JSON only.',
-        geminiConfig: {
-          systemInstruction: 'You are a senior art director. Make bold, unexpected visual choices. Each slide must feel unique. Return JSON only.',
-          responseMimeType: 'application/json',
-          responseSchema: ART_DIRECTION_SCHEMA,
-          thinkingConfig: { thinkingLevel: resolvedThinking },
+          // Fallback to Gemini
+          const models = await getBatchModels()
+          const model = _proUnavailable ? (models[1] || models[0]) : models[0]
+          console.log(`[SlideDesigner][${requestId}] 🤖 Calling ${model} for art direction (Gemini fallback)...`)
+          artResult = await callAI({
+            model,
+            prompt: fullPrompt,
+            systemPrompt: 'Senior art director. Return JSON only.',
+            geminiConfig: {
+              systemInstruction: 'Senior art director. Bold visual choices. Return JSON only.',
+              responseMimeType: 'application/json',
+              responseSchema: ART_DIRECTION_SCHEMA,
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+              maxOutputTokens: 6144,
+              temperature: 0.7,
+            },
+            responseSchema: ART_DIRECTION_SCHEMA as unknown as Record<string, unknown>,
+            thinkingLevel: 'MEDIUM',
+            maxOutputTokens: 6144,
+            callerId: `${requestId}-artdir-gemini`,
+            noGlobalFallback: true,
+          })
+          console.log(`[SlideDesigner][${requestId}] ✅ Gemini responded: ${artResult.text?.length || 0} chars`)
+        }
+      } else {
+        // No OpenAI key — use Gemini directly
+        console.log(`[SlideDesigner][${requestId}] 🤖 No OPENAI_API_KEY, using Gemini for art direction...`)
+        const models = await getBatchModels()
+        const model = _proUnavailable ? (models[1] || models[0]) : models[0]
+        artResult = await callAI({
+          model,
+          prompt: fullPrompt,
+          systemPrompt: 'Senior art director. Return JSON only.',
+          geminiConfig: {
+            systemInstruction: 'Senior art director. Bold visual choices. Return JSON only.',
+            responseMimeType: 'application/json',
+            responseSchema: ART_DIRECTION_SCHEMA,
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+            maxOutputTokens: 6144,
+            temperature: 0.7,
+          },
+          responseSchema: ART_DIRECTION_SCHEMA as unknown as Record<string, unknown>,
+          thinkingLevel: 'MEDIUM',
           maxOutputTokens: 6144,
-          temperature: 0.7,
-        },
-        responseSchema: ART_DIRECTION_SCHEMA as unknown as Record<string, unknown>,
-        thinkingLevel,
-        maxOutputTokens: 6144,
-        callerId: `${requestId}-artdir`,
-        noGlobalFallback: true,
-      })
+          callerId: `${requestId}-artdir-gemini`,
+          noGlobalFallback: true,
+        })
+        console.log(`[SlideDesigner][${requestId}] ✅ Gemini responded: ${artResult.text?.length || 0} chars`)
+      }
 
       artDirection = parseArtDirection(artResult.text || '{}', batchPlans)
       console.log(`[SlideDesigner][${requestId}] ✅ AI Art Direction received:`)
