@@ -1069,151 +1069,92 @@ export async function pipelineBatch(
   const ds = foundation.designSystem as PremiumDesignSystem
 
   try {
-    // ═══ Art Director Engine v3 ═══
-    // Step 1: AI makes creative decisions (composition, scale, emphasis)
-    // Step 2: TypeScript layout engine builds pixel-perfect slides
-    const {
-      buildArtDirectionPrompt,
-      ART_DIRECTION_SCHEMA,
-      parseArtDirection,
-      buildFallbackArtDirection,
-      generateSlides,
-    } = await import('@/lib/slide-engine')
+    // ═══ Art Director Engine v4 — Semantic Design ═══
+    // GPT-5.4 assembles semantic elements (title, cards, watermark, etc.)
+    // TypeScript translates semantic intent → pixel-positioned SlideElements
+    const { buildSemanticPrompt, parseSemanticResponse, buildFallbackSemanticPresentation } = await import('@/lib/slide-engine/semantic-prompt')
+    const { translateSlide } = await import('@/lib/slide-engine/semantic-translator')
 
-    // ── Step 1: AI Art Direction (GPT-5.4 primary, Gemini fallback) ──
-    let artDirection: import('@/lib/slide-engine').ArtDirectionResult
+    let semanticResult: import('@/lib/slide-engine/semantic-types').SemanticPresentation
     try {
-      const artPrompt = buildArtDirectionPrompt(batchPlans, ds, foundation.brandName)
-      const fullPrompt = `${artPrompt}\n\nReturn a JSON object: { "slides": [ { "slideType": "...", "composition": "hero-center|hero-left|hero-right|split-screen|bento-grid|data-art|editorial|cards-float|full-bleed|timeline-flow", "heroElement": "title|number|image|quote|cards", "titlePlacement": "top|center|bottom", "titleScale": "md|lg|xl|xxl", "backgroundStyle": "solid|gradient|aurora|image-overlay", "gradientAngle": 135, "decorativeElement": "watermark|accent-line|motif-pattern|floating-shape|none", "colorEmphasis": "primary|accent|dark|light", "dramaticChoice": "One bold sentence" } ] }`
-      console.log(`[SlideDesigner][${requestId}] 📝 Art Direction prompt: ${fullPrompt.length} chars`)
+      const prompt = buildSemanticPrompt(batchPlans, ds, foundation.brandName)
+      console.log(`[SlideDesigner][${requestId}] 📝 Semantic Design prompt: ${prompt.length} chars`)
 
-      let artResult: { text?: string | null }
+      // Call GPT-5.4 with semantic prompt
+      console.log(`[SlideDesigner][${requestId}] 🤖 Calling GPT-5.4 for semantic design (medium reasoning)...`)
+      const OpenAI = (await import('openai')).default
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-5.4',
+        messages: [
+          { role: 'system', content: 'You are a world-class art director. Design each slide by assembling semantic elements. Return ONLY valid JSON. No markdown fences.' },
+          { role: 'user', content: prompt },
+        ],
+        max_completion_tokens: 16384,
+        reasoning_effort: 'medium',
+        response_format: { type: 'json_object' },
+      })
+      const rawText = completion.choices[0]?.message?.content || '{}'
+      console.log(`[SlideDesigner][${requestId}] ✅ GPT-5.4 responded: ${rawText.length} chars`)
 
-      // Try GPT-5.4 first (best art direction quality)
-      if (process.env.OPENAI_API_KEY) {
-        try {
-          console.log(`[SlideDesigner][${requestId}] 🤖 Calling GPT-5.4 for art direction (medium reasoning)...`)
-          const OpenAI = (await import('openai')).default
-          const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-          const completion = await openai.chat.completions.create({
-            model: 'gpt-5.4',
-            messages: [
-              { role: 'system', content: 'You are a senior art director at a top Israeli agency creating premium RTL Hebrew presentations. Each slide should feel like a different page in a luxury brand lookbook. Bold, unexpected, always readable. Return ONLY valid JSON.' },
-              { role: 'user', content: fullPrompt },
-            ],
-            max_completion_tokens: 8192,
-            reasoning_effort: 'medium',
-            response_format: { type: 'json_object' },
-          })
-          artResult = { text: completion.choices[0]?.message?.content }
-          console.log(`[SlideDesigner][${requestId}] ✅ GPT-5.4 responded: ${artResult.text?.length || 0} chars`)
-        } catch (gptErr) {
-          const gptMsg = gptErr instanceof Error ? gptErr.message : String(gptErr)
-          console.warn(`[SlideDesigner][${requestId}] ⚠️ GPT-5.4 failed (${gptMsg.slice(0, 80)}), trying Gemini...`)
-
-          // Fallback to Gemini
-          const models = await getBatchModels()
-          const model = _proUnavailable ? (models[1] || models[0]) : models[0]
-          console.log(`[SlideDesigner][${requestId}] 🤖 Calling ${model} for art direction (Gemini fallback)...`)
-          artResult = await callAI({
-            model,
-            prompt: fullPrompt,
-            systemPrompt: 'Senior art director. Return JSON only.',
-            geminiConfig: {
-              systemInstruction: 'Senior art director. Bold visual choices. Return JSON only.',
-              responseMimeType: 'application/json',
-              responseSchema: ART_DIRECTION_SCHEMA,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-              maxOutputTokens: 6144,
-              temperature: 0.7,
-            },
-            responseSchema: ART_DIRECTION_SCHEMA as unknown as Record<string, unknown>,
-            thinkingLevel: 'MEDIUM',
-            maxOutputTokens: 6144,
-            callerId: `${requestId}-artdir-gemini`,
-            noGlobalFallback: true,
-          })
-          console.log(`[SlideDesigner][${requestId}] ✅ Gemini responded: ${artResult.text?.length || 0} chars`)
-        }
-      } else {
-        // No OpenAI key — use Gemini directly
-        console.log(`[SlideDesigner][${requestId}] 🤖 No OPENAI_API_KEY, using Gemini for art direction...`)
-        const models = await getBatchModels()
-        const model = _proUnavailable ? (models[1] || models[0]) : models[0]
-        artResult = await callAI({
-          model,
-          prompt: fullPrompt,
-          systemPrompt: 'Senior art director. Return JSON only.',
-          geminiConfig: {
-            systemInstruction: 'Senior art director. Bold visual choices. Return JSON only.',
-            responseMimeType: 'application/json',
-            responseSchema: ART_DIRECTION_SCHEMA,
-            thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-            maxOutputTokens: 6144,
-            temperature: 0.7,
-          },
-          responseSchema: ART_DIRECTION_SCHEMA as unknown as Record<string, unknown>,
-          thinkingLevel: 'MEDIUM',
-          maxOutputTokens: 6144,
-          callerId: `${requestId}-artdir-gemini`,
-          noGlobalFallback: true,
-        })
-        console.log(`[SlideDesigner][${requestId}] ✅ Gemini responded: ${artResult.text?.length || 0} chars`)
+      semanticResult = parseSemanticResponse(rawText, batchPlans)
+      console.log(`[SlideDesigner][${requestId}] ✅ Semantic design parsed: ${semanticResult.slides.length} slides`)
+      for (const s of semanticResult.slides) {
+        console.log(`[SlideDesigner][${requestId}]   🎯 ${s.slideType.padEnd(18)} | ${s.elements.length} elements | bg=${s.background.style} | "${s.dramaticChoice.slice(0, 60)}"`)
       }
-
-      artDirection = parseArtDirection(artResult.text || '{}', batchPlans)
-      console.log(`[SlideDesigner][${requestId}] ✅ AI Art Direction received:`)
-      for (const s of artDirection.slides) {
-        console.log(`[SlideDesigner][${requestId}]   🎯 ${s.slideType.padEnd(18)} → ${s.composition.padEnd(15)} | ${s.titlePlacement}/${s.titleScale} | bg=${s.backgroundStyle} | deco=${s.decorativeElement}`)
-        console.log(`[SlideDesigner][${requestId}]      💡 ${s.dramaticChoice.slice(0, 80)}`)
-      }
-    } catch (artError) {
-      const msg = artError instanceof Error ? artError.message : String(artError)
-      console.warn(`[SlideDesigner][${requestId}] ⚠️ Art Direction AI failed (${msg.slice(0, 100)}), using smart defaults`)
-      artDirection = buildFallbackArtDirection(batchPlans)
-      for (const s of artDirection.slides) {
-        console.log(`[SlideDesigner][${requestId}]   🎯 ${s.slideType.padEnd(18)} → ${s.composition.padEnd(15)} (fallback)`)
-      }
+    } catch (aiError) {
+      const msg = aiError instanceof Error ? aiError.message : String(aiError)
+      console.warn(`[SlideDesigner][${requestId}] ⚠️ Semantic AI failed (${msg.slice(0, 100)}), using fallback`)
+      semanticResult = buildFallbackSemanticPresentation(batchPlans)
     }
 
-    // ── Step 2: TypeScript Layout Engine ──
-    console.log(`[SlideDesigner][${requestId}] 🏗️ Running Layout Engine...`)
-    const generatedSlides = generateSlides(
-      artDirection, batchPlans, ds, foundation.images, foundation.brandName,
-      { clientLogoUrl: foundation.clientLogo },
-    )
-
-    // Fix slide IDs with offset
-    for (let i = 0; i < generatedSlides.length; i++) {
-      generatedSlides[i].id = `slide-${slideOffset + i}`
+    // ── Step 2: Translate semantic → pixel elements ──
+    console.log(`[SlideDesigner][${requestId}] 🏗️ Translating semantic design to pixels...`)
+    const generatedSlides: Slide[] = []
+    for (let i = 0; i < batchPlans.length; i++) {
+      const semantic = semanticResult.slides[i] || semanticResult.slides[0]
+      const slide = translateSlide(semantic, batchPlans[i], ds, foundation.images, slideOffset + i)
+      generatedSlides.push(slide)
     }
 
-    console.log(`[SlideDesigner][${requestId}] ✅ Layout Engine generated ${generatedSlides.length} slides:`)
-    for (const slide of generatedSlides) {
-      const texts = slide.elements.filter(e => e.type === 'text')
-      const shapes = slide.elements.filter(e => e.type === 'shape')
-      const imgs = slide.elements.filter(e => e.type === 'image')
-      const titleEl = texts.find(e => (e as unknown as {role:string}).role === 'title') as unknown as {fontSize:number, y:number, content:string} | undefined
-      console.log(`[SlideDesigner][${requestId}]   🎬 ${slide.slideType.padEnd(18)} | ${slide.elements.length} elements (${texts.length}T ${shapes.length}S ${imgs.length}I) | bg=${slide.background.type} | ${slide.archetype}`)
-      if (titleEl) console.log(`[SlideDesigner][${requestId}]      title: "${titleEl.content?.slice(0, 35)}" ${titleEl.fontSize}px y=${titleEl.y}`)
-    }
+    // Logo injection
+    try {
+      const { injectLeadersLogo, injectClientLogo } = await import('@/lib/gemini/slide-design/logo-injection')
+      let result = injectLeadersLogo(generatedSlides)
+      if (foundation.clientLogo) result = injectClientLogo(result, foundation.clientLogo)
+      const finalSlides = result
+      for (let i = 0; i < finalSlides.length; i++) finalSlides[i].id = `slide-${slideOffset + i}`
 
-    return { slides: generatedSlides, visualSummary: '', slideIndex: slideOffset + generatedSlides.length }
+      console.log(`[SlideDesigner][${requestId}] ✅ Semantic Engine generated ${finalSlides.length} slides:`)
+      for (const slide of finalSlides) {
+        const texts = slide.elements.filter((e: SlideElement) => e.type === 'text')
+        const shapes = slide.elements.filter((e: SlideElement) => e.type === 'shape')
+        const imgs = slide.elements.filter((e: SlideElement) => e.type === 'image')
+        const titleEl = texts.find((e: SlideElement) => (e as unknown as {role:string}).role === 'title') as unknown as {fontSize:number, y:number, content:string} | undefined
+        console.log(`[SlideDesigner][${requestId}]   🎬 ${slide.slideType.padEnd(18)} | ${slide.elements.length} elements (${texts.length}T ${shapes.length}S ${imgs.length}I) | bg=${slide.background.type}`)
+        if (titleEl) console.log(`[SlideDesigner][${requestId}]      title: "${titleEl.content?.slice(0, 35)}" ${titleEl.fontSize}px y=${titleEl.y}`)
+      }
+      return { slides: finalSlides, visualSummary: '', slideIndex: slideOffset + finalSlides.length }
+    } catch {
+      // Logo injection failed — return without logos
+      for (let i = 0; i < generatedSlides.length; i++) generatedSlides[i].id = `slide-${slideOffset + i}`
+      return { slides: generatedSlides, visualSummary: '', slideIndex: slideOffset + generatedSlides.length }
+    }
   } catch (error) {
-    console.error(`[SlideDesigner][${requestId}] ❌ Engine v3 failed entirely:`, error)
+    console.error(`[SlideDesigner][${requestId}] ❌ Semantic engine failed entirely:`, error)
 
-    // Fallback 1: Layout engine with default art direction (no AI)
+    // Fallback: semantic defaults (no AI) + translate
     try {
-      const { buildFallbackArtDirection, generateSlides } = await import('@/lib/slide-engine')
-      console.log(`[SlideDesigner][${requestId}] 🔄 Fallback: Layout engine with default art direction...`)
-      const artDirection = buildFallbackArtDirection(batchPlans)
-      const fallbackSlides = generateSlides(artDirection, batchPlans, ds, foundation.images, foundation.brandName)
-      for (let i = 0; i < fallbackSlides.length; i++) fallbackSlides[i].id = `slide-${slideOffset + i}`
-      console.log(`[SlideDesigner][${requestId}] ✅ Fallback generated ${fallbackSlides.length} slides`)
+      const { buildFallbackSemanticPresentation } = await import('@/lib/slide-engine/semantic-prompt')
+      const { translateSlide } = await import('@/lib/slide-engine/semantic-translator')
+      console.log(`[SlideDesigner][${requestId}] 🔄 Fallback: semantic defaults...`)
+      const fallbackSemantic = buildFallbackSemanticPresentation(batchPlans)
+      const fallbackSlides = batchPlans.map((plan, i) =>
+        translateSlide(fallbackSemantic.slides[i], plan, ds, foundation.images, slideOffset + i)
+      )
       return { slides: fallbackSlides, visualSummary: '', slideIndex: slideOffset + fallbackSlides.length }
-    } catch (fbError) {
-      // Fallback 2: Original fallback slides
-      console.error(`[SlideDesigner][${requestId}] ❌ Layout engine fallback also failed:`, fbError)
+    } catch {
+      // Last resort: legacy fallback
       const fallbackSlides = batchPlans.map((plan, i) => {
         const imageUrl = plan.existingImageKey ? foundation.images[plan.existingImageKey] : undefined
         const input: SlideContentInput = { slideType: plan.slideType, title: plan.title, content: { subtitle: plan.subtitle, bodyText: plan.bodyText }, imageUrl }
