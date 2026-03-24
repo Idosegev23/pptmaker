@@ -1063,43 +1063,117 @@ export async function pipelineBatch(
   let slideOffset = 0
   for (let i = 0; i < batchIndex; i++) slideOffset += foundation.batches[i].length
 
-  console.log(`[SlideDesigner][${requestId}] Batch ${batchIndex + 1}/${foundation.batches.length} (${batchPlans.length} slides, offset ${slideOffset})`)
+  console.log(`[SlideDesigner][${requestId}] 🚀 Batch ${batchIndex + 1}/${foundation.batches.length} (${batchPlans.length} slides, offset ${slideOffset}) — Art Director Engine v3`)
   console.log(`[SlideDesigner][${requestId}]   Types: ${batchPlans.map(p => p.slideType).join(', ')}`)
 
-  const batchContext: BatchContext = { previousSlidesVisualSummary: '', slideIndex: slideOffset, totalSlides: foundation.totalSlides }
+  const ds = foundation.designSystem as PremiumDesignSystem
 
   try {
-    const generatedSlides = await generateSlidesBatchAST(
-      foundation.designSystem as PremiumDesignSystem,
-      batchPlans, batchIndex, foundation.brandName, batchContext, foundation.images,
-    )
+    // ═══ Art Director Engine v3 ═══
+    // Step 1: AI makes creative decisions (composition, scale, emphasis)
+    // Step 2: TypeScript layout engine builds pixel-perfect slides
+    const {
+      buildArtDirectionPrompt,
+      ART_DIRECTION_SCHEMA,
+      parseArtDirection,
+      buildFallbackArtDirection,
+      generateSlides,
+    } = await import('@/lib/slide-engine')
 
-    console.log(`[SlideDesigner][${requestId}] 🔍 Validating ${generatedSlides.length} slides...`)
-    const pacingMap = await getPacingMap()
-    const finalSlides: Slide[] = []
-    for (let i = 0; i < generatedSlides.length; i++) {
-      const slide = generatedSlides[i]
-      const plan = batchPlans[i]
-      const imageUrl = plan?.existingImageKey ? foundation.images[plan.existingImageKey] : undefined
-      const pacing = pacingMap[slide.slideType] || pacingMap.brief
-      const validResult = validateSlide(slide, foundation.designSystem as PremiumDesignSystem, pacing, imageUrl)
-      const fixable = validResult.issues.filter(issue => issue.autoFixable)
-      if (validResult.issues.length > 0) {
-        console.log(`[SlideDesigner][${requestId}]   ⚠️ ${slide.slideType}: score=${validResult.score}/100 issues=${validResult.issues.length} (${validResult.issues.map(i => `${i.category}[${i.severity}]`).join(', ')})`)
+    // ── Step 1: AI Art Direction ──
+    let artDirection: import('@/lib/slide-engine').ArtDirectionResult
+    try {
+      const artPrompt = buildArtDirectionPrompt(batchPlans, ds, foundation.brandName)
+      console.log(`[SlideDesigner][${requestId}] 📝 Art Direction prompt: ${artPrompt.length} chars`)
+
+      const models = await getBatchModels()
+      const model = _proUnavailable ? (models[1] || models[0]) : models[0]
+      const thinkingLevel = await getBatchThinkingLevel()
+      const resolvedThinking = thinkingLevel === 'HIGH' ? ThinkingLevel.HIGH
+        : thinkingLevel === 'MEDIUM' ? ThinkingLevel.MEDIUM
+        : ThinkingLevel.LOW
+
+      console.log(`[SlideDesigner][${requestId}] 🤖 Calling ${model} for art direction (thinking: ${thinkingLevel})...`)
+
+      const artResult = await callAI({
+        model,
+        prompt: artPrompt,
+        systemPrompt: 'You are a senior art director at a top Israeli agency creating premium RTL Hebrew presentations. Each slide should feel like a different page in a luxury brand lookbook. Bold, unexpected, always readable. Return JSON only.',
+        geminiConfig: {
+          systemInstruction: 'You are a senior art director. Make bold, unexpected visual choices. Each slide must feel unique. Return JSON only.',
+          responseMimeType: 'application/json',
+          responseSchema: ART_DIRECTION_SCHEMA,
+          thinkingConfig: { thinkingLevel: resolvedThinking },
+          maxOutputTokens: 6144,
+          temperature: 0.7,
+        },
+        responseSchema: ART_DIRECTION_SCHEMA as unknown as Record<string, unknown>,
+        thinkingLevel,
+        maxOutputTokens: 6144,
+        callerId: `${requestId}-artdir`,
+        noGlobalFallback: true,
+      })
+
+      artDirection = parseArtDirection(artResult.text || '{}', batchPlans)
+      console.log(`[SlideDesigner][${requestId}] ✅ AI Art Direction received:`)
+      for (const s of artDirection.slides) {
+        console.log(`[SlideDesigner][${requestId}]   🎯 ${s.slideType.padEnd(18)} → ${s.composition.padEnd(15)} | ${s.titlePlacement}/${s.titleScale} | bg=${s.backgroundStyle} | deco=${s.decorativeElement}`)
+        console.log(`[SlideDesigner][${requestId}]      💡 ${s.dramaticChoice.slice(0, 80)}`)
       }
-      finalSlides.push(fixable.length > 0 ? autoFixSlide(slide, fixable, foundation.designSystem as PremiumDesignSystem, imageUrl) : slide)
+    } catch (artError) {
+      const msg = artError instanceof Error ? artError.message : String(artError)
+      console.warn(`[SlideDesigner][${requestId}] ⚠️ Art Direction AI failed (${msg.slice(0, 100)}), using smart defaults`)
+      artDirection = buildFallbackArtDirection(batchPlans)
+      for (const s of artDirection.slides) {
+        console.log(`[SlideDesigner][${requestId}]   🎯 ${s.slideType.padEnd(18)} → ${s.composition.padEnd(15)} (fallback)`)
+      }
     }
 
-    console.log(`[SlideDesigner][${requestId}] ✅ Batch ${batchIndex + 1} done: ${finalSlides.length} slides`)
-    return { slides: finalSlides, visualSummary: '', slideIndex: slideOffset + finalSlides.length }
+    // ── Step 2: TypeScript Layout Engine ──
+    console.log(`[SlideDesigner][${requestId}] 🏗️ Running Layout Engine...`)
+    const generatedSlides = generateSlides(
+      artDirection, batchPlans, ds, foundation.images, foundation.brandName,
+      { clientLogoUrl: foundation.clientLogo },
+    )
+
+    // Fix slide IDs with offset
+    for (let i = 0; i < generatedSlides.length; i++) {
+      generatedSlides[i].id = `slide-${slideOffset + i}`
+    }
+
+    console.log(`[SlideDesigner][${requestId}] ✅ Layout Engine generated ${generatedSlides.length} slides:`)
+    for (const slide of generatedSlides) {
+      const texts = slide.elements.filter(e => e.type === 'text')
+      const shapes = slide.elements.filter(e => e.type === 'shape')
+      const imgs = slide.elements.filter(e => e.type === 'image')
+      const titleEl = texts.find(e => (e as unknown as {role:string}).role === 'title') as unknown as {fontSize:number, y:number, content:string} | undefined
+      console.log(`[SlideDesigner][${requestId}]   🎬 ${slide.slideType.padEnd(18)} | ${slide.elements.length} elements (${texts.length}T ${shapes.length}S ${imgs.length}I) | bg=${slide.background.type} | ${slide.archetype}`)
+      if (titleEl) console.log(`[SlideDesigner][${requestId}]      title: "${titleEl.content?.slice(0, 35)}" ${titleEl.fontSize}px y=${titleEl.y}`)
+    }
+
+    return { slides: generatedSlides, visualSummary: '', slideIndex: slideOffset + generatedSlides.length }
   } catch (error) {
-    console.error(`[SlideDesigner][${requestId}] Batch ${batchIndex + 1} failed:`, error)
-    const fallbackSlides = batchPlans.map((plan, i) => {
-      const imageUrl = plan.existingImageKey ? foundation.images[plan.existingImageKey] : undefined
-      const input: SlideContentInput = { slideType: plan.slideType, title: plan.title, content: { subtitle: plan.subtitle, bodyText: plan.bodyText }, imageUrl }
-      return createFallbackSlide(input, foundation.designSystem as PremiumDesignSystem, slideOffset + i)
-    })
-    return { slides: fallbackSlides, visualSummary: '', slideIndex: slideOffset + fallbackSlides.length }
+    console.error(`[SlideDesigner][${requestId}] ❌ Engine v3 failed entirely:`, error)
+
+    // Fallback 1: Layout engine with default art direction (no AI)
+    try {
+      const { buildFallbackArtDirection, generateSlides } = await import('@/lib/slide-engine')
+      console.log(`[SlideDesigner][${requestId}] 🔄 Fallback: Layout engine with default art direction...`)
+      const artDirection = buildFallbackArtDirection(batchPlans)
+      const fallbackSlides = generateSlides(artDirection, batchPlans, ds, foundation.images, foundation.brandName)
+      for (let i = 0; i < fallbackSlides.length; i++) fallbackSlides[i].id = `slide-${slideOffset + i}`
+      console.log(`[SlideDesigner][${requestId}] ✅ Fallback generated ${fallbackSlides.length} slides`)
+      return { slides: fallbackSlides, visualSummary: '', slideIndex: slideOffset + fallbackSlides.length }
+    } catch (fbError) {
+      // Fallback 2: Original fallback slides
+      console.error(`[SlideDesigner][${requestId}] ❌ Layout engine fallback also failed:`, fbError)
+      const fallbackSlides = batchPlans.map((plan, i) => {
+        const imageUrl = plan.existingImageKey ? foundation.images[plan.existingImageKey] : undefined
+        const input: SlideContentInput = { slideType: plan.slideType, title: plan.title, content: { subtitle: plan.subtitle, bodyText: plan.bodyText }, imageUrl }
+        return createFallbackSlide(input, ds, slideOffset + i)
+      })
+      return { slides: fallbackSlides, visualSummary: '', slideIndex: slideOffset + fallbackSlides.length }
+    }
   }
 }
 
