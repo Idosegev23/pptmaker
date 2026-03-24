@@ -147,6 +147,8 @@ async function generateDesignSystem(
   const requestId = `ds-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Step 1: Design System for "${brand.brandName}"`)
 
+  console.log(`[SlideDesigner][${requestId}] 📋 Brand input:`, JSON.stringify({ name: brand.brandName, industry: brand.industry, personality: brand.brandPersonality, colors: brand.brandColors, audience: brand.targetAudience }, null, 2))
+
   const prompt = `<brand>
 name: ${brand.brandName}
 industry: ${brand.industry || 'לא ידוע'}
@@ -208,7 +210,8 @@ Font: Heebo.
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
-      console.log(`[SlideDesigner][${requestId}] Calling ${model} for design system (attempt ${attempt + 1}/${models.length})...`)
+      console.log(`[SlideDesigner][${requestId}] 🤖 Calling ${model} for design system (attempt ${attempt + 1}/${models.length})...`)
+      console.log(`[SlideDesigner][${requestId}] 📝 DS prompt length: ${prompt.length} chars | thinking: ${dsThinkingLevel} | maxTokens: ${dsMaxOutputTokens}`)
       const dsResult = await callAI({
         model,
         prompt,
@@ -245,7 +248,11 @@ Font: Heebo.
         parsed.colors = validateAndFixColors(parsed.colors)
         parsed.fonts = parsed.fonts || { heading: 'Heebo', body: 'Heebo' }
         parsed.direction = 'rtl'
-        console.log(`[SlideDesigner][${requestId}] Design system ready. Style: ${parsed.effects?.decorativeStyle} (model: ${model})`)
+        console.log(`[SlideDesigner][${requestId}] ✅ Design System ready (model: ${model}):`)
+        console.log(`[SlideDesigner][${requestId}]   🎨 Colors: primary=${parsed.colors.primary} secondary=${parsed.colors.secondary} accent=${parsed.colors.accent} bg=${parsed.colors.background} text=${parsed.colors.text}`)
+        console.log(`[SlideDesigner][${requestId}]   📐 Typography: heading=${parsed.typography?.headingSize}px body=${parsed.typography?.bodySize}px weights=${JSON.stringify(parsed.typography?.weightPairs)}`)
+        console.log(`[SlideDesigner][${requestId}]   ✨ Effects: radius=${parsed.effects?.borderRadius} shadow=${parsed.effects?.shadowStyle} deco=${parsed.effects?.decorativeStyle}`)
+        console.log(`[SlideDesigner][${requestId}]   🎭 Creative: metaphor="${parsed.creativeDirection?.visualMetaphor}" tension="${parsed.creativeDirection?.visualTension}" rule="${parsed.creativeDirection?.oneRule}"`)
         return parsed
       }
       throw new Error(`Invalid design system — parsed colors missing`)
@@ -352,6 +359,9 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
   const models = await getDesignSystemModels()
   const maxTokens = await getMaxOutputTokens()
 
+  console.log(`[SlideDesigner][${requestId}] 📝 Plan prompt length: ${prompt.length} chars`)
+  console.log(`[SlideDesigner][${requestId}] 🖼️ Available images: ${imageList || 'none'}`)
+
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = _proUnavailable && attempt === 0 ? models[1] || models[0] : models[attempt]
     try {
@@ -406,8 +416,11 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
             delete slide.bodyText
           }
         }
-        console.log(`[SlideDesigner][${requestId}] Plan ready: ${parsed.slides.length} slides (model: ${model})`)
+        console.log(`[SlideDesigner][${requestId}] ✅ Plan ready: ${parsed.slides.length} slides (model: ${model})`)
         console.log(`[SlideDesigner][${requestId}]   Types: ${parsed.slides.map(s => s.slideType).join(', ')}`)
+        for (const s of parsed.slides) {
+          console.log(`[SlideDesigner][${requestId}]   📄 ${s.slideType.padEnd(18)} | title="${s.title}" | tone=${s.emotionalTone} | image=${s.existingImageKey || 'none'} | cards=${s.cards?.length || 0} | bullets=${s.bulletPoints?.length || 0} | number=${s.keyNumber || 'none'}`)
+        }
         return parsed.slides
       }
       throw new Error(`Plan too short: ${parsed?.slides?.length || 0} slides`)
@@ -555,6 +568,13 @@ ${contentParts.join('\n')}
 
   const prompt = buildBatchPrompt(brandName, cd, colors, typo, effects, motif, designSystem, batchContext, slidesDescription, plans.length, rhythm)
 
+  console.log(`[SlideDesigner][${requestId}] 📝 Batch prompt: ${prompt.length} chars | rhythm: ${rhythm.arc}`)
+  console.log(`[SlideDesigner][${requestId}] 🎯 Slide directives:`)
+  for (const plan of plans) {
+    const imgUrl = plan.existingImageKey ? images[plan.existingImageKey] : undefined
+    console.log(`[SlideDesigner][${requestId}]   ${plan.slideType.padEnd(18)} | layout=${(LAYOUT_MAP[plan.slideType] || 'default').slice(0, 40)} | image=${imgUrl ? 'YES' : 'no'} | tone=${plan.emotionalTone}`)
+  }
+
   // Retry with model fallback
   const batchSysInstruction = await getSystemInstruction()
   const batchModels = await getBatchModels()
@@ -651,7 +671,16 @@ ${contentParts.join('\n')}
           }
         }
 
-        console.log(`[SlideDesigner][${requestId}] Generated ${generatedSlides.length} AST slides (${label})`)
+        console.log(`[SlideDesigner][${requestId}] ✅ Generated ${generatedSlides.length} AST slides (${label})`)
+        for (const slide of generatedSlides) {
+          const texts = slide.elements.filter(e => e.type === 'text')
+          const shapes = slide.elements.filter(e => e.type === 'shape')
+          const imgs = slide.elements.filter(e => e.type === 'image')
+          const titleEl = texts.find(e => (e as unknown as {role:string}).role === 'title') as unknown as {fontSize:number, y:number, content:string} | undefined
+          console.log(`[SlideDesigner][${requestId}]   🎬 ${slide.slideType.padEnd(18)} | ${slide.elements.length} elements (${texts.length}T ${shapes.length}S ${imgs.length}I) | bg=${slide.background.type} | archetype="${slide.archetype?.slice(0, 35)}"`)
+          if (titleEl) console.log(`[SlideDesigner][${requestId}]      title: "${titleEl.content?.slice(0, 30)}" fontSize=${titleEl.fontSize} y=${titleEl.y}`)
+          console.log(`[SlideDesigner][${requestId}]      drama: "${slide.dramaticChoice?.slice(0, 60)}"`)
+        }
         return generatedSlides
       }
       throw new Error('No slides in AST response')
@@ -1045,6 +1074,7 @@ export async function pipelineBatch(
       batchPlans, batchIndex, foundation.brandName, batchContext, foundation.images,
     )
 
+    console.log(`[SlideDesigner][${requestId}] 🔍 Validating ${generatedSlides.length} slides...`)
     const pacingMap = await getPacingMap()
     const finalSlides: Slide[] = []
     for (let i = 0; i < generatedSlides.length; i++) {
@@ -1054,10 +1084,13 @@ export async function pipelineBatch(
       const pacing = pacingMap[slide.slideType] || pacingMap.brief
       const validResult = validateSlide(slide, foundation.designSystem as PremiumDesignSystem, pacing, imageUrl)
       const fixable = validResult.issues.filter(issue => issue.autoFixable)
+      if (validResult.issues.length > 0) {
+        console.log(`[SlideDesigner][${requestId}]   ⚠️ ${slide.slideType}: score=${validResult.score}/100 issues=${validResult.issues.length} (${validResult.issues.map(i => `${i.category}[${i.severity}]`).join(', ')})`)
+      }
       finalSlides.push(fixable.length > 0 ? autoFixSlide(slide, fixable, foundation.designSystem as PremiumDesignSystem, imageUrl) : slide)
     }
 
-    console.log(`[SlideDesigner][${requestId}] Batch ${batchIndex + 1} done: ${finalSlides.length} slides`)
+    console.log(`[SlideDesigner][${requestId}] ✅ Batch ${batchIndex + 1} done: ${finalSlides.length} slides`)
     return { slides: finalSlides, visualSummary: '', slideIndex: slideOffset + finalSlides.length }
   } catch (error) {
     console.error(`[SlideDesigner][${requestId}] Batch ${batchIndex + 1} failed:`, error)
