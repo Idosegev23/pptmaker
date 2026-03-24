@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     const filename = `הצעת_מחיר_${data.clientName}_${data.date.replace(/\./g, '-')}.pdf`
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
