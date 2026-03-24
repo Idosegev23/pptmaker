@@ -191,6 +191,107 @@ export async function generateMultiPagePdf(
 }
 
 /**
+ * Generate multi-page PDF by navigating to the React export-slides page.
+ * This renders slides using the REAL React components (not ast-to-html),
+ * ensuring aurora gradients, shadows, and all CSS effects render correctly.
+ */
+export async function generateReactPdf(
+  documentId: string,
+  options: PdfOptions = {}
+): Promise<Buffer> {
+  const { PDFDocument } = await import('pdf-lib')
+  const browser = await getBrowser()
+
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+      || 'http://localhost:3000'
+    const exportUrl = `${baseUrl}/export-slides/${documentId}`
+
+    console.log(`[PDF] React render: navigating to ${exportUrl}`)
+
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 2 })
+    await page.emulateMediaType('screen')
+
+    await page.goto(exportUrl, { waitUntil: 'networkidle0', timeout: 30000 })
+
+    // Inject print-fix CSS
+    await page.addStyleTag({ content: PRINT_FIX_CSS })
+
+    // Wait for fonts
+    await page.evaluate(async () => {
+      await document.fonts.ready
+      await document.fonts.load('900 16px Heebo').catch(() => {})
+      await document.fonts.load('300 16px Heebo').catch(() => {})
+    })
+
+    // Wait for all images
+    await page.evaluate(() => {
+      const imgs = Array.from(document.querySelectorAll('img'))
+      return Promise.all(imgs.map(img =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise<void>(resolve => {
+              img.addEventListener('load', () => resolve(), { once: true })
+              img.addEventListener('error', () => resolve(), { once: true })
+              setTimeout(resolve, 8000)
+            })
+      ))
+    })
+
+    // Wait for slides to render
+    await page.waitForSelector('.slide[data-rendered="true"]', { timeout: 10000 }).catch(() => {
+      console.warn('[PDF] No data-rendered slides found, proceeding anyway')
+    })
+
+    // Extra time for font rendering
+    await new Promise(resolve => setTimeout(resolve, 1500))
+
+    // Count slides
+    const slideCount = await page.$$eval('.slide', els => els.length)
+    console.log(`[PDF] Found ${slideCount} slides`)
+
+    if (slideCount === 0) {
+      throw new Error('No slides rendered on export page')
+    }
+
+    // Generate PDF for each slide separately (better page control)
+    const mergedPdf = await PDFDocument.create()
+    const pdfOpts = { width: '1920px', height: '1080px', printBackground: true, preferCSSPageSize: true }
+
+    for (let i = 0; i < slideCount; i++) {
+      // Hide all slides except current one
+      await page.evaluate((idx) => {
+        const slides = document.querySelectorAll('.slide')
+        slides.forEach((s, j) => {
+          (s as HTMLElement).style.display = j === idx ? 'block' : 'none'
+        })
+      }, i)
+
+      const pageBuffer = await page.pdf(pdfOpts)
+      const pagePdf = await PDFDocument.load(pageBuffer)
+      const copiedPages = await mergedPdf.copyPages(pagePdf, pagePdf.getPageIndices())
+      copiedPages.forEach(p => mergedPdf.addPage(p))
+    }
+
+    // Metadata
+    mergedPdf.setTitle(options.title || 'Presentation')
+    mergedPdf.setAuthor(options.brandName || 'Leaders')
+    mergedPdf.setCreator('Leaders pptmaker — React PDF')
+    mergedPdf.setCreationDate(new Date())
+
+    const buffer = await mergedPdf.save()
+    console.log(`[PDF] React PDF complete: ${slideCount} pages, ${(buffer.length / 1024).toFixed(0)} KB`)
+
+    await page.close()
+    return Buffer.from(buffer)
+  } finally {
+    await browser.close()
+  }
+}
+
+/**
  * Generate screenshot from HTML (for preview)
  */
 export async function generateScreenshot(

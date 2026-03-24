@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { generateMultiPagePdf } from '@/lib/playwright/pdf'
+import { generateMultiPagePdf, generateReactPdf } from '@/lib/playwright/pdf'
 
 export const maxDuration = 600
 import { renderProposalToHtml } from '@/templates/quote/proposal-template'
@@ -49,19 +49,42 @@ export async function POST(request: NextRequest) {
     const documentData = document.data as Record<string, unknown>
 
     // ─── AST Presentation path ─────────────────────────────
-    // If `_presentation` exists, use the AST pipeline (convert AST → HTML → PDF)
+    // If `_presentation` exists, use React render → PDF (full CSS fidelity)
     const astPresentation = documentData._presentation as Presentation | undefined
     if (astPresentation && astPresentation.slides?.length > 0) {
       console.log(`[PDF] Using AST presentation with ${astPresentation.slides.length} slides`)
-      const astHtmlPages = presentationToHtmlSlides(astPresentation, true)
-      console.log(`[PDF] Converted AST to ${astHtmlPages.length} HTML pages`)
-
       const brandNameStr = (documentData.brandName as string) || ''
-      const pdfBuffer = await generateMultiPagePdf(astHtmlPages, {
-        format: '16:9',
-        title: astPresentation.title || brandNameStr || 'Presentation',
-        brandName: brandNameStr,
-      })
+
+      let pdfBuffer: Buffer
+
+      // Try React render first (full CSS fidelity — aurora, shadows, gradients)
+      const useReactRender = process.env.PDF_USE_REACT_RENDER !== 'false'
+      if (useReactRender) {
+        try {
+          console.log(`[PDF] 🎨 Using React renderer (Playwright navigation)`)
+          pdfBuffer = await generateReactPdf(documentId, {
+            format: '16:9',
+            title: astPresentation.title || brandNameStr || 'Presentation',
+            brandName: brandNameStr,
+          })
+        } catch (reactErr) {
+          console.warn(`[PDF] ⚠️ React render failed, falling back to ast-to-html:`, reactErr)
+          const astHtmlPages = presentationToHtmlSlides(astPresentation, true)
+          pdfBuffer = await generateMultiPagePdf(astHtmlPages, {
+            format: '16:9',
+            title: astPresentation.title || brandNameStr || 'Presentation',
+            brandName: brandNameStr,
+          })
+        }
+      } else {
+        console.log(`[PDF] Using legacy ast-to-html renderer`)
+        const astHtmlPages = presentationToHtmlSlides(astPresentation, true)
+        pdfBuffer = await generateMultiPagePdf(astHtmlPages, {
+          format: '16:9',
+          title: astPresentation.title || brandNameStr || 'Presentation',
+          brandName: brandNameStr,
+        })
+      }
       console.log(`[PDF] Generated PDF, size: ${pdfBuffer.length} bytes`)
 
       const fileName = `proposal_${document.id}_${Date.now()}.pdf`
