@@ -429,7 +429,7 @@ export default function SlideEditor({
                 outlineOffset: '2px',
                 cursor: isLocked ? 'default' : isEditingText ? 'text' : 'move',
               }}
-              resizeHandleStyles={{
+              resizeHandleStyles={isSelected && !isLocked && !isEditingText ? {
                 topLeft: handleStyle,
                 topRight: handleStyle,
                 bottomLeft: handleStyle,
@@ -438,6 +438,11 @@ export default function SlideEditor({
                 bottom: { ...barStyle, bottom: -3, left: '20%', width: '60%', height: 6 },
                 left: { ...barStyle, left: -3, top: '20%', width: 6, height: '60%' },
                 right: { ...barStyle, right: -3, top: '20%', width: 6, height: '60%' },
+              } : {
+                topLeft: { display: 'none' }, topRight: { display: 'none' },
+                bottomLeft: { display: 'none' }, bottomRight: { display: 'none' },
+                top: { display: 'none' }, bottom: { display: 'none' },
+                left: { display: 'none' }, right: { display: 'none' },
               }}
             >
               <div
