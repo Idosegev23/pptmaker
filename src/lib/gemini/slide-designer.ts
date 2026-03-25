@@ -1170,30 +1170,21 @@ export async function pipelineBatch(
     // ── Lite validation (bounds + contrast + overlap only) ──
     const validated = slides.map(s => liteValidateSlide(s, ds))
 
-    // ── Logo injection ──
-    try {
-      const { injectLeadersLogo, injectClientLogo } = await import('@/lib/gemini/slide-design/logo-injection')
-      let result = injectLeadersLogo(validated)
-      if (foundation.clientLogo) result = injectClientLogo(result, foundation.clientLogo)
-      for (let i = 0; i < result.length; i++) result[i].id = `slide-${slideOffset + i}`
+    // ── No logo injection here — pipelineFinalize handles it once for all slides ──
+    for (let i = 0; i < validated.length; i++) validated[i].id = `slide-${slideOffset + i}`
 
-      console.log(`[SlideDesigner][${requestId}] ✅ Intent Engine generated ${result.length} slides:`)
-      for (const slide of result) {
-        const texts = slide.elements.filter((e: SlideElement) => e.type === 'text')
-        const shapes = slide.elements.filter((e: SlideElement) => e.type === 'shape')
-        const imgs = slide.elements.filter((e: SlideElement) => e.type === 'image')
-        const titleEl = texts.find((e: SlideElement) => (e as unknown as { role: string }).role === 'title') as unknown as { fontSize: number; y: number; content: string } | undefined
-        console.log(`[SlideDesigner][${requestId}]   🎬 ${slide.slideType.padEnd(18)} | ${slide.elements.length} elements (${texts.length}T ${shapes.length}S ${imgs.length}I) | bg=${slide.background.type}`)
-        if (titleEl) console.log(`[SlideDesigner][${requestId}]      title: "${titleEl.content?.slice(0, 35)}" ${titleEl.fontSize}px y=${titleEl.y}`)
-      }
-
-      // Store intents as visual summary for next batch variety
-      const visualSummary = JSON.stringify(intents)
-      return { slides: result, visualSummary, slideIndex: slideOffset + result.length }
-    } catch {
-      for (let i = 0; i < validated.length; i++) validated[i].id = `slide-${slideOffset + i}`
-      return { slides: validated, visualSummary: JSON.stringify(intents), slideIndex: slideOffset + validated.length }
+    console.log(`[SlideDesigner][${requestId}] ✅ Intent Engine generated ${validated.length} slides:`)
+    for (const slide of validated) {
+      const texts = slide.elements.filter((e: SlideElement) => e.type === 'text')
+      const shapes = slide.elements.filter((e: SlideElement) => e.type === 'shape')
+      const imgs = slide.elements.filter((e: SlideElement) => e.type === 'image')
+      const titleEl = texts.find((e: SlideElement) => (e as unknown as { role: string }).role === 'title') as unknown as { fontSize: number; y: number; content: string } | undefined
+      console.log(`[SlideDesigner][${requestId}]   🎬 ${slide.slideType.padEnd(18)} | ${slide.elements.length} elements (${texts.length}T ${shapes.length}S ${imgs.length}I) | bg=${slide.background.type}`)
+      if (titleEl) console.log(`[SlideDesigner][${requestId}]      title: "${titleEl.content?.slice(0, 35)}" ${titleEl.fontSize}px y=${titleEl.y}`)
     }
+
+    const visualSummary = JSON.stringify(intents)
+    return { slides: validated, visualSummary, slideIndex: slideOffset + validated.length }
   } catch (error) {
     console.error(`[SlideDesigner][${requestId}] ❌ Intent engine failed entirely:`, error)
 
