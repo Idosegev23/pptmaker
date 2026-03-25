@@ -84,10 +84,16 @@ export async function POST(request: NextRequest) {
         logoUrl?: string; heroImages?: string[]; lifestyleImages?: string[]
       } | undefined
 
+      // Logo: check _scraped.logoUrl, _brandColors.logoUrl, and brandLogoFile
+      const brandColorsRaw = documentData._brandColors as Record<string, unknown> | undefined
+      const clientLogoUrl = scrapedAssets?.logoUrl
+        || (typeof brandColorsRaw?.logoUrl === 'string' ? brandColorsRaw.logoUrl : undefined)
+        || (documentData.brandLogoFile as string | undefined)
+
       const config = {
         accentColor: brandColors?.primary || '#E94560',
         brandLogoUrl: documentData.brandLogoFile as string | undefined,
-        clientLogoUrl: scrapedAssets?.logoUrl,
+        clientLogoUrl,
         images: {
           coverImage: images.coverImage || scrapedAssets?.heroImages?.[0] || '',
           brandImage: images.brandImage || scrapedAssets?.heroImages?.[1] || scrapedAssets?.heroImages?.[0] || '',
