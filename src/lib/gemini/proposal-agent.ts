@@ -711,7 +711,7 @@ function normalizeResponse(
       tagline: raw.extracted?.brand?.tagline,
     },
     budget: {
-      amount: raw.extracted?.budget?.amount || 0,
+      amount: raw.extracted?.budget?.amount ?? null,
       currency: raw.extracted?.budget?.currency || '₪',
       breakdown: raw.extracted?.budget?.breakdown,
     },
@@ -747,7 +747,7 @@ function normalizeResponse(
 
   // Add warnings
   if (!extracted.brand.name) extracted._meta.warnings.push('שם המותג לא נמצא')
-  if (!extracted.budget.amount) extracted._meta.warnings.push('תקציב לא נמצא')
+  if (extracted.budget.amount === null || extracted.budget.amount === undefined) extracted._meta.warnings.push('תקציב לא נמצא — יש להזין ידנית')
 
   // Normalize step data with safe defaults
   const sd = raw.stepData || {} as RawProposalResponse['stepData']

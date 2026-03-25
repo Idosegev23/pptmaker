@@ -512,6 +512,37 @@ export default function ProposalWizard({
         onGoToStep={handleGoToStep}
       />
 
+      {/* Pipeline warnings banner */}
+      {(() => {
+        const warnings: string[] = []
+        const extracted = initialData?._extractedData as Record<string, unknown> | undefined
+        const meta = extracted?._meta as { warnings?: string[] } | undefined
+        if (meta?.warnings?.length) warnings.push(...meta.warnings)
+        const research = initialData?._brandResearch as Record<string, unknown> | undefined
+        if (research?._isFallback) warnings.push(research._fallbackReason as string || 'מחקר מותג מבוסס על ברירת מחדל')
+        if ((research as Record<string, unknown>)?.confidence === 'low') warnings.push('רמת ביטחון נמוכה במחקר המותג — מומלץ לבדוק ידנית')
+        const influencer = initialData?._influencerStrategy as Record<string, unknown> | undefined
+        if (influencer?._isFallback) warnings.push(influencer._fallbackReason as string || 'אסטרטגיית משפיענים גנרית — לא נמצאו שמות ספציפיים')
+        const colors = initialData?._brandColors as Record<string, unknown> | undefined
+        if (colors?._isFallback) warnings.push('צבעי המותג לא זוהו — נעשה שימוש בצבעי ברירת מחדל')
+        if (warnings.length === 0) return null
+        return (
+          <div className="mx-auto max-w-4xl px-4 mt-3">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+              <div className="flex items-start gap-2">
+                <span className="text-amber-500 text-lg mt-0.5">⚠️</span>
+                <div>
+                  <p className="text-amber-200 font-medium text-sm mb-1">שים לב — חלק מהנתונים דורשים בדיקה</p>
+                  <ul className="text-amber-300/80 text-xs space-y-0.5">
+                    {warnings.map((w, i) => <li key={i}>• {w}</li>)}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Step content area */}
       <main className="flex-1 overflow-y-auto pb-24">
         {/* Step header */}

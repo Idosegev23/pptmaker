@@ -581,7 +581,9 @@ function getMinimalResearch(brandName: string, websiteData?: ScrapedWebsite): Br
     sources: [],
     confidence: 'low',
     researchNotes: 'המחקר האוטומטי לא הצליח לאסוף מידע מספק. מומלץ לבצע מחקר ידני נוסף.',
-  }
+    _isFallback: true,
+    _fallbackReason: 'כל ניסיונות המחקר נכשלו — הנתונים המוצגים הם ברירת מחדל בלבד',
+  } as BrandResearch & { _isFallback: boolean; _fallbackReason: string }
 }
 
 /**

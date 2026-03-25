@@ -341,7 +341,7 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
 4. גוף: מקסימום 2-3 משפטים. תמציתי וחד
 5. כרטיסים: כותרת + גוף קצר. מקסימום 5 כרטיסים
 6. בולט פוינטס: מקסימום 5 נקודות, כל אחת עד 10 מילים
-7. מספרים מפתח: השתמש בנתונים אמיתיים מהדאטה (תקציב, reach, KPIs)
+7. מספרים מפתח: השתמש בנתונים אמיתיים מהדאטה (תקציב, reach, KPIs). אם תקציב לא מצוין בדאטה — אל תמציא מספר! השתמש ב-KPIs אחרים כמו reach, engagement, המרות
 8. שייך תמונות קיימות (existingImageKey) כשהן רלוונטיות. אם אין תמונה מתאימה — כתוב imageDirection לתמונה שצריך ליצור
 9. whyNow — רק אם יש נתונים רלוונטיים (whyNowTrigger, israeliMarketContext)
 10. competitive — רק אם יש מתחרים בדאטה
@@ -486,7 +486,7 @@ function buildFallbackPlan(data: PremiumProposalData, images: Record<string, str
     { slideType: 'bigIdea', title: data.activityTitle || 'הרעיון הגדול', bodyText: data.activityDescription || '', emotionalTone: 'bold' },
     { slideType: 'approach', title: 'הגישה שלנו', cards: (data.activityApproach || []).map(a => ({ title: a.title, body: a.description })), emotionalTone: 'warm', existingImageKey: images.activityImage ? 'activityImage' : undefined },
     { slideType: 'deliverables', title: 'מה אנחנו מספקים', bulletPoints: data.deliverables || [], emotionalTone: 'confident' },
-    { slideType: 'metrics', title: 'מדדי הצלחה', bulletPoints: data.successMetrics || [], keyNumber: data.budget ? `₪${data.budget.toLocaleString()}` : undefined, keyNumberLabel: 'תקציב', emotionalTone: 'analytical' },
+    { slideType: 'metrics', title: 'מדדי הצלחה', bulletPoints: data.successMetrics || [], keyNumber: data.budget != null && data.budget > 0 ? `₪${data.budget.toLocaleString()}` : undefined, keyNumberLabel: 'תקציב', emotionalTone: 'analytical' },
     { slideType: 'closing', title: `בואו נעשה את זה`, subtitle: brandName, tagline: 'מוכנים להתחיל?', emotionalTone: 'inspiring' },
   ]
 

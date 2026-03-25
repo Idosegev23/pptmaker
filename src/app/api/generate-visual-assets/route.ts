@@ -219,6 +219,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Default colors if absolutely everything failed
+    let colorsFallback = false
     if (!brandColors) {
       brandColors = {
         primary: '#111111',
@@ -230,7 +231,8 @@ export async function POST(request: NextRequest) {
         style: 'minimal' as const,
         mood: 'מודרני ומינימליסטי',
       }
-      console.log(`[Visual Assets][${requestId}] Using default colors (all methods failed)`)
+      colorsFallback = true
+      console.warn(`[Visual Assets][${requestId}] ⚠️ Using DEFAULT colors (all extraction methods failed) — brand identity may be inaccurate`)
     }
 
     // ─── Step 3: Generate AI images ───
@@ -414,6 +416,9 @@ export async function POST(request: NextRequest) {
       extraImages: extraImageUrls,
       imageStrategy: imageStrategyMeta || null,
       elapsed,
+      _warnings: [
+        ...(colorsFallback ? ['צבעי המותג לא זוהו — נעשה שימוש בצבעי ברירת מחדל'] : []),
+      ].filter(Boolean),
     })
   } catch (error) {
     console.error(`[Visual Assets][${requestId}] Error:`, error)
