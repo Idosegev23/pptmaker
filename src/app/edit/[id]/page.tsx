@@ -683,15 +683,32 @@ export default function PresentationEditorPage() {
   // ─── HTML-Native presentation mode (v6) ─────────────
   if (htmlSlides && htmlSlides.length > 0) {
     const HtmlSlideViewer = require('@/components/presentation/HtmlSlideViewer').default
+    const HtmlSlideEditor = require('@/components/presentation/HtmlSlideEditor').default
+
+    const handleHtmlSlideUpdate = (newHtml: string) => {
+      setHtmlSlides(prev => {
+        if (!prev) return prev
+        const updated = [...prev]
+        updated[activeHtmlSlide] = newHtml
+        return updated
+      })
+      // Auto-save to Supabase
+      fetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ _htmlPresentation: { ...documentData?._htmlPresentation as Record<string, unknown>, htmlSlides: htmlSlides } }),
+      }).catch(() => {}) // silent save
+    }
+
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex" dir="rtl">
         {/* Sidebar — thumbnails */}
         <div className="w-48 bg-[#111118] border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-2">
           <div className="text-xs text-gray-500 font-medium px-1 mb-2">{brandName}</div>
-          {htmlSlides.map((html, i) => (
+          {htmlSlides.map((slideHtml, i) => (
             <div key={i} onClick={() => setActiveHtmlSlide(i)} className="cursor-pointer">
               <HtmlSlideViewer
-                html={html}
+                html={slideHtml}
                 scale={0.09}
                 isActive={activeHtmlSlide === i}
                 className="rounded"
@@ -736,11 +753,12 @@ export default function PresentationEditorPage() {
             </div>
           </div>
 
-          {/* Slide display */}
+          {/* Slide editor */}
           <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
-            <HtmlSlideViewer
+            <HtmlSlideEditor
               html={htmlSlides[activeHtmlSlide] || ''}
               scale={0.55}
+              onHtmlChange={handleHtmlSlideUpdate}
             />
           </div>
 

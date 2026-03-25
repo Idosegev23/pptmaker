@@ -86,11 +86,15 @@ export async function POST(request: NextRequest) {
         logoUrl?: string; heroImages?: string[]; lifestyleImages?: string[]
       } | undefined
 
-      // Logo: check _scraped.logoUrl, _brandColors.logoUrl, and brandLogoFile
+      // Logo: check multiple locations where it might be stored
       const brandColorsRaw = documentData._brandColors as Record<string, unknown> | undefined
+      const brandColorsNested = brandColorsRaw?.colors as Record<string, unknown> | undefined
       const clientLogoUrl = scrapedAssets?.logoUrl
         || (typeof brandColorsRaw?.logoUrl === 'string' ? brandColorsRaw.logoUrl : undefined)
+        || (typeof brandColorsNested?.logoUrl === 'string' ? brandColorsNested.logoUrl : undefined)
+        || (typeof brandColorsRaw?.websiteDomain === 'string' ? `https://logo.clearbit.com/${brandColorsRaw.websiteDomain}` : undefined)
         || (documentData.brandLogoFile as string | undefined)
+      console.log(`[generate-slides-stage] 🏷️ Logo resolved: ${clientLogoUrl || 'NONE'}`)
 
       const config = {
         accentColor: brandColors?.primary || '#E94560',
