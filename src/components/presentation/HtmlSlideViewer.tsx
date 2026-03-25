@@ -2,7 +2,8 @@
 
 /**
  * HtmlSlideViewer — renders a single HTML slide in a sandboxed iframe.
- * Used for HTML-Native presentations (v6) where GPT outputs raw HTML/CSS.
+ * The iframe is 1920×1080 native, scaled down via CSS transform.
+ * The wrapper div is sized to the SCALED dimensions to prevent layout overflow.
  */
 
 interface HtmlSlideViewerProps {
@@ -27,8 +28,8 @@ export default function HtmlSlideViewer({
     <div
       className={`relative overflow-hidden ${className}`}
       style={{
-        width: W * scale,
-        height: H * scale,
+        width: Math.round(W * scale),
+        height: Math.round(H * scale),
         cursor: onClick ? 'pointer' : 'default',
         outline: isActive ? '3px solid #3b82f6' : 'none',
         outlineOffset: '2px',
@@ -40,12 +41,15 @@ export default function HtmlSlideViewer({
         srcDoc={html}
         sandbox="allow-same-origin"
         style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
           width: W,
           height: H,
           border: 'none',
           transform: `scale(${scale})`,
           transformOrigin: 'top left',
-          pointerEvents: 'none', // Prevent interaction inside iframe
+          pointerEvents: 'none',
         }}
         title="Slide"
       />

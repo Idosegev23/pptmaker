@@ -191,6 +191,63 @@ export async function generateMultiPagePdf(
 }
 
 /**
+ * Generate multi-page PDF from HTML pages using SCREENSHOTS instead of page.pdf().
+ * Screenshots render ALL CSS effects perfectly (backdrop-filter, radial-gradient,
+ * box-shadow with spread, text-shadow glow, etc.) — unlike page.pdf() which
+ * flattens these to solid blocks.
+ *
+ * Each slide is rendered as a 1920×1080 PNG screenshot, then embedded in a PDF page.
+ */
+export async function generateScreenshotPdf(
+  htmlPages: string[],
+  options: PdfOptions = {}
+): Promise<Buffer> {
+  const { PDFDocument } = await import('pdf-lib')
+  const browser = await getBrowser()
+
+  try {
+    const mergedPdf = await PDFDocument.create()
+
+    console.log(`[PDF] Rendering ${htmlPages.length} slides via SCREENSHOT (full CSS fidelity)`)
+
+    for (let i = 0; i < htmlPages.length; i++) {
+      const page = await setupPage(browser, htmlPages[i], {
+        width: 1920,
+        height: 1080,
+        deviceScaleFactor: 2, // 2x for sharp output
+        isFirst: i === 0,
+      })
+
+      // Take screenshot of the slide (captures ALL CSS effects perfectly)
+      const screenshotBuffer = await page.screenshot({
+        type: 'png',
+        clip: { x: 0, y: 0, width: 1920, height: 1080 },
+      })
+      await page.close()
+
+      // Embed screenshot as a full-page image in PDF
+      const pngImage = await mergedPdf.embedPng(screenshotBuffer)
+      const pdfPage = mergedPdf.addPage([1920, 1080])
+      pdfPage.drawImage(pngImage, {
+        x: 0, y: 0, width: 1920, height: 1080,
+      })
+    }
+
+    // Metadata
+    mergedPdf.setTitle(options.title || 'Presentation')
+    mergedPdf.setAuthor(options.brandName || 'Leaders')
+    mergedPdf.setCreator('Leaders pptmaker — Screenshot PDF')
+    mergedPdf.setCreationDate(new Date())
+
+    const mergedBuffer = await mergedPdf.save()
+    console.log(`[PDF] Screenshot PDF complete: ${htmlPages.length} pages, ${(mergedBuffer.length / 1024 / 1024).toFixed(1)} MB`)
+    return Buffer.from(mergedBuffer)
+  } finally {
+    await browser.close()
+  }
+}
+
+/**
  * Generate multi-page PDF by navigating to the React export-slides page.
  * This renders slides using the REAL React components (not ast-to-html),
  * ensuring aurora gradients, shadows, and all CSS effects render correctly.

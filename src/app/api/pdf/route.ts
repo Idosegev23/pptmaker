@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { generateMultiPagePdf, generateReactPdf } from '@/lib/playwright/pdf'
+import { generateMultiPagePdf, generateReactPdf, generateScreenshotPdf } from '@/lib/playwright/pdf'
 
 export const maxDuration = 600
 import { renderProposalToHtml } from '@/templates/quote/proposal-template'
@@ -51,9 +51,9 @@ export async function POST(request: NextRequest) {
     // ─── HTML-Native Presentation path (v6) ─────────────────
     const htmlPres = documentData._htmlPresentation as { htmlSlides?: string[]; brandName?: string; title?: string } | undefined
     if (htmlPres?.htmlSlides?.length) {
-      console.log(`[PDF] 🎨 Using HTML-Native presentation: ${htmlPres.htmlSlides.length} slides`)
+      console.log(`[PDF] 🎨 Using HTML-Native presentation: ${htmlPres.htmlSlides.length} slides (screenshot PDF for full CSS fidelity)`)
       const brandNameStr = (htmlPres.brandName || documentData.brandName as string) || ''
-      const pdfBuffer = await generateMultiPagePdf(htmlPres.htmlSlides, {
+      const pdfBuffer = await generateScreenshotPdf(htmlPres.htmlSlides, {
         format: '16:9',
         title: htmlPres.title || brandNameStr || 'Presentation',
         brandName: brandNameStr,
