@@ -42,11 +42,23 @@ export function translateSlide(
   let nextY = MARGIN
   let titleBottomY = 0
 
-  // Translate each element
+  // Translate each element — cap at 15 content elements to prevent overcrowding
+  const MAX_CONTENT_ELEMENTS = 15
+  let contentCount = 0
   for (const el of semantic.elements) {
+    // Overlays (images, watermarks, decorative) don't count toward cap
+    if (!isOverlayElement(el)) {
+      if (contentCount >= MAX_CONTENT_ELEMENTS) continue
+    }
+    // Skip elements that would overflow below canvas
+    if (nextY > H - MARGIN - 40 && !isOverlayElement(el)) continue
+
     const result = translateElement(el, ds, plan, imageUrl, nextY, titleBottomY)
     if (result) {
       elements.push(...result.elements)
+      if (!isOverlayElement(el)) {
+        contentCount += result.elements.length
+      }
       if (result.bottomY > nextY && !isOverlayElement(el)) {
         nextY = result.bottomY + 16
       }

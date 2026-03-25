@@ -249,6 +249,15 @@ export function validateSlide(
     score -= 10
   }
 
+  // Title-too-low — title pushed near bottom leaves no room for content
+  for (const title of titles) {
+    const titleBottom = (title.y || 0) + (title.height || (title.fontSize || 48) + 40)
+    if (titleBottom > 850 && slide.slideType !== 'closing') {
+      issues.push({ severity: 'critical', category: 'title-too-low', message: `Title at y=${title.y}, bottom=${titleBottom} — too low`, elementId: title.id, autoFixable: true })
+      score -= 15
+    }
+  }
+
   // Image validation
   if (expectedImageUrl && imageElements.length === 0) {
     issues.push({ severity: 'warning', category: 'missing-image', message: 'Slide has imageUrl but no image element', autoFixable: true })
@@ -421,6 +430,16 @@ export function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSyst
       }
     }
 
+    if (issue.category === 'title-too-low') {
+      const el = fixed.elements[elIndex]
+      if (isTextElement(el)) {
+        const updated: TextElement = { ...el }
+        const titleHeight = updated.height || (updated.fontSize || 48) + 40
+        updated.y = Math.max(80, 780 - titleHeight)
+        fixed.elements[elIndex] = updated
+      }
+    }
+
     if (issue.category === 'text-text-overlap') {
       const el = fixed.elements[elIndex]
       if (isTextElement(el)) {
@@ -451,7 +470,7 @@ export function autoFixSlide(slide: Slide, issues: ValidationIssue[], designSyst
   return fixed
 }
 
-/** Gentle visual consistency — only catch wild outliers, don't normalize */
+/** Cluster-aware visual consistency — normalizes within position groups, preserves variety */
 export function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDesignSystem): Slide[] {
   const allTitles: { slideIndex: number; y: number; fontSize: number; element: TextElement }[] = []
 
@@ -471,17 +490,55 @@ export function checkVisualConsistency(slides: Slide[], _designSystem: PremiumDe
   )
 
   if (regularTitles.length > 0) {
-    // Align title Y positions to median (60px threshold — only wild outliers)
-    const medianY = regularTitles.map(t => t.y).sort((a, b) => a - b)[Math.floor(regularTitles.length / 2)]
+    // ── Fix 1: title-too-low — clamp titles that would push content off canvas ──
     for (const t of regularTitles) {
-      if (Math.abs(t.y - medianY) > 60) t.element.y = medianY
+      const titleHeight = t.element.height || (t.element.fontSize || 48) + 40
+      if (t.element.y + titleHeight > 900) {
+        // Push up so title bottom is at ~780 (leaves room for content below)
+        t.element.y = Math.max(80, 780 - titleHeight)
+      }
     }
 
-    // Normalize heading font sizes (6-30px range — catch drifts but allow intentional variance)
+    // ── Fix 2: cluster-based Y normalization (top / center / bottom bands) ──
+    // Group titles into 3 position clusters instead of flattening to one median
+    const TOP_BAND = 200    // y < 200 → "top" cluster
+    const BOT_BAND = 600    // y > 600 → "bottom" cluster
+    const clusters = {
+      top: regularTitles.filter(t => t.element.y < TOP_BAND),
+      center: regularTitles.filter(t => t.element.y >= TOP_BAND && t.element.y <= BOT_BAND),
+      bottom: regularTitles.filter(t => t.element.y > BOT_BAND),
+    }
+
+    // Normalize within each cluster (40px threshold)
+    for (const group of Object.values(clusters)) {
+      if (group.length < 2) continue
+      const ys = group.map(t => t.element.y).sort((a, b) => a - b)
+      const clusterMedian = ys[Math.floor(ys.length / 2)]
+      for (const t of group) {
+        if (Math.abs(t.element.y - clusterMedian) > 40) {
+          t.element.y = clusterMedian
+        }
+      }
+    }
+
+    // ── Fix 3: ensure variety — if >70% of titles ended up in one cluster, redistribute ──
+    const total = regularTitles.length
+    const largest = Math.max(clusters.top.length, clusters.center.length, clusters.bottom.length)
+    if (largest / total > 0.7 && total >= 5) {
+      // Sort all regular titles by slide index and alternate between top (80) and center (400)
+      const sorted = [...regularTitles].sort((a, b) => a.slideIndex - b.slideIndex)
+      const positions = [80, 80, 400, 80, 400] // 60% top, 40% center pattern
+      sorted.forEach((t, i) => {
+        t.element.y = positions[i % positions.length]
+      })
+    }
+
+    // ── Fix 4: heading font sizes — snap only small drifts (6-30px from median) ──
     const headingSizes = regularTitles.map(t => t.element.fontSize || 48)
-    const medianSize = headingSizes.sort((a, b) => a - b)[Math.floor(headingSizes.length / 2)]
+    const sortedSizes = [...headingSizes].sort((a, b) => a - b)
+    const medianSize = sortedSizes[Math.floor(sortedSizes.length / 2)]
     for (const t of regularTitles) {
-      const diff = Math.abs(t.fontSize - medianSize)
+      const diff = Math.abs((t.element.fontSize || 48) - medianSize)
       if (diff > 6 && diff < 30) {
         t.element.fontSize = medianSize
       }

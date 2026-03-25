@@ -7,8 +7,16 @@
  * Playwright navigates here and calls page.pdf().
  */
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import type { Presentation, Slide, DesignSystem, SlideElement, BaseElement, TextElement, ImageElement, ShapeElement } from '@/types/presentation'
+
+/** Service-role client — no cookies needed, bypasses RLS for headless export */
+function getExportSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+}
 import { borderRadiusToCss, maskToClipPath } from '@/types/presentation'
 
 const W = 1920
@@ -197,7 +205,7 @@ export default async function ExportSlidesPage({
 
   if (!presentation) {
     try {
-      const supabase = await createClient()
+      const supabase = getExportSupabase()
       const { data: doc } = await supabase.from('documents').select('data').eq('id', id).single()
       if (doc?.data) {
         presentation = (doc.data as Record<string, unknown>)._presentation as Presentation
