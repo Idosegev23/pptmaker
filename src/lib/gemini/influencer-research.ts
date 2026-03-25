@@ -201,10 +201,10 @@ ${criticalRules}
       model,
       prompt,
       geminiConfig: {
-        thinkingConfig: { thinkingLevel: 'LOW' as any },
+        thinkingConfig: { thinkingLevel: 'HIGH' as any },
         maxOutputTokens: 6000,
       },
-      thinkingLevel: 'LOW',
+      thinkingLevel: 'HIGH',
       maxOutputTokens: 6000,
       useGoogleSearch: true,
       callerId: `influencer-research-${brandResearch.brandName}`,

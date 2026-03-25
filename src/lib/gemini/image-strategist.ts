@@ -96,8 +96,8 @@ ${proposalContent?.goals?.map(g => `- ${g.title}: ${g.description}`).join('\n') 
 - התיאור ב-rationale חייב להיות ספציפי וישראלי
 - אל תכתוב תיאורים גנריים - תהיה יצירתי ומדויק`
 
-  // Flash first (fast + cheap), Pro fallback
-  const models = [FLASH_MODEL, PRO_MODEL]
+  // Pro first (quality), Flash fallback
+  const models = [PRO_MODEL, FLASH_MODEL]
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {

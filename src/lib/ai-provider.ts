@@ -160,13 +160,21 @@ function mapThinkingToEffort(thinkingLevel?: string): 'low' | 'medium' | 'high' 
 
 // ─── Model resolution ─────────────────────────────────────────────
 
-export function resolveModels(
-  _agentPrimaryKey: string,
-  _agentFallbackKey: string,
+export async function resolveModels(
+  agentPrimaryKey: string,
+  agentFallbackKey: string,
   agentPrimaryDefault: string = 'gemini-3.1-pro-preview',
   agentFallbackDefault: string = 'gemini-3-flash-preview',
-): [string, string] {
-  return [agentPrimaryDefault, agentFallbackDefault]
+): Promise<string[]> {
+  try {
+    const { getConfig } = await import('@/lib/config/admin-config')
+    const primary = await getConfig('ai_models', agentPrimaryKey, agentPrimaryDefault) as string
+    const fallback = await getConfig('ai_models', agentFallbackKey, agentFallbackDefault) as string
+    return [primary, fallback]
+  } catch {
+    // If admin config unavailable, use defaults
+    return [agentPrimaryDefault, agentFallbackDefault]
+  }
 }
 
 // ─── Call options & result ─────────────────────────────────────────

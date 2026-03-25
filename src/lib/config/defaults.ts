@@ -659,13 +659,13 @@ export const MODEL_DEFAULTS = {
 
   // --- Proposal Agent ---
   'proposal_agent.primary_model': {
-    value: 'claude-opus-4-6',
-    description: 'מודל ראשי — סוכן הצעות (חילוץ + עיבוד מטרות)',
+    value: 'gpt-5.4',
+    description: 'מודל ראשי — סוכן הצעות (חילוץ + עיבוד מטרות). GPT-5.4 for Hebrew + long context.',
     value_type: 'text' as const,
     group: 'סוכן הצעות',
   },
   'proposal_agent.fallback_model': {
-    value: 'gemini-3-flash-preview',
+    value: 'gemini-3.1-pro-preview',
     description: 'מודל גיבוי — סוכן הצעות',
     value_type: 'text' as const,
     group: 'סוכן הצעות',
@@ -728,13 +728,13 @@ export const MODEL_DEFAULTS = {
 
   'brand_research.primary_model': {
     value: 'gemini-3-flash-preview',
-    description: 'מודל ראשי — מחקר מותג (מהיר + Google Search)',
+    description: 'מודל ראשי — מחקר מותג (Flash + HIGH thinking + Google Search)',
     value_type: 'text' as const,
     group: 'מחקר מותג',
   },
   'brand_research.fallback_model': {
-    value: 'gemini-3-flash-preview',
-    description: 'מודל גיבוי — מחקר מותג',
+    value: 'gemini-3.1-pro-preview',
+    description: 'מודל גיבוי — מחקר מותג (Pro for deeper analysis)',
     value_type: 'text' as const,
     group: 'מחקר מותג',
   },
@@ -747,13 +747,13 @@ export const MODEL_DEFAULTS = {
 
   'influencer_research.primary_model': {
     value: 'gemini-3-flash-preview',
-    description: 'מודל ראשי — מחקר משפיענים (מהיר + Google Search)',
+    description: 'מודל ראשי — מחקר משפיענים (Flash + HIGH thinking + Google Search)',
     value_type: 'text' as const,
     group: 'מחקר משפיענים',
   },
   'influencer_research.fallback_model': {
-    value: 'gemini-3-flash-preview',
-    description: 'מודל גיבוי — מחקר משפיענים',
+    value: 'gemini-3.1-pro-preview',
+    description: 'מודל גיבוי — מחקר משפיענים (Pro for deeper strategy)',
     value_type: 'text' as const,
     group: 'מחקר משפיענים',
   },

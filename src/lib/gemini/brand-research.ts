@@ -269,10 +269,10 @@ export async function runSingleAgent(
       model,
       prompt,
       geminiConfig: {
-        thinkingConfig: { thinkingLevel: 'LOW' as any },
+        thinkingConfig: { thinkingLevel: 'HIGH' as any },
         maxOutputTokens: 4000,
       },
-      thinkingLevel: 'LOW',
+      thinkingLevel: 'HIGH',
       maxOutputTokens: 4000,
       useGoogleSearch: true,
       callerId: `brand-research-agent-${angleName}`,
@@ -456,10 +456,10 @@ ${websiteContext}
         model,
         prompt: synthesisPrompt,
         geminiConfig: {
-          thinkingConfig: { thinkingLevel: 'LOW' as any },
+          thinkingConfig: { thinkingLevel: 'HIGH' as any },
           maxOutputTokens: 16000,
         },
-        thinkingLevel: 'LOW',
+        thinkingLevel: 'HIGH',
         maxOutputTokens: 16000,
         callerId: `brand-research-synthesis`,
       })
