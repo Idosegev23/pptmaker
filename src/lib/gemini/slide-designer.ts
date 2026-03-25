@@ -53,7 +53,7 @@ import {
 } from './slide-design'
 
 // Re-export pipeline types for external consumers
-export type { PipelineFoundation, BatchResult, SlidePlan } from './slide-design'
+export type { PipelineFoundation, BatchResult, HtmlBatchResult, HtmlPresentation, SlidePlan } from './slide-design'
 
 // ─── Constants ──────────────────────────────────────────
 
@@ -1248,6 +1248,227 @@ export async function pipelineFinalize(
     id: `pres-${Date.now()}`, title: foundation.brandName || 'הצעת מחיר', designSystem: ds,
     slides: finalSlides,
     metadata: { brandName: foundation.brandName, createdAt: new Date().toISOString(), version: 2, pipeline: 'slide-designer-v5-planner-staged', qualityScore: avgScore },
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  HTML-NATIVE PIPELINE (v6) — GPT outputs raw HTML/CSS per slide
+// ═══════════════════════════════════════════════════════════
+
+export async function pipelineBatchHtml(
+  foundation: import('./slide-design').PipelineFoundation,
+  batchIndex: number,
+): Promise<import('./slide-design').HtmlBatchResult> {
+  const requestId = `html-batch-${batchIndex}-${Date.now()}`
+  const batchIndices = foundation.batches[batchIndex]
+  if (!batchIndices || batchIndices.length === 0) throw new Error(`Invalid batch index: ${batchIndex}`)
+
+  const batchPlans = batchIndices.map(i => foundation.plan[i])
+  let slideOffset = 0
+  for (let i = 0; i < batchIndex; i++) slideOffset += foundation.batches[i].length
+
+  console.log(`[SlideDesigner][${requestId}] 🎨 HTML Batch ${batchIndex + 1}/${foundation.batches.length} (${batchPlans.length} slides, offset ${slideOffset})`)
+
+  const ds = foundation.designSystem as PremiumDesignSystem
+  const c = ds.colors
+  const cd = ds.creativeDirection
+
+  // Build slide descriptions for the prompt
+  const slidesBlock = batchPlans.map((plan, i) => {
+    const globalIndex = slideOffset + i + 1
+    const imageUrl = plan.existingImageKey ? foundation.images[plan.existingImageKey] : undefined
+    const contentParts: string[] = [`Title: ${plan.title}`]
+    if (plan.subtitle) contentParts.push(`Subtitle: ${plan.subtitle}`)
+    if (plan.bodyText) contentParts.push(`Body: ${plan.bodyText}`)
+    if (plan.bulletPoints?.length) contentParts.push(`Bullets:\n${plan.bulletPoints.map(b => `  • ${b}`).join('\n')}`)
+    if (plan.cards?.length) contentParts.push(`Cards:\n${plan.cards.map(card => `  - ${card.title}: ${card.body}`).join('\n')}`)
+    if (plan.keyNumber) contentParts.push(`KEY STAT: ${plan.keyNumber} (${plan.keyNumberLabel || ''})`)
+    if (plan.tagline) contentParts.push(`Tagline: ${plan.tagline}`)
+    if (imageUrl) contentParts.push(`IMAGE URL: ${imageUrl}`)
+
+    return `<slide index="${globalIndex}" type="${plan.slideType}" tone="${plan.emotionalTone || 'professional'}">
+${contentParts.join('\n')}
+</slide>`
+  }).join('\n\n')
+
+  const prompt = `You are a LEGENDARY presentation designer. You build slides that look like they belong in a design museum.
+
+<design_system>
+Brand: ${foundation.brandName}
+Primary: ${c.primary}
+Secondary: ${c.secondary}
+Accent: ${c.accent}
+Background: ${c.background || '#0C0C10'}
+Text: ${c.text || '#F5F5F7'}
+Card BG: ${c.cardBg || 'rgba(255,255,255,0.05)'}
+Muted: ${c.muted || 'rgba(245,245,247,0.5)'}
+Aurora: ${ds.effects?.auroraGradient || `radial-gradient(ellipse at 20% 50%, ${c.primary}40, transparent 50%), radial-gradient(ellipse at 80% 20%, ${c.accent}30, transparent 50%), ${c.background}`}
+Font: Heebo
+Direction: RTL
+${cd ? `Creative Metaphor: ${cd.visualMetaphor}
+Visual Tension: ${cd.visualTension}
+One Rule: ${cd.oneRule}` : ''}
+</design_system>
+
+<css_arsenal>
+USE ALL OF THESE across the batch — not just basic CSS:
+- Mesh gradients (multiple radial-gradient layers for aurora/cosmic effects)
+- Glassmorphism (backdrop-filter: blur(20px) + rgba backgrounds + subtle borders)
+- -webkit-text-stroke for hollow/outline typography (watermarks at 200-400px, opacity 0.03-0.08)
+- mix-blend-mode: overlay, screen, difference
+- clip-path for creative shapes
+- text-shadow with multiple layers (glow: 0 0 60px rgba(...), depth: 0 4px 30px rgba(...))
+- box-shadow with extreme spread for soft glows
+- CSS transforms: perspective, rotateX for subtle 3D card tilts
+- Opacity layering (watermark text behind content)
+- letter-spacing from -8px (headlines) to 12px (labels)
+- Gradient borders via border-image or pseudo-elements
+</css_arsenal>
+
+<rules>
+1. Each slide is a COMPLETE self-contained HTML document:
+   <!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">
+   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@100;300;400;500;700;800;900&display=swap" rel="stylesheet">
+   <style>...</style></head><body><div class="slide">...</div></body></html>
+
+2. The .slide div: width:1920px; height:1080px; position:relative; overflow:hidden; margin:0;
+3. ALL text in Hebrew. RTL direction.
+4. Use design system colors. No random colors.
+5. Images: use ONLY the provided URL. <img src="URL" style="object-fit:cover; ...">
+6. Each slide needs ONE dramatic visual choice that makes it unforgettable.
+7. VARY layouts dramatically between slides. No two slides should feel the same.
+8. Some slides = 80% whitespace (dramatic). Others = rich with overlapping cards.
+9. Think MAGAZINE EDITORIAL, not corporate PowerPoint.
+</rules>
+
+<slides>
+${slidesBlock}
+</slides>
+
+Return a JSON object: { "slides": ["<!DOCTYPE html>...", "<!DOCTYPE html>...", ...] }
+Each array item is a COMPLETE HTML document string for one slide.`
+
+  try {
+    console.log(`[SlideDesigner][${requestId}] 🤖 Calling GPT-5.4 for HTML slides (${prompt.length} chars)...`)
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    const htmlSchema = {
+      type: 'object' as const,
+      additionalProperties: false,
+      required: ['slides'],
+      properties: {
+        slides: {
+          type: 'array' as const,
+          items: { type: 'string' as const },
+        },
+      },
+    }
+
+    const response = await openai.responses.create({
+      model: 'gpt-5.4',
+      instructions: 'You are a legendary web designer. Return ONLY valid JSON with an array of complete HTML document strings. Each string starts with <!DOCTYPE html> and ends with </html>. Make them breathtaking.',
+      input: prompt,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'html_slides',
+          strict: true,
+          schema: htmlSchema,
+        },
+      },
+    })
+
+    const rawText = response.output_text || '{}'
+    console.log(`[SlideDesigner][${requestId}] ✅ GPT-5.4 responded: ${rawText.length} chars`)
+
+    const parsed = JSON.parse(rawText) as { slides: string[] }
+    const htmlSlides = parsed.slides || []
+
+    console.log(`[SlideDesigner][${requestId}] ✅ Got ${htmlSlides.length} HTML slides:`)
+    for (let i = 0; i < htmlSlides.length; i++) {
+      const plan = batchPlans[i]
+      console.log(`[SlideDesigner][${requestId}]   🎨 ${(plan?.slideType || '?').padEnd(18)} | ${htmlSlides[i].length} chars`)
+    }
+
+    return {
+      htmlSlides,
+      slideTypes: batchPlans.map(p => p.slideType),
+      slideIndex: slideOffset + htmlSlides.length,
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error(`[SlideDesigner][${requestId}] ❌ HTML batch failed: ${msg.slice(0, 200)}`)
+
+    // Fallback: use AST pipeline → convert to HTML
+    console.log(`[SlideDesigner][${requestId}] 🔄 Falling back to AST → HTML conversion...`)
+    try {
+      const astResult = await pipelineBatch(foundation, batchIndex, null)
+      const { presentationToHtmlSlides } = await import('@/lib/presentation/ast-to-html')
+      const tempPresentation = {
+        id: 'temp', title: foundation.brandName, designSystem: ds,
+        slides: astResult.slides, metadata: { version: 2 },
+      }
+      const htmlSlides = presentationToHtmlSlides(tempPresentation as import('@/types/presentation').Presentation)
+      return {
+        htmlSlides,
+        slideTypes: batchPlans.map(p => p.slideType),
+        slideIndex: slideOffset + htmlSlides.length,
+      }
+    } catch (fallbackErr) {
+      console.error(`[SlideDesigner][${requestId}] ❌ Fallback also failed:`, fallbackErr)
+      return { htmlSlides: [], slideTypes: [], slideIndex: slideOffset }
+    }
+  }
+}
+
+export async function pipelineFinalizeHtml(
+  foundation: import('./slide-design').PipelineFoundation,
+  allHtmlSlides: string[],
+  allSlideTypes: string[],
+): Promise<import('./slide-design').HtmlPresentation> {
+  const requestId = `html-final-${Date.now()}`
+  console.log(`[SlideDesigner][${requestId}] Finalizing HTML presentation: ${allHtmlSlides.length} slides`)
+
+  // Inject logos into each HTML slide
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')
+  const leadersLogoUrl = foundation.leadersLogo || `${supabaseUrl}/storage/v1/object/public/assets/logos/leaders-logo-white.png`
+  const clientLogoUrl = foundation.clientLogo
+
+  const finalSlides = allHtmlSlides.map(html => {
+    // Inject logos before </body>
+    const logos: string[] = []
+    if (leadersLogoUrl) {
+      logos.push(`<img src="${leadersLogoUrl}" alt="Leaders" style="position:absolute;bottom:30px;left:40px;height:40px;opacity:0.7;z-index:999;" />`)
+    }
+    if (clientLogoUrl) {
+      logos.push(`<img src="${clientLogoUrl}" alt="Brand" style="position:absolute;top:30px;right:40px;height:50px;opacity:0.85;z-index:999;" />`)
+    }
+    if (logos.length > 0) {
+      // Insert logos inside the .slide div (before closing </div>)
+      const slideCloseIdx = html.lastIndexOf('</div>')
+      if (slideCloseIdx > 0) {
+        return html.slice(0, slideCloseIdx) + logos.join('\n') + html.slice(slideCloseIdx)
+      }
+    }
+    return html
+  })
+
+  console.log(`[SlideDesigner][${requestId}] ✅ HTML presentation ready: ${finalSlides.length} slides, logos injected`)
+
+  return {
+    title: foundation.brandName || 'הצעת מחיר',
+    brandName: foundation.brandName || '',
+    designSystem: foundation.designSystem as PremiumDesignSystem,
+    htmlSlides: finalSlides,
+    slideTypes: allSlideTypes,
+    metadata: {
+      brandName: foundation.brandName,
+      createdAt: new Date().toISOString(),
+      version: 6,
+      pipeline: 'html-native-v6',
+      qualityScore: 90,
+    },
   }
 }
 

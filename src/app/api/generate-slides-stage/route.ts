@@ -5,8 +5,10 @@ import {
   pipelineFoundation,
   pipelineBatch,
   pipelineFinalize,
+  pipelineBatchHtml,
+  pipelineFinalizeHtml,
 } from '@/lib/gemini/slide-designer'
-import type { PipelineFoundation, BatchResult } from '@/lib/gemini/slide-designer'
+import type { PipelineFoundation, BatchResult, HtmlBatchResult } from '@/lib/gemini/slide-designer'
 import type { Slide } from '@/types/presentation'
 
 export const maxDuration = 600
@@ -132,14 +134,15 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // ═══ STAGE: BATCH (~5 slides per batch, 3 batches total) ════
+    // ═══ STAGE: BATCH — HTML-Native (GPT → raw HTML per slide) ════
     if (stage === 'batch') {
       const idx = typeof batchIndex === 'number' ? batchIndex : 0
       console.log(`[${requestId}] Running batch ${idx + 1}...`)
 
       const pipeline = documentData._pipeline as {
         foundation: PipelineFoundation
-        batchResults: BatchResult[]
+        batchResults?: BatchResult[]
+        htmlBatchResults?: HtmlBatchResult[]
         status: string
       } | undefined
 
@@ -147,9 +150,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Foundation not found. Run foundation stage first.' }, { status: 400 })
       }
 
-      const result = await pipelineBatch(pipeline.foundation, idx, null)
+      // HTML-Native pipeline (v6)
+      const htmlResult = await pipelineBatchHtml(pipeline.foundation, idx)
+      const updatedHtmlResults = [...(pipeline.htmlBatchResults || []), htmlResult]
 
-      const updatedBatchResults = [...(pipeline.batchResults || []), result]
+      // Also run AST pipeline as fallback (for editor compatibility)
+      let astResult: BatchResult | null = null
+      try {
+        astResult = await pipelineBatch(pipeline.foundation, idx, null)
+      } catch (e) {
+        console.warn(`[${requestId}] AST fallback failed (non-critical):`, e)
+      }
+      const updatedBatchResults = astResult ? [...(pipeline.batchResults || []), astResult] : (pipeline.batchResults || [])
 
       await supabase
         .from('documents')
@@ -158,6 +170,7 @@ export async function POST(request: NextRequest) {
             ...documentData,
             _pipeline: {
               ...pipeline,
+              htmlBatchResults: updatedHtmlResults,
               batchResults: updatedBatchResults,
               status: `batch_${idx}_complete`,
             },
@@ -165,14 +178,14 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', documentId)
 
-      const totalAccumulated = updatedBatchResults.reduce((sum, r) => sum + r.slides.length, 0)
-      console.log(`[${requestId}] Batch ${idx + 1} cached (${result.slides.length} slides). Total accumulated: ${totalAccumulated}`)
+      const totalAccumulated = updatedHtmlResults.reduce((sum, r) => sum + r.htmlSlides.length, 0)
+      console.log(`[${requestId}] Batch ${idx + 1} cached (${htmlResult.htmlSlides.length} HTML slides). Total accumulated: ${totalAccumulated}`)
 
       return NextResponse.json({
         success: true,
         stage: 'batch',
         batchIndex: idx,
-        slidesGenerated: result.slides.length,
+        slidesGenerated: htmlResult.htmlSlides.length,
         totalSlidesAccumulated: totalAccumulated,
       })
     }
@@ -183,39 +196,71 @@ export async function POST(request: NextRequest) {
 
       const pipeline = documentData._pipeline as {
         foundation: PipelineFoundation
-        batchResults: BatchResult[]
+        batchResults?: BatchResult[]
+        htmlBatchResults?: HtmlBatchResult[]
         status: string
       } | undefined
 
-      if (!pipeline?.foundation || !pipeline.batchResults?.length) {
+      if (!pipeline?.foundation) {
         return NextResponse.json({ error: 'Pipeline incomplete. Run foundation and batch stages first.' }, { status: 400 })
       }
 
-      // Collect all slides from batch results
-      const allSlides: Slide[] = pipeline.batchResults.flatMap(r => r.slides)
-
-      const presentation = await pipelineFinalize(pipeline.foundation, allSlides)
-
-      // Save final presentation + clean up pipeline data
       const { _pipeline, ...cleanData } = documentData as Record<string, unknown> & { _pipeline?: unknown }
-      await supabase
-        .from('documents')
-        .update({
-          data: {
-            ...cleanData,
-            _presentation: presentation,
-          },
+
+      // HTML-Native finalize
+      if (pipeline.htmlBatchResults?.length) {
+        const allHtmlSlides = pipeline.htmlBatchResults.flatMap(r => r.htmlSlides)
+        const allSlideTypes = pipeline.htmlBatchResults.flatMap(r => r.slideTypes)
+        const htmlPresentation = await pipelineFinalizeHtml(pipeline.foundation, allHtmlSlides, allSlideTypes)
+
+        // Also finalize AST if available (for editor)
+        let astPresentation = null
+        if (pipeline.batchResults?.length) {
+          try {
+            const allSlides: Slide[] = pipeline.batchResults.flatMap(r => r.slides)
+            astPresentation = await pipelineFinalize(pipeline.foundation, allSlides)
+          } catch { /* non-critical */ }
+        }
+
+        await supabase
+          .from('documents')
+          .update({
+            data: {
+              ...cleanData,
+              _htmlPresentation: htmlPresentation,
+              ...(astPresentation ? { _presentation: astPresentation } : {}),
+            },
+          })
+          .eq('id', documentId)
+
+        console.log(`[${requestId}] Presentation finalized: ${htmlPresentation.htmlSlides.length} HTML slides`)
+        return NextResponse.json({
+          success: true,
+          stage: 'finalize',
+          slideCount: htmlPresentation.htmlSlides.length,
+          qualityScore: htmlPresentation.metadata.qualityScore,
+          mode: 'html',
         })
-        .eq('id', documentId)
+      }
 
-      console.log(`[${requestId}] Presentation finalized: ${presentation.slides.length} slides, quality: ${presentation.metadata?.qualityScore}/100`)
+      // Fallback: AST-only finalize
+      if (pipeline.batchResults?.length) {
+        const allSlides: Slide[] = pipeline.batchResults.flatMap(r => r.slides)
+        const presentation = await pipelineFinalize(pipeline.foundation, allSlides)
+        await supabase
+          .from('documents')
+          .update({ data: { ...cleanData, _presentation: presentation } })
+          .eq('id', documentId)
+        console.log(`[${requestId}] Presentation finalized (AST fallback): ${presentation.slides.length} slides`)
+        return NextResponse.json({
+          success: true, stage: 'finalize',
+          slideCount: presentation.slides.length,
+          qualityScore: presentation.metadata?.qualityScore,
+          mode: 'ast',
+        })
+      }
 
-      return NextResponse.json({
-        success: true,
-        stage: 'finalize',
-        slideCount: presentation.slides.length,
-        qualityScore: presentation.metadata?.qualityScore,
-      })
+      return NextResponse.json({ error: 'No batch results found' }, { status: 400 })
     }
 
     return NextResponse.json({ error: `Unknown stage: ${stage}` }, { status: 400 })

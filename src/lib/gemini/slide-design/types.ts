@@ -173,6 +173,30 @@ export interface BatchResult {
   slideIndex: number
 }
 
+// ─── HTML-Native Pipeline Types (v6) ─────────────────
+
+export interface HtmlBatchResult {
+  htmlSlides: string[]
+  slideTypes: string[]
+  slideIndex: number
+}
+
+export interface HtmlPresentation {
+  title: string
+  brandName: string
+  designSystem: PremiumDesignSystem
+  htmlSlides: string[]
+  slideTypes: string[]
+  metadata: {
+    brandName?: string
+    createdAt: string
+    version: number
+    pipeline: string
+    qualityScore: number
+    duration?: number
+  }
+}
+
 // ─── Data Types ───────────────────────────────────────
 
 export interface InfluencerResearchData {

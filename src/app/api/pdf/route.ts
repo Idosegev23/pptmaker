@@ -48,8 +48,35 @@ export async function POST(request: NextRequest) {
     // Get document data
     const documentData = document.data as Record<string, unknown>
 
-    // ─── AST Presentation path ─────────────────────────────
-    // If `_presentation` exists, use React render → PDF (full CSS fidelity)
+    // ─── HTML-Native Presentation path (v6) ─────────────────
+    const htmlPres = documentData._htmlPresentation as { htmlSlides?: string[]; brandName?: string; title?: string } | undefined
+    if (htmlPres?.htmlSlides?.length) {
+      console.log(`[PDF] 🎨 Using HTML-Native presentation: ${htmlPres.htmlSlides.length} slides`)
+      const brandNameStr = (htmlPres.brandName || documentData.brandName as string) || ''
+      const pdfBuffer = await generateMultiPagePdf(htmlPres.htmlSlides, {
+        format: '16:9',
+        title: htmlPres.title || brandNameStr || 'Presentation',
+        brandName: brandNameStr,
+      })
+      console.log(`[PDF] Generated HTML-Native PDF, size: ${pdfBuffer.length} bytes`)
+
+      const fileName = `proposal_${document.id}_${Date.now()}.pdf`
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true })
+      if (uploadError) console.error('Upload error:', uploadError)
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName)
+      await supabase.from('documents').update({ pdf_url: urlData.publicUrl, status: 'generated' }).eq('id', documentId)
+
+      if (action === 'download') {
+        return new NextResponse(new Uint8Array(pdfBuffer), {
+          headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${fileName}"` },
+        })
+      }
+      return NextResponse.json({ success: true, pdfUrl: urlData.publicUrl })
+    }
+
+    // ─── AST Presentation path (fallback) ─────────────────
     const astPresentation = documentData._presentation as Presentation | undefined
     if (astPresentation && astPresentation.slides?.length > 0) {
       console.log(`[PDF] Using AST presentation with ${astPresentation.slides.length} slides`)

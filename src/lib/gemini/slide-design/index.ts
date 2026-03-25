@@ -17,6 +17,8 @@ export type {
   SlidePlan,
   PipelineFoundation,
   BatchResult,
+  HtmlBatchResult,
+  HtmlPresentation,
   InfluencerResearchData,
   PremiumProposalData,
 } from './types'

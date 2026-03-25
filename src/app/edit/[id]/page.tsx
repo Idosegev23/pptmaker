@@ -48,6 +48,8 @@ export default function PresentationEditorPage() {
   const [pageState, setPageState] = useState<PageState>('loading')
   const [error, setError] = useState<string | null>(null)
   const [brandName, setBrandName] = useState('')
+  const [htmlSlides, setHtmlSlides] = useState<string[] | null>(null)
+  const [activeHtmlSlide, setActiveHtmlSlide] = useState(0)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
   const [showProperties, setShowProperties] = useState(true)
   const [showFeedback, setShowFeedback] = useState(false)
@@ -103,6 +105,15 @@ export default function PresentationEditorPage() {
       const docData = doc.data as Record<string, unknown>
       setBrandName((docData.brandName as string) || doc.title || 'הצעת מחיר')
       setDocumentData(docData)
+
+      // Check for HTML-Native presentation first (v6)
+      const htmlPres = docData._htmlPresentation as { htmlSlides?: string[]; slideTypes?: string[]; designSystem?: unknown } | undefined
+      if (htmlPres?.htmlSlides?.length) {
+        console.log(`[Editor] Loaded HTML-Native presentation with ${htmlPres.htmlSlides.length} slides`)
+        setHtmlSlides(htmlPres.htmlSlides)
+        setPageState('ready')
+        return
+      }
 
       const existing = docData._presentation as Presentation | undefined
       if (existing && existing.slides?.length > 0) {
@@ -663,6 +674,81 @@ export default function PresentationEditorPage() {
             >
               חזרה לרשימה
             </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── HTML-Native presentation mode (v6) ─────────────
+  if (htmlSlides && htmlSlides.length > 0) {
+    const HtmlSlideViewer = require('@/components/presentation/HtmlSlideViewer').default
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex" dir="rtl">
+        {/* Sidebar — thumbnails */}
+        <div className="w-48 bg-[#111118] border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-2">
+          <div className="text-xs text-gray-500 font-medium px-1 mb-2">{brandName}</div>
+          {htmlSlides.map((html, i) => (
+            <div key={i} onClick={() => setActiveHtmlSlide(i)} className="cursor-pointer">
+              <HtmlSlideViewer
+                html={html}
+                scale={0.09}
+                isActive={activeHtmlSlide === i}
+                className="rounded"
+              />
+              <div className="text-[10px] text-gray-500 text-center mt-1">שקף {i + 1}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Main slide view */}
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <div className="h-14 bg-[#111118] border-b border-gray-800 flex items-center justify-between px-6">
+            <div className="flex items-center gap-4">
+              <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm">← חזרה</Link>
+              <h1 className="text-white font-medium">{brandName}</h1>
+              <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">HTML-Native ✨</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  setIsGeneratingPdf(true)
+                  try {
+                    const res = await fetch('/api/pdf', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ documentId, action: 'download' }),
+                    })
+                    if (res.ok) {
+                      const blob = await res.blob()
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a'); a.href = url; a.download = `${brandName}.pdf`; a.click()
+                      URL.revokeObjectURL(url)
+                    }
+                  } finally { setIsGeneratingPdf(false) }
+                }}
+                disabled={isGeneratingPdf}
+                className="px-4 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                {isGeneratingPdf ? 'מייצר PDF...' : 'הורד PDF'}
+              </button>
+            </div>
+          </div>
+
+          {/* Slide display */}
+          <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
+            <HtmlSlideViewer
+              html={htmlSlides[activeHtmlSlide] || ''}
+              scale={0.55}
+            />
+          </div>
+
+          {/* Slide counter */}
+          <div className="h-10 bg-[#111118] border-t border-gray-800 flex items-center justify-center">
+            <span className="text-xs text-gray-500">
+              שקף {activeHtmlSlide + 1} מתוך {htmlSlides.length}
+            </span>
           </div>
         </div>
       </div>
