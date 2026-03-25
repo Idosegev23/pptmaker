@@ -388,7 +388,7 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
     required: ['slides'],
   }
 
-  const models = ['gpt-5.4', 'gpt-4.1-mini']
+  const models = ['gpt-5.4', 'gpt-4o-mini']
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -406,7 +406,7 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
           type: 'json_schema',
           json_schema: { name: 'slide_plan', strict: true, schema: jsonSchema },
         },
-        max_tokens: 16384,
+        max_completion_tokens: 16384,
       })
 
       const rawText = completion.choices[0]?.message?.content || '{}'
