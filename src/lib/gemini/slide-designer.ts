@@ -43,7 +43,7 @@ import {
   getThinkingLevel, getBatchThinkingLevel,
   getMaxOutputTokens, getTemperature,
   // Schemas
-  DESIGN_SYSTEM_SCHEMA, SLIDE_PLAN_SCHEMA, SLIDE_BATCH_SCHEMA,
+  DESIGN_SYSTEM_SCHEMA, SLIDE_BATCH_SCHEMA,
   // Color utils
   validateAndFixColors,
   // Validation
@@ -356,39 +356,68 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
 17. CLOSING: רק כותרת + tagline קצר. אין הנחיות או הערות! כתוב רק תוכן שהקהל רואה. דוגמה: title="בואו נתחיל", tagline="Leaders × ${brandName}"
 </task>`
 
-  const models = await getDesignSystemModels()
-  const maxTokens = await getMaxOutputTokens()
-
   console.log(`[SlideDesigner][${requestId}] 📝 Plan prompt length: ${prompt.length} chars`)
   console.log(`[SlideDesigner][${requestId}] 🖼️ Available images: ${imageList || 'none'}`)
 
-  for (let attempt = 0; attempt < models.length; attempt++) {
-    const model = _proUnavailable && attempt === 0 ? models[1] || models[0] : models[attempt]
-    try {
-      console.log(`[SlideDesigner][${requestId}] Calling ${model} for plan (attempt ${attempt + 1}/${models.length})...`)
-
-      const planResult = await callAI({
-        model,
-        prompt,
-        geminiConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: SLIDE_PLAN_SCHEMA,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-          maxOutputTokens: maxTokens,
+  // ── GPT-5.4 for Planner (fast, excellent Hebrew, no timeout on long prompts) ──
+  const jsonSchema = {
+    type: 'object' as const,
+    properties: {
+      slides: {
+        type: 'array' as const,
+        items: {
+          type: 'object' as const,
+          properties: {
+            slideType: { type: 'string' as const },
+            title: { type: 'string' as const },
+            subtitle: { type: 'string' as const },
+            bodyText: { type: 'string' as const },
+            bulletPoints: { type: 'array' as const, items: { type: 'string' as const } },
+            cards: { type: 'array' as const, items: { type: 'object' as const, properties: { title: { type: 'string' as const }, body: { type: 'string' as const } }, required: ['title', 'body'] } },
+            keyNumber: { type: 'string' as const },
+            keyNumberLabel: { type: 'string' as const },
+            tagline: { type: 'string' as const },
+            imageDirection: { type: 'string' as const },
+            existingImageKey: { type: 'string' as const },
+            emotionalTone: { type: 'string' as const },
+          },
+          required: ['slideType', 'title', 'emotionalTone'],
         },
-        responseSchema: SLIDE_PLAN_SCHEMA as unknown as Record<string, unknown>,
-        thinkingLevel: 'MEDIUM',
-        maxOutputTokens: maxTokens,
-        callerId: `${requestId}-plan`,
-        noGlobalFallback: true,
+      },
+    },
+    required: ['slides'],
+  }
+
+  const models = ['gpt-5.4', 'gpt-4.1-mini']
+  for (let attempt = 0; attempt < models.length; attempt++) {
+    const model = models[attempt]
+    try {
+      console.log(`[SlideDesigner][${requestId}] 🤖 Calling ${model} for plan (attempt ${attempt + 1}/${models.length})...`)
+      const OpenAI = (await import('openai')).default
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+      const completion = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: 'אתה קריאייטיב דיירקטור בכיר. תכנן מצגות הצעת מחיר פרימיום בעברית. החזר JSON בלבד.' },
+          { role: 'user', content: prompt },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'slide_plan', strict: true, schema: jsonSchema },
+        },
+        max_tokens: 16384,
       })
+
+      const rawText = completion.choices[0]?.message?.content || '{}'
+      console.log(`[SlideDesigner][${requestId}] ✅ ${model} responded: ${rawText.length} chars`)
 
       let parsed: { slides: SlidePlan[] }
       try {
-        parsed = JSON.parse(planResult.text || '') as { slides: SlidePlan[] }
+        parsed = JSON.parse(rawText) as { slides: SlidePlan[] }
       } catch {
         const { parseGeminiJson } = await import('@/lib/utils/json-cleanup')
-        const fallbackParsed = parseGeminiJson<{ slides: SlidePlan[] }>(planResult.text || '')
+        const fallbackParsed = parseGeminiJson<{ slides: SlidePlan[] }>(rawText)
         if (!fallbackParsed) throw new Error('JSON parse failed')
         parsed = fallbackParsed
       }
@@ -396,25 +425,16 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
       if (parsed?.slides?.length >= 5) {
         // Post-process: sanitize plan content
         for (const slide of parsed.slides) {
-          // Cover: strip bodyText (cover should be visual, not a paragraph)
           if (slide.slideType === 'cover') {
             delete slide.bodyText
             delete slide.bulletPoints
             delete slide.cards
           }
-          // Closing: strip instruction leaks
           if (slide.slideType === 'closing') {
-            if (slide.bodyText && /הנחי[הי]|הערה|הוראה|instruction/i.test(slide.bodyText)) {
-              delete slide.bodyText
-            }
-            if (slide.tagline && /הנחי[הי]|הערה|הוראה|instruction/i.test(slide.tagline)) {
-              delete slide.tagline
-            }
+            if (slide.bodyText && /הנחי[הי]|הערה|הוראה|instruction/i.test(slide.bodyText)) delete slide.bodyText
+            if (slide.tagline && /הנחי[הי]|הערה|הוראה|instruction/i.test(slide.tagline)) delete slide.tagline
           }
-          // General: strip any text that looks like system instructions
-          if (slide.bodyText && /^הנחי[הי]\s*(נוספת|:)/i.test(slide.bodyText.trim())) {
-            delete slide.bodyText
-          }
+          if (slide.bodyText && /^הנחי[הי]\s*(נוספת|:)/i.test(slide.bodyText.trim())) delete slide.bodyText
         }
         console.log(`[SlideDesigner][${requestId}] ✅ Plan ready: ${parsed.slides.length} slides (model: ${model})`)
         console.log(`[SlideDesigner][${requestId}]   Types: ${parsed.slides.map(s => s.slideType).join(', ')}`)
@@ -427,11 +447,6 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
     } catch (error) {
       const msg = detailedError(error)
       console.error(`[SlideDesigner][${requestId}] Plan attempt ${attempt + 1} failed (${model}): ${msg}`)
-
-      if (model === models[0] && (msg.includes('503') || msg.includes('fetch failed') || msg.includes('UNAVAILABLE'))) {
-        _proUnavailable = true
-      }
-
       if (attempt < models.length - 1) {
         await new Promise(r => setTimeout(r, 1500))
       }
