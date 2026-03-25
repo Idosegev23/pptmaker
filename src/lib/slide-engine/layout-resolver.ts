@@ -73,7 +73,7 @@ function resolveBackground(token: BackgroundToken, ds: PremiumDesignSystem): Sli
 }
 
 // ─── Weight → fontWeight ──────────────────────────────
-function resolveWeight(token: ElementIntent['weight']): number {
+function resolveWeight(token: ElementIntent['weight']): 300 | 400 | 500 | 600 | 700 | 800 | 900 {
   switch (token) {
     case 'dominant':   return 900
     case 'prominent':  return 700
