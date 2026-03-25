@@ -4,15 +4,15 @@
 
 | # | בעיה | חומרה | סטטוס | הערות |
 |---|------|-------|-------|-------|
-| 1 | Proposal Agent — פרומפט מנופח + מודל לא עקבי | 🔴 קריטי | ⬜ לא התחיל | |
+| 1 | Proposal Agent — פרומפט מנופח + מודל לא עקבי | 🔴 קריטי | 🔄 חלקי | מודל שונה ל-GPT-5.4, פרומפט עדיין צריך שכתוב |
 | 2 | משפיענים מומצאים — אפס ולידציה | 🔴 קריטי | ⬜ לא התחיל | |
-| 3 | מחקר מותג ב-LOW thinking + אין cross-validation | 🔴 קריטי | ⬜ לא התחיל | |
-| 4 | Wizard לא מבדיל עובדות מספקולציות | 🟡 גבוה | ⬜ לא התחיל | |
-| 5 | תקציב 0 עובר בשקט | 🟡 גבוה | ⬜ לא התחיל | |
+| 3 | מחקר מותג ב-LOW thinking + אין cross-validation | 🔴 קריטי | ✅ הושלם | Flash+HIGH, Pro fallback, cross-validation=שלב 2 |
+| 4 | Wizard לא מבדיל עובדות מספקולציות | 🟡 גבוה | 🔄 חלקי | warnings banner הוסף, עדיין חסר per-field indicator |
+| 5 | תקציב 0 עובר בשקט | 🟡 גבוה | ✅ הושלם | null instead of 0, planner warned, display fixed |
 | 6 | Data loss: Brief → Wizard mapping | 🟡 גבוה | ⬜ לא התחיל | |
 | 7 | Image Strategy מנותקת מ-Slide Design | 🟠 בינוני | ⬜ לא התחיל | |
-| 8 | Fallbacks שקטים — משתמש לא יודע | 🟠 בינוני | ⬜ לא התחיל | |
-| 9 | מודלים לא עקביים | 🔵 מבנה | ⬜ לא התחיל | |
+| 8 | Fallbacks שקטים — משתמש לא יודע | 🟠 בינוני | ✅ הושלם | _isFallback flags + wizard warnings banner |
+| 9 | מודלים לא עקביים | 🔵 מבנה | ✅ הושלם | GPT-5.4/Flash+HIGH/Pro model hierarchy |
 | 10 | אין audit trail | 🔵 מבנה | ⬜ לא התחיל | |
 
 ---
