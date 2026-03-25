@@ -1038,6 +1038,7 @@ export async function pipelineFoundation(
   }
 
   console.log(`[SlideDesigner][${requestId}] Foundation complete: ${plan.length} slides planned in ${batches.length} batches (${batchSizes.join(', ')})`)
+  console.log(`[SlideDesigner][${requestId}] 🏷️ clientLogo: ${clientLogo || 'NONE'} | leadersLogo: ${leadersLogo ? 'YES' : 'NONE'}`)
   return foundation
 }
 
