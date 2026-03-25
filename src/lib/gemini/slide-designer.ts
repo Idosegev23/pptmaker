@@ -47,7 +47,7 @@ import {
   // Color utils
   validateAndFixColors,
   // Fallbacks
-  buildFallbackDesignSystem, createFallbackSlide,
+  buildFallbackDesignSystem, buildFallbackSlide, createFallbackSlide,
   // Logo injection
   injectLeadersLogo, injectClientLogo,
 } from './slide-design'
