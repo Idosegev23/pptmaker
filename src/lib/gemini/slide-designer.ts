@@ -46,10 +46,8 @@ import {
   DESIGN_SYSTEM_SCHEMA, SLIDE_BATCH_SCHEMA,
   // Color utils
   validateAndFixColors,
-  // Validation
-  validateSlide, autoFixSlide, checkVisualConsistency,
   // Fallbacks
-  buildFallbackDesignSystem, buildFallbackSlide, createFallbackSlide,
+  buildFallbackDesignSystem, createFallbackSlide,
   // Logo injection
   injectLeadersLogo, injectClientLogo,
 } from './slide-design'
@@ -503,10 +501,13 @@ function buildFallbackPlan(data: PremiumProposalData, images: Record<string, str
 }
 
 // ═══════════════════════════════════════════════════════════
-//  STEP 3: GENERATE SLIDES (BATCH AST)
+//  STEP 3: Intent Engine (in pipelineBatch below)
+//  Old generateSlidesBatchAST + sanitizeElement + buildBatchPrompt deleted in v5 cleanup
 // ═══════════════════════════════════════════════════════════
 
-async function generateSlidesBatchAST(
+/* @deprecated — removed in v5. Use pipelineBatch() with Intent Engine instead. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _legacyGenerateSlidesBatchAST(
   designSystem: PremiumDesignSystem,
   plans: SlidePlan[],
   batchIndex: number,
@@ -940,83 +941,40 @@ export async function generateAIPresentation(
 ): Promise<Presentation> {
   const requestId = `pres-${Date.now()}`
   const startTime = Date.now()
-  console.log(`\n${'═'.repeat(50)}\n[SlideDesigner][${requestId}] Starting for "${data.brandName}"\n${'═'.repeat(50)}\n`)
+  console.log(`\n${'═'.repeat(50)}\n[SlideDesigner][${requestId}] Starting for "${data.brandName}" (Intent Engine v5)\n${'═'.repeat(50)}\n`)
 
-  _proUnavailable = false
+  // Use the same pipeline as staged Vercel: Foundation → Batches → Finalize
+  const foundation = await pipelineFoundation(data as Record<string, unknown>, config)
 
-  const brandColors = data._brandColors || { primary: config.accentColor || '#E94560', secondary: '#1A1A2E', accent: config.accentColor || '#E94560', style: 'corporate', mood: 'מקצועי' }
-  const brandInput: BrandDesignInput = {
-    brandName: data.brandName || 'Unknown',
-    industry: typeof data._brandResearch?.industry === 'string' ? data._brandResearch.industry : '',
-    brandPersonality: Array.isArray(data._brandResearch?.brandPersonality) ? data._brandResearch.brandPersonality as string[] : [],
-    brandColors,
-    logoUrl: config.clientLogoUrl || (typeof data._scraped?.logoUrl === 'string' ? data._scraped.logoUrl : undefined) || config.brandLogoUrl || undefined,
-    coverImageUrl: config.images?.coverImage || undefined,
-    targetAudience: data.targetDescription || '',
-  }
+  // Batch 1 first (establishes visual language), then 2+3 in parallel
+  const allSlides: Slide[] = []
+  const batch1 = await pipelineBatch(foundation, 0, null)
+  allSlides.push(...batch1.slides)
 
-  const images: Record<string, string> = { ...(config.images || {}), ...(data._generatedImages || {}) }
-  if (config.extraImages) {
-    for (const extra of config.extraImages) images[extra.id] = extra.url
-  }
-
-  const designSystem = await generateDesignSystem(brandInput)
-  const plan = await generateSlidePlan(data, designSystem, images)
-
-  const batchSize = Math.ceil(plan.length / 3)
-  const batches: SlidePlan[][] = []
-  for (let i = 0; i < plan.length; i += batchSize) batches.push(plan.slice(i, i + batchSize))
-
-  console.log(`[SlideDesigner][${requestId}] ${batches.length} batches: ${batches.map(b => b.length).join(', ')} slides`)
-
-  let slideOffset = 0
-  const batchPromises = batches.map((batch, bi) => {
-    const ctx: BatchContext = { previousSlidesVisualSummary: '', slideIndex: slideOffset, totalSlides: plan.length }
-    slideOffset += batch.length
-    return generateSlidesBatchAST(designSystem, batch, bi, data.brandName || '', ctx, images)
-  })
-
-  const batchResults = await Promise.allSettled(batchPromises)
-  const pacingMap = await getPacingMap()
-  const allGeneratedSlides: Slide[] = []
-
-  for (let bi = 0; bi < batchResults.length; bi++) {
-    const result = batchResults[bi]
-    if (result.status === 'fulfilled') {
-      for (const slide of result.value) {
-        const pacing = pacingMap[slide.slideType] || pacingMap.brief
-        const planItem = plan[allGeneratedSlides.length]
-        const imageUrl = planItem?.existingImageKey ? images[planItem.existingImageKey] : undefined
-        const validResult = validateSlide(slide, designSystem, pacing, imageUrl)
-        const fixable = validResult.issues.filter(i => i.autoFixable)
-        allGeneratedSlides.push(fixable.length > 0 ? autoFixSlide(slide, fixable, designSystem, imageUrl) : slide)
-      }
-    } else {
-      console.error(`[SlideDesigner][${requestId}] Batch ${bi + 1} failed:`, result.reason)
-      for (const slidePlan of batches[bi]) {
-        const imageUrl = slidePlan.existingImageKey ? images[slidePlan.existingImageKey] : undefined
-        const input: SlideContentInput = { slideType: slidePlan.slideType, title: slidePlan.title, content: { subtitle: slidePlan.subtitle, bodyText: slidePlan.bodyText }, imageUrl }
-        allGeneratedSlides.push(createFallbackSlide(input, designSystem, allGeneratedSlides.length))
+  const batchCount = foundation.batchCount || foundation.batches.length
+  if (batchCount > 1) {
+    const parallelBatches: Promise<import('./slide-design').BatchResult>[] = []
+    for (let bi = 1; bi < batchCount; bi++) {
+      parallelBatches.push(pipelineBatch(foundation, bi, batch1))
+    }
+    const results = await Promise.allSettled(parallelBatches)
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        allSlides.push(...result.value.slides)
+      } else {
+        console.error(`[SlideDesigner][${requestId}] Parallel batch failed:`, result.reason)
       }
     }
   }
 
-  if (allGeneratedSlides.length === 0) throw new Error('All slides failed')
+  if (allSlides.length === 0) throw new Error('All slides failed')
 
-  let totalScore = 0
-  for (const slide of allGeneratedSlides) totalScore += validateSlide(slide, designSystem, pacingMap[slide.slideType] || pacingMap.brief).score
-  const avgScore = Math.round(totalScore / allGeneratedSlides.length)
-  const clientLogoUrl = config.clientLogoUrl || (typeof data._scraped?.logoUrl === 'string' ? data._scraped.logoUrl : '') || config.brandLogoUrl || ''
-  const finalSlides = injectClientLogo(injectLeadersLogo(checkVisualConsistency(allGeneratedSlides, designSystem)), clientLogoUrl)
-
+  const presentation = await pipelineFinalize(foundation, allSlides)
   const duration = ((Date.now() - startTime) / 1000).toFixed(1)
-  console.log(`\n${'═'.repeat(50)}\n[SlideDesigner][${requestId}] Done in ${duration}s — ${finalSlides.length} slides, quality: ${avgScore}/100\n${'═'.repeat(50)}\n`)
+  const meta = presentation.metadata || { brandName: data.brandName, createdAt: new Date().toISOString(), version: 5, pipeline: 'intent-engine-v5', qualityScore: 0 }
+  console.log(`\n${'═'.repeat(50)}\n[SlideDesigner][${requestId}] Done in ${duration}s — ${presentation.slides.length} slides, quality: ${meta.qualityScore}/100\n${'═'.repeat(50)}\n`)
 
-  return {
-    id: `pres-${Date.now()}`, title: data.brandName || 'הצעת מחיר', designSystem,
-    slides: finalSlides,
-    metadata: { brandName: data.brandName, createdAt: new Date().toISOString(), version: 2, pipeline: 'slide-designer-v5-planner', qualityScore: avgScore, duration: parseFloat(duration) },
-  }
+  return { ...presentation, metadata: { ...meta, duration: parseFloat(duration) } }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1224,14 +1182,22 @@ export async function pipelineBatch(
 
 /** Convert SlidePlan → ElementIntent[] for fallback intents */
 function planToElements(plan: SlidePlan, images: Record<string, string>): import('@/lib/slide-engine/semantic-tokens').ElementIntent[] {
+  const hasStat = !!plan.keyNumber
   const els: import('@/lib/slide-engine/semantic-tokens').ElementIntent[] = [
-    { type: 'text', role: 'title', content: plan.title, size: 'headline', weight: 'dominant', position: null, color: 'on-dark', imageUrl: null, imageOpacity: null },
+    { type: 'text', role: 'title', content: plan.title, size: hasStat ? 'title' : 'headline', weight: hasStat ? 'prominent' : 'dominant', position: null, color: 'on-dark', imageUrl: null, imageOpacity: null },
   ]
   if (plan.subtitle) els.push({ type: 'text', role: 'subtitle', content: plan.subtitle, size: 'subtitle', weight: 'supporting', position: null, color: 'muted', imageUrl: null, imageOpacity: null })
   if (plan.bodyText) els.push({ type: 'text', role: 'body', content: plan.bodyText, size: 'body', weight: 'supporting', position: null, color: 'muted', imageUrl: null, imageOpacity: null })
   if (plan.keyNumber) {
     els.push({ type: 'text', role: 'stat', content: plan.keyNumber, size: 'hero', weight: 'dominant', position: null, color: 'accent', imageUrl: null, imageOpacity: null })
     if (plan.keyNumberLabel) els.push({ type: 'text', role: 'label', content: plan.keyNumberLabel, size: 'caption', weight: 'subtle', position: null, color: 'muted', imageUrl: null, imageOpacity: null })
+  }
+  // Bullets → card pairs
+  if (plan.bulletPoints?.length) {
+    for (const bullet of plan.bulletPoints.slice(0, 4)) {
+      els.push({ type: 'text', role: 'card-title', content: bullet, size: null, weight: null, position: null, color: 'accent', imageUrl: null, imageOpacity: null })
+      els.push({ type: 'text', role: 'card-body', content: '', size: null, weight: null, position: null, color: 'muted', imageUrl: null, imageOpacity: null })
+    }
   }
   if (plan.cards?.length) {
     for (const card of plan.cards.slice(0, 4)) {
@@ -1244,6 +1210,22 @@ function planToElements(plan: SlidePlan, images: Record<string, string>): import
   return els
 }
 
+/** Lightweight quality estimator — no pacing map needed */
+function estimateQuality(slide: Slide): number {
+  let score = 60
+  const els = slide.elements
+  const texts = els.filter(e => e.type === 'text')
+  const images = els.filter(e => e.type === 'image')
+  if (slide.background.type === 'gradient') score += 10
+  if (els.some(e => e.type === 'shape')) score += 5
+  if (images.length > 0) score += 10
+  if (els.length >= 3 && els.length <= 8) score += 5
+  const title = texts.find(e => (e as unknown as { role: string }).role === 'title')
+  if (title && (title as unknown as { fontSize: number }).fontSize >= 48) score += 5
+  if (els.length <= 10) score += 5
+  return Math.min(score, 100)
+}
+
 export async function pipelineFinalize(
   foundation: import('./slide-design').PipelineFoundation,
   allSlides: Slide[],
@@ -1252,23 +1234,12 @@ export async function pipelineFinalize(
   console.log(`[SlideDesigner][${requestId}] Finalizing: ${allSlides.length} slides`)
   if (allSlides.length === 0) throw new Error('No slides to finalize')
 
-  const pacingMap = await getPacingMap()
   const ds = foundation.designSystem as PremiumDesignSystem
+  const { liteValidateSlide } = await import('@/lib/slide-engine/lite-validation')
 
-  const validatedSlides: Slide[] = []
-  let totalScore = 0
-  for (let si = 0; si < allSlides.length; si++) {
-    const slide = allSlides[si]
-    const plan = foundation.plan[si]
-    const imageUrl = plan?.existingImageKey ? foundation.images[plan.existingImageKey] : undefined
-    const pacing = pacingMap[slide.slideType] || pacingMap.brief
-    const result = validateSlide(slide, ds, pacing, imageUrl)
-    totalScore += result.score
-    validatedSlides.push(result.issues.some(i => i.autoFixable) ? autoFixSlide(slide, result.issues, ds, imageUrl) : slide)
-  }
-
-  const avgScore = Math.round(totalScore / allSlides.length)
-  // v5: removed checkVisualConsistency — GPT + Layout Resolver own visual decisions
+  // v5: lite validation only (bounds + contrast + overlap). No old density/whitespace/consistency checks.
+  const validatedSlides = allSlides.map(s => liteValidateSlide(s, ds))
+  const avgScore = Math.round(validatedSlides.reduce((sum, s) => sum + estimateQuality(s), 0) / validatedSlides.length)
   const finalSlides = injectClientLogo(injectLeadersLogo(validatedSlides), foundation.clientLogo)
 
   console.log(`[SlideDesigner][${requestId}] Finalized: ${finalSlides.length} slides, quality: ${avgScore}/100`)
@@ -1291,31 +1262,51 @@ export async function regenerateSingleSlide(
   _layoutStrategy?: unknown,
   instruction?: string,
 ): Promise<Slide> {
+  const { buildIntentPrompt, SLIDE_INTENT_SCHEMA } = await import('@/lib/slide-engine/intent-prompt')
+  const { resolveLayout, FALLBACK_COMPOSITIONS } = await import('@/lib/slide-engine/layout-resolver')
+  const { liteValidateSlide } = await import('@/lib/slide-engine/lite-validation')
+  type SlideIntentType = import('@/lib/slide-engine/semantic-tokens').SlideIntent
+
   const plan: SlidePlan = {
     slideType: slideContent.slideType,
     title: slideContent.title,
+    subtitle: typeof slideContent.content?.subtitle === 'string' ? slideContent.content.subtitle : undefined,
     bodyText: instruction
-      ? `${String(slideContent.content?.subtitle || slideContent.content?.description || '')}\n\nהנחיה נוספת: ${instruction}`
-      : String(slideContent.content?.subtitle || slideContent.content?.description || ''),
+      ? `${String(slideContent.content?.description || '')}\n\nהנחיה: ${instruction}`
+      : typeof slideContent.content?.description === 'string' ? slideContent.content.description : undefined,
     emotionalTone: 'confident',
     existingImageKey: slideContent.imageUrl ? 'image' : undefined,
   }
   const images: Record<string, string> = slideContent.imageUrl ? { image: slideContent.imageUrl } : {}
 
-  const slides = await generateSlidesBatchAST(
-    designSystem, [plan], 0, brandName,
-    { previousSlidesVisualSummary: '', slideIndex: 0, totalSlides: 1 },
-    images,
-  )
-  if (slides.length === 0) throw new Error('Failed to regenerate slide')
-
-  const pacingMap = await getPacingMap()
-  const pacing = pacingMap[slideContent.slideType] || pacingMap.brief
-  const validation = validateSlide(slides[0], designSystem, pacing, slideContent.imageUrl)
-  if (validation.issues.some(i => i.autoFixable)) {
-    return autoFixSlide(slides[0], validation.issues, designSystem, slideContent.imageUrl)
+  // Try Intent Engine
+  try {
+    const prompt = buildIntentPrompt([plan], designSystem, images, brandName, undefined, 0, 1)
+    const OpenAI = (await import('openai')).default
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    const response = await openai.responses.create({
+      model: 'gpt-5.4',
+      instructions: 'You are a world-class presentation art director. Return ONLY valid JSON.',
+      input: prompt,
+      text: { format: { type: 'json_schema', name: 'slide_intents', strict: true, schema: SLIDE_INTENT_SCHEMA } },
+    })
+    const parsed = JSON.parse(response.output_text || '{}') as { slides: SlideIntentType[] }
+    if (parsed.slides?.[0]) {
+      const slide = resolveLayout(parsed.slides[0], plan, designSystem, 0)
+      return liteValidateSlide(slide, designSystem)
+    }
+  } catch (error) {
+    console.warn('[regenerateSingleSlide] Intent engine failed, using fallback:', error)
   }
-  return slides[0]
+
+  // Fallback: deterministic composition
+  const fallbackIntent: SlideIntentType = {
+    composition: FALLBACK_COMPOSITIONS[slideContent.slideType] || 'hero-center',
+    background: 'gradient-dramatic',
+    mood: 'professional',
+    elements: planToElements(plan, images),
+  }
+  return liteValidateSlide(resolveLayout(fallbackIntent, plan, designSystem, 0), designSystem)
 }
 
 // ═══════════════════════════════════════════════════════════
