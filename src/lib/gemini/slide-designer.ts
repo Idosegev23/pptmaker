@@ -1291,54 +1291,82 @@ ${contentParts.join('\n')}
 </slide>`
   }).join('\n\n')
 
-  const prompt = `You are a LEGENDARY presentation designer. You build slides that look like they belong in a design museum.
+  const prompt = `You are the MOST AWARDED presentation designer alive. Cannes Lions, D&AD Black Pencil, TDC.
+You don't make slides — you make VISUAL EXPERIENCES that people screenshot and share.
 
 <design_system>
 Brand: ${foundation.brandName}
-Primary: ${c.primary}
-Secondary: ${c.secondary}
-Accent: ${c.accent}
-Background: ${c.background || '#0C0C10'}
-Text: ${c.text || '#F5F5F7'}
-Card BG: ${c.cardBg || 'rgba(255,255,255,0.05)'}
-Muted: ${c.muted || 'rgba(245,245,247,0.5)'}
+Primary: ${c.primary} | Secondary: ${c.secondary} | Accent: ${c.accent}
+Background: ${c.background || '#0C0C10'} | Text: ${c.text || '#F5F5F7'}
+Card BG: ${c.cardBg || 'rgba(255,255,255,0.05)'} | Muted: ${c.muted || 'rgba(245,245,247,0.5)'}
 Aurora: ${ds.effects?.auroraGradient || `radial-gradient(ellipse at 20% 50%, ${c.primary}40, transparent 50%), radial-gradient(ellipse at 80% 20%, ${c.accent}30, transparent 50%), ${c.background}`}
-Font: Heebo
-Direction: RTL
+Font: Heebo | Direction: RTL
 ${cd ? `Creative Metaphor: ${cd.visualMetaphor}
 Visual Tension: ${cd.visualTension}
-One Rule: ${cd.oneRule}` : ''}
+One Rule: ${cd.oneRule}
+Color Story: ${cd.colorStory || 'dark → accent burst → restrained ending'}` : ''}
 </design_system>
 
+<five_layer_model>
+Every slide MUST have at least 5 visual layers. This is what separates a B+ slide from an A+ slide:
+
+Layer 0 — BACKGROUND: Solid color, gradient, or full-bleed image with overlay
+Layer 1 — ATMOSPHERE: Glow clusters (radial-gradient orbs), aurora mesh (3+ overlapping elliptical gradients), vignette (darkened edges), noise texture
+Layer 2 — STRUCTURAL DECOR: Accent lines (thin gradient bars), accent blades (vertical dividers with box-shadow glow), geometric frame corners (partial borders at 2 corners), diagonal slashes, floating circles
+Layer 3 — CONTENT: Titles, body text, images, cards, stats
+Layer 4 — OVERLAY DECOR: Watermarks (200-400px text at 0.03-0.06 opacity), floating labels (tiny uppercase tracking text at edges), number badges, accent stripes (thin gradient line at top/bottom)
+
+If a slide has fewer than 5 layers, ADD MORE ATMOSPHERE AND DECORATION.
+</five_layer_model>
+
 <css_arsenal>
-USE ALL OF THESE across the batch — not just basic CSS:
-- Mesh gradients (multiple radial-gradient layers for aurora/cosmic effects)
-- Glassmorphism (backdrop-filter: blur(20px) + rgba backgrounds + subtle borders)
-- -webkit-text-stroke for hollow/outline typography (watermarks at 200-400px, opacity 0.03-0.08)
-- mix-blend-mode: overlay, screen, difference
-- clip-path for creative shapes
-- text-shadow with multiple layers (glow: 0 0 60px rgba(...), depth: 0 4px 30px rgba(...))
-- box-shadow with extreme spread for soft glows
-- CSS transforms: perspective, rotateX for subtle 3D card tilts
-- Opacity layering (watermark text behind content)
-- letter-spacing from -8px (headlines) to 12px (labels)
-- Gradient borders via border-image or pseudo-elements
+USE ALL of these — this is your paint palette:
+
+ATMOSPHERE:
+- Aurora mesh: 3 overlapping radial-gradient ellipses at different positions/sizes
+  radial-gradient(ellipse 120% 80% at 15% 50%, ${c.primary}25, transparent 60%),
+  radial-gradient(ellipse 80% 120% at 85% 30%, ${c.accent}18, transparent 55%),
+  radial-gradient(ellipse 60% 90% at 50% 80%, ${c.secondary || c.primary}12, transparent 50%)
+- Vignette: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, rgba(0,0,0,0.3) 100%)
+- Glow orbs: position:absolute divs with radial-gradient(circle, ${c.primary}20, transparent 70%) and large width/height (800-1000px)
+
+STRUCTURAL:
+- Accent stripe: 4px height, full width, linear-gradient(90deg, ${c.primary}, ${c.accent}, transparent)
+- Geometric frame corners: 2px × 60px L-shapes at corners using ::before/::after or absolute divs
+- Accent blade: 3px wide vertical line with box-shadow: 0 0 20px ${c.accent}40
+- Diagonal slash: rotated div with subtle gradient fill
+
+TYPOGRAPHY:
+- Titles: text-shadow: 0 4px 30px rgba(0,0,0,0.6), 0 0 80px ${c.accent}20, 0 0 160px ${c.primary}10
+- Stats: text-shadow: 0 0 80px ${c.accent}40, 0 8px 40px rgba(0,0,0,0.5)
+- Hollow watermarks: -webkit-text-stroke: 2px ${c.text}08; color: transparent; font-size: 300-400px; opacity: 0.03-0.06
+- Labels: letter-spacing: 6-12px; text-transform: uppercase; font-weight: 300; opacity: 0.4-0.5
+- Headlines: letter-spacing: -6 to -8px; line-height: 0.85-0.95
+
+CARDS:
+- Glassmorphism: backdrop-filter: blur(12px); background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 8px 32px rgba(0,0,0,0.2)
+- Gradient border: outer div with gradient bg, inner div with solid bg (1px gap = border)
+- 3D tilt on hover area: transform: perspective(1200px) rotateX(2deg) rotateY(-1deg)
+- Number badges inside cards: large number (48-96px) at low opacity (0.08-0.15)
+
+IMAGE TREATMENT:
+- Full-bleed: position:absolute; inset:0; object-fit:cover; filter: brightness(0.5) contrast(1.15)
+- Overlay gradient: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 65%)
+- Split with fade: linear-gradient(to right, transparent 60%, ${c.background} 100%) over the image edge
+- Image bleeds: negative margins (-40px) on image edges for editorial tension
 </css_arsenal>
 
 <rules>
-1. Each slide is a COMPLETE self-contained HTML document:
-   <!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">
-   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@100;300;400;500;700;800;900&display=swap" rel="stylesheet">
-   <style>...</style></head><body><div class="slide">...</div></body></html>
-
-2. The .slide div: width:1920px; height:1080px; position:relative; overflow:hidden; margin:0;
-3. ALL text in Hebrew. RTL direction.
-4. Use design system colors. No random colors.
-5. Images: use ONLY the provided URL. <img src="URL" style="object-fit:cover; ...">
-6. Each slide needs ONE dramatic visual choice that makes it unforgettable.
-7. VARY layouts dramatically between slides. No two slides should feel the same.
-8. Some slides = 80% whitespace (dramatic). Others = rich with overlapping cards.
-9. Think MAGAZINE EDITORIAL, not corporate PowerPoint.
+1. Each slide = COMPLETE HTML document: <!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Heebo:wght@100;300;400;500;700;800;900&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box;}</style></head><body><div class="slide" style="width:1920px;height:1080px;position:relative;overflow:hidden;font-family:'Heebo',sans-serif;direction:rtl;">...</div></body></html>
+2. ALL text in Hebrew. RTL.
+3. Design system colors ONLY. No random colors.
+4. Images: use ONLY provided URLs. Always with object-fit:cover and a gradient overlay for text readability.
+5. EVERY title gets multi-layer text-shadow (depth + glow + ambient). No flat text.
+6. EVERY slide gets at least one watermark OR floating label OR accent stripe (Layer 4).
+7. EVERY slide gets atmospheric depth — glow orbs, aurora mesh, or vignette (Layer 1).
+8. VARY layouts DRAMATICALLY. No two slides should feel similar. Mix: full-bleed images, centered typography, split layouts, card grids, massive stats, minimal closings.
+9. Some slides = 80% whitespace. Others = rich overlapping glass cards. The CONTRAST between slides makes the deck alive.
+10. Think Vogue spread, not PowerPoint. This should look like it cost $50,000 to design.
 </rules>
 
 <slides>
@@ -1346,7 +1374,7 @@ ${slidesBlock}
 </slides>
 
 Return a JSON object: { "slides": ["<!DOCTYPE html>...", "<!DOCTYPE html>...", ...] }
-Each array item is a COMPLETE HTML document string for one slide.`
+Each item is a COMPLETE, self-contained HTML document for one slide. Make them BREATHTAKING.`
 
   try {
     console.log(`[SlideDesigner][${requestId}] 🤖 Calling GPT-5.4 for HTML slides (${prompt.length} chars)...`)
