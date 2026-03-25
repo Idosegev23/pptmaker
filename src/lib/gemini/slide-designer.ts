@@ -1114,7 +1114,7 @@ export async function pipelineBatch(
       try { previousIntents = JSON.parse(previousContext.visualSummary) as SlideIntentType[] } catch { /* ok */ }
     }
 
-    const prompt = buildIntentPrompt(batchPlans, ds, foundation.images, foundation.brandName, previousIntents)
+    const prompt = buildIntentPrompt(batchPlans, ds, foundation.images, foundation.brandName, previousIntents, slideOffset, foundation.totalSlides)
     console.log(`[SlideDesigner][${requestId}] 📝 Intent prompt: ${prompt.length} chars`)
 
     let intents: SlideIntentType[]
