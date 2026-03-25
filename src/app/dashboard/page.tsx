@@ -57,27 +57,48 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Main Action - Create Proposal */}
-      <Link href="/create-proposal" className="group block mb-10">
-        <Card className="p-8 bg-gradient-to-l from-indigo-900 to-purple-800 border-0 text-white hover:from-indigo-800 hover:to-purple-700 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
-          <div className="flex items-center gap-6">
-            <div className="p-4 rounded-2xl bg-white/10">
-              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-              </svg>
+      {/* Main Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+        {/* Create Proposal */}
+        <Link href="/create-proposal" className="group block">
+          <Card className="p-6 h-full bg-gradient-to-l from-indigo-900 to-purple-800 border-0 text-white hover:from-indigo-800 hover:to-purple-700 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
+            <div className="flex items-center gap-5">
+              <div className="p-3 rounded-2xl bg-white/10 shrink-0">
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xl font-bold mb-1">מצגת קריאטיב</h3>
+                <p className="text-white/70 text-sm">
+                  העלה בריף לקוח - הסוכן יבנה הצעה מלאה עם מצגת
+                </p>
+              </div>
+              <span className="text-white/60 group-hover:text-white text-lg shrink-0">&larr;</span>
             </div>
-            <div className="flex-1">
-              <h3 className="text-2xl font-bold mb-1">צור הצעת מחיר חדשה</h3>
-              <p className="text-white/70 text-sm">
-                העלה בריף לקוח ומסמך התנעה - הסוכן יעבד, ינתח, ויבנה הצעה מלאה
-              </p>
+          </Card>
+        </Link>
+
+        {/* Price Quote */}
+        <Link href="/price-quote" className="group block">
+          <Card className="p-6 h-full bg-gradient-to-l from-emerald-900 to-teal-800 border-0 text-white hover:from-emerald-800 hover:to-teal-700 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
+            <div className="flex items-center gap-5">
+              <div className="p-3 rounded-2xl bg-white/10 shrink-0">
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xl font-bold mb-1">הצעת מחיר</h3>
+                <p className="text-white/70 text-sm">
+                  צור הצעת מחיר מקצועית עם טבלת שירותים ותמחור
+                </p>
+              </div>
+              <span className="text-white/60 group-hover:text-white text-lg shrink-0">&larr;</span>
             </div>
-            <span className="text-white/80 font-medium group-hover:text-white text-lg">
-              &larr;
-            </span>
-          </div>
-        </Card>
-      </Link>
+          </Card>
+        </Link>
+      </div>
 
       {/* Recent Proposals */}
       <Card>

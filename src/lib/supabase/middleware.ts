@@ -32,7 +32,13 @@ export async function updateSession(request: NextRequest) {
             request,
           })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            // Session-only cookies: remove maxAge/expires so they die when browser closes.
+            // Forces re-login on every new browser session → fresh Google provider_token.
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              maxAge: undefined,
+              expires: undefined,
+            })
           )
         },
       },
@@ -57,7 +63,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Protected routes
-  const protectedPaths = ['/dashboard', '/admin', '/create', '/documents', '/preview', '/create-proposal', '/wizard', '/research', '/generate', '/edit']
+  const protectedPaths = ['/dashboard', '/admin', '/create', '/documents', '/preview', '/create-proposal', '/price-quote', '/wizard', '/research', '/generate', '/edit']
   const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )
