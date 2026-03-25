@@ -396,20 +396,21 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
       const OpenAI = (await import('openai')).default
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-      const completion = await openai.chat.completions.create({
+      const response = await openai.responses.create({
         model,
-        messages: [
-          { role: 'system', content: 'אתה קריאייטיב דיירקטור בכיר. תכנן מצגות הצעת מחיר פרימיום בעברית. החזר JSON בלבד.' },
-          { role: 'user', content: prompt },
-        ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: 'slide_plan', strict: true, schema: jsonSchema },
+        instructions: 'אתה קריאייטיב דיירקטור בכיר. תכנן מצגות הצעת מחיר פרימיום בעברית. החזר JSON בלבד.',
+        input: prompt,
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'slide_plan',
+            strict: true,
+            schema: jsonSchema,
+          },
         },
-        max_completion_tokens: 16384,
       })
 
-      const rawText = completion.choices[0]?.message?.content || '{}'
+      const rawText = response.output_text || '{}'
       console.log(`[SlideDesigner][${requestId}] ✅ ${model} responded: ${rawText.length} chars`)
 
       let parsed: { slides: SlidePlan[] }
@@ -1095,21 +1096,18 @@ export async function pipelineBatch(
       const prompt = buildSemanticPrompt(batchPlans, ds, foundation.brandName)
       console.log(`[SlideDesigner][${requestId}] 📝 Semantic Design prompt: ${prompt.length} chars`)
 
-      // Call GPT-5.4 with semantic prompt
+      // Call GPT-5.4 with semantic prompt (Responses API)
       console.log(`[SlideDesigner][${requestId}] 🤖 Calling GPT-5.4 for semantic design (medium reasoning)...`)
       const OpenAI = (await import('openai')).default
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-      const completion = await openai.chat.completions.create({
+      const response = await openai.responses.create({
         model: 'gpt-5.4',
-        messages: [
-          { role: 'system', content: 'You are a world-class art director. Design each slide by assembling semantic elements. Return ONLY valid JSON. No markdown fences.' },
-          { role: 'user', content: prompt },
-        ],
-        max_completion_tokens: 16384,
-        reasoning_effort: 'medium',
-        response_format: { type: 'json_object' },
+        instructions: 'You are a world-class art director. Design each slide by assembling semantic elements. Return ONLY valid JSON. No markdown fences.',
+        input: prompt,
+        reasoning: { effort: 'medium' },
+        text: { format: { type: 'json_object' } },
       })
-      const rawText = completion.choices[0]?.message?.content || '{}'
+      const rawText = response.output_text || '{}'
       console.log(`[SlideDesigner][${requestId}] ✅ GPT-5.4 responded: ${rawText.length} chars`)
 
       semanticResult = parseSemanticResponse(rawText, batchPlans)
