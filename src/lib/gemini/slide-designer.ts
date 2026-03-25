@@ -359,33 +359,50 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
   console.log(`[SlideDesigner][${requestId}] 📝 Plan prompt length: ${prompt.length} chars`)
   console.log(`[SlideDesigner][${requestId}] 🖼️ Available images: ${imageList || 'none'}`)
 
-  // ── GPT-5.4 for Planner (fast, excellent Hebrew, no timeout on long prompts) ──
+  // ── GPT-5.4 Planner — strict JSON schema (all objects need additionalProperties: false) ──
   const jsonSchema = {
     type: 'object' as const,
+    additionalProperties: false,
+    required: ['slides'],
     properties: {
       slides: {
         type: 'array' as const,
         items: {
           type: 'object' as const,
+          additionalProperties: false,
+          required: [
+            'slideType', 'title', 'subtitle', 'bodyText', 'bulletPoints',
+            'cards', 'keyNumber', 'keyNumberLabel', 'tagline',
+            'imageDirection', 'existingImageKey', 'emotionalTone',
+          ],
           properties: {
             slideType: { type: 'string' as const },
             title: { type: 'string' as const },
-            subtitle: { type: 'string' as const },
-            bodyText: { type: 'string' as const },
-            bulletPoints: { type: 'array' as const, items: { type: 'string' as const } },
-            cards: { type: 'array' as const, items: { type: 'object' as const, properties: { title: { type: 'string' as const }, body: { type: 'string' as const } }, required: ['title', 'body'] } },
-            keyNumber: { type: 'string' as const },
-            keyNumberLabel: { type: 'string' as const },
-            tagline: { type: 'string' as const },
-            imageDirection: { type: 'string' as const },
-            existingImageKey: { type: 'string' as const },
+            subtitle: { type: ['string', 'null'] as const },
+            bodyText: { type: ['string', 'null'] as const },
+            bulletPoints: { type: ['array', 'null'] as const, items: { type: 'string' as const } },
+            cards: {
+              type: ['array', 'null'] as const,
+              items: {
+                type: 'object' as const,
+                additionalProperties: false,
+                required: ['title', 'body'],
+                properties: {
+                  title: { type: 'string' as const },
+                  body: { type: 'string' as const },
+                },
+              },
+            },
+            keyNumber: { type: ['string', 'null'] as const },
+            keyNumberLabel: { type: ['string', 'null'] as const },
+            tagline: { type: ['string', 'null'] as const },
+            imageDirection: { type: ['string', 'null'] as const },
+            existingImageKey: { type: ['string', 'null'] as const },
             emotionalTone: { type: 'string' as const },
           },
-          required: ['slideType', 'title', 'emotionalTone'],
         },
       },
     },
-    required: ['slides'],
   }
 
   const models = ['gpt-5.4', 'gpt-4o-mini']
