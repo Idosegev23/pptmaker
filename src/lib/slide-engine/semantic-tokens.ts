@@ -60,6 +60,7 @@ export type CompositionToken =
   // Split layouts
   | 'split-image-left'
   | 'split-image-right'
+  | 'split-diagonal'
   // Data / Stats
   | 'big-number-center'
   | 'big-number-side'
@@ -70,11 +71,15 @@ export type CompositionToken =
   | 'editorial-stack'
   | 'editorial-sidebar'
   | 'quote-center'
+  | 'quote-attributed'
   // Visual-heavy
   | 'full-bleed-image'
   | 'image-showcase'
+  | 'image-grid-2'
+  | 'image-grid-3'
   // Timeline / Process
   | 'timeline-horizontal'
+  | 'timeline-vertical'
   | 'process-3-step'
   // Team / People
   | 'team-grid'
@@ -85,12 +90,12 @@ export type CompositionToken =
 
 export const ALL_COMPOSITION_TOKENS: CompositionToken[] = [
   'hero-center', 'hero-bottom', 'hero-left',
-  'split-image-left', 'split-image-right',
+  'split-image-left', 'split-image-right', 'split-diagonal',
   'big-number-center', 'big-number-side',
   'data-grid-2', 'data-grid-3', 'data-grid-4',
-  'editorial-stack', 'editorial-sidebar', 'quote-center',
-  'full-bleed-image', 'image-showcase',
-  'timeline-horizontal', 'process-3-step',
+  'editorial-stack', 'editorial-sidebar', 'quote-center', 'quote-attributed',
+  'full-bleed-image', 'image-showcase', 'image-grid-2', 'image-grid-3',
+  'timeline-horizontal', 'timeline-vertical', 'process-3-step',
   'team-grid', 'profile-spotlight',
   'closing-cta', 'closing-minimal',
 ]
