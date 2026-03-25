@@ -1,9 +1,16 @@
 /**
- * Intent Prompt v6 — Dramatic Choice Philosophy meets Semantic Tokens.
+ * Intent Prompt v7 — Dramatic Choice Philosophy + Semantic Tokens.
  *
- * The creative soul from the v3 system instruction, channeled through
- * the v5 token architecture. GPT picks tokens. Layout Resolver picks pixels.
- * But now GPT thinks like an art director, not a form filler.
+ * Changes from v6:
+ * - Added explicit guidance for bulletPoints → card or body conversion
+ * - Added tagline handling (maps to subtitle or cta role)
+ * - Added keyNumber + cards combo guidance (sidebar composition)
+ * - Cleaner narrative position labels (5 stages instead of generic)
+ * - IMAGE AVAILABLE is now more prominent with suggested composition
+ * - Tightened kill list with concrete anti-patterns from real test failures
+ * - Added token budget note: prompt stays under ~3K tokens for slide data
+ * - Removed redundant rules that were stated twice in v6
+ * - Better first-batch seeding (explicit composition sequence suggestion)
  */
 
 import type { PremiumDesignSystem, SlidePlan } from '@/lib/gemini/slide-design/types'
@@ -35,136 +42,187 @@ export function buildIntentPrompt(
 
   return `<role>
 You are an award-winning Editorial Art Director — not a slide maker.
-You design magazine covers, film posters, and gallery installations that happen to be 1920x1080px.
+You design magazine covers, film posters, and gallery installations that happen to be 1920×1080px.
 You choose compositions and semantic tokens. The Layout Resolver translates your vision to pixels.
 </role>
 
 <the_one_rule>
 Every slide MUST have ONE DRAMATIC CHOICE — a single visual decision so bold it would make a junior designer nervous.
 
-Examples of dramatic choices you can express through composition + element tokens:
-- hero-center with size "hero" = title so large it dominates everything
-- quote-center with mood "dramatic" + aurora background = vast empty space with one centered thought
-- full-bleed-image with imageOpacity 0.25 = image IS the slide, text is a whisper
-- big-number-center with size "hero" on stat = the number screams
-- editorial-stack with only title + subtitle = radical minimalism, 70% empty canvas
+Examples you can express through composition + element tokens:
+- hero-center + size "hero" = title so large it dominates everything
+- quote-center + aurora = vast empty space with one centered thought
+- full-bleed-image + imageOpacity 0.25 = image IS the slide, text is a whisper
+- big-number-center + size "hero" on stat = the number screams
+- editorial-stack + only 3 elements = radical minimalism
 
 If you can describe the slide without mentioning something EXTREME, it's not dramatic enough.
-The remaining elements SERVE that one choice. They don't compete.
 </the_one_rule>
 
 <kill_list>
-These make slides look AI-generated. ABSOLUTE BAN:
-- Same composition on consecutive slides (the "broken record")
-- Every slide with mood "professional" (the "corporate zombie")
-- Every slide with background "solid-dark" (the "tunnel")
-- Title always size "headline" (the "one-size-fits-all")
-- No images used even when URLs are available (the "text wall")
-- Cards without visual hierarchy (the "spreadsheet")
-- Every element with color "on-dark" (the "flatline")
+ABSOLUTE BAN — these make slides look AI-generated:
+- Same composition on consecutive slides
+- Every slide mood "professional" or "dramatic" (vary!)
+- Every background "solid-dark" (use gradient-subtle, aurora, solid-light too)
+- Title always size "headline" (use hero for impact, title for content slides)
+- Ignoring available images (if IMAGE URL given → USE IT)
+- Cards without visual hierarchy (first card should feel different)
+- More than 6 elements on one slide (whitespace is design)
+- Same color token on every text element (vary: accent, muted, on-dark)
 </kill_list>
 
 <dramatic_approaches>
-Before choosing each slide's composition, mentally pick a DRAMATIC APPROACH:
+Before choosing each slide, mentally pick ONE approach:
 
-SPACE DRAMA — Vast emptiness. Content in a tight cluster. Use quote-center, closing-minimal, or hero-left.
-SCALE SHOCK — One element absurdly large. Use big-number-center with hero-sized stat, or hero-center with hero title.
-TENSION — Two forces competing. Use split-image-left/right, or editorial-sidebar with contrasting stat.
-RHYTHM — Cards/steps with progressive change. Use data-grid-3, process-3-step, or timeline-horizontal.
-MATERIAL — Depth and texture. Use aurora background, image-dimmed, or gradient-dramatic.
-MINIMALISM — Fewest possible elements, maximum impact. Use closing-minimal, hero-left, or quote-center.
+SPACE DRAMA → Vast emptiness. Content in a tight cluster. Compositions: quote-center, closing-minimal, hero-left.
+SCALE SHOCK → One element absurdly large. Compositions: big-number-center, hero-center with hero-sized title.
+TENSION → Two forces competing. Compositions: split-image-left/right, editorial-sidebar, split-diagonal.
+RHYTHM → Cards/steps with progressive change. Compositions: data-grid-3, process-3-step, timeline-horizontal.
+MATERIAL → Depth and texture. Backgrounds: aurora, image-dimmed, gradient-dramatic.
+MINIMALISM → Fewest possible elements. Compositions: closing-minimal, hero-left (only 2-3 elements).
 
 NEVER use the same approach on consecutive slides.
 </dramatic_approaches>
 
 <image_philosophy>
-When an image URL is available, decide its ROLE first:
-- HERO (full-bleed-image): Image gets 100% of canvas. Text overlay at bottom. imageOpacity: 0.3-0.4
-- PARTNER (split-image-left/right): Image and text share space equally. imageOpacity: 1.0
-- TEXTURE (hero-center/hero-bottom with image-dimmed bg): Image is atmosphere. imageOpacity: 0.2-0.3
+When an image URL is available:
+- HERO → full-bleed-image: image 100% of canvas, text at bottom. imageOpacity: 0.25–0.4
+- PARTNER → split-image-left/right: image and text share space. imageOpacity: 1.0
+- TEXTURE → hero-center/hero-bottom with image: image as atmosphere. imageOpacity: 0.2–0.3
+- SHOWCASE → image-showcase: large image with caption below.
 NEVER ignore an available image. If an image URL is provided, USE IT.
 </image_philosophy>
 
-## Available Compositions
-${ALL_COMPOSITION_TOKENS.map(c => `- ${c}`).join('\n')}
+<content_mapping>
+How to handle different content types from the slide plan:
+
+BULLET POINTS → Convert to card-title + card-body pairs. Use data-grid-2/3 or process-3-step.
+  Example: "נקודה 1 | נקודה 2 | נקודה 3" → 3 card pairs in a data-grid-3.
+
+TAGLINE → Map to role "subtitle" (if supporting title) or role "cta" (if closing/action-oriented).
+
+KEY NUMBER → The number goes in role="stat" with size="hero". The label goes in role="label".
+  If the slide ALSO has cards → use editorial-sidebar: stat in sidebar, cards in main area.
+
+KEY NUMBER + BODY TEXT → big-number-side: stat on one side, explanation on the other.
+
+BODY TEXT ONLY (no bullets, no cards) → editorial-stack or quote-center.
+</content_mapping>
 
 ## Available Tokens
+
+Compositions: ${ALL_COMPOSITION_TOKENS.join(', ')}
 Sizes: ${ALL_SIZE_TOKENS.join(' | ')}
 Colors: ${ALL_COLOR_TOKENS.join(' | ')}
 Backgrounds: ${ALL_BACKGROUND_TOKENS.join(' | ')}
 Moods: ${ALL_MOOD_TOKENS.join(' | ')}
 Element types: ${ALL_ELEMENT_TYPES.join(' | ')}
 Element roles: ${ALL_ELEMENT_ROLES.join(' | ')}
+Positions (optional): ${ALL_POSITION_TOKENS.join(' | ')}
 
-## Design System for "${brandName}"
-Primary: ${ds.colors.primary}
-Secondary: ${ds.colors.secondary}
-Accent: ${ds.colors.accent}
-Background: ${ds.colors.background}
-Text: ${ds.colors.text}
-Typography: heading=${ds.typography.headingSize}px, body=${ds.typography.bodySize}px
-Effects: radius=${ds.effects.borderRadius}, shadow=${ds.effects.shadowStyle}
-${ds.creativeDirection ? `
-Creative Metaphor: ${ds.creativeDirection.visualMetaphor}
-Visual Tension: ${ds.creativeDirection.visualTension}
-One Rule: ${ds.creativeDirection.oneRule}
-Color Story: ${ds.creativeDirection.colorStory || 'dark → accent burst → restrained ending'}
-Emotional Arc: ${ds.creativeDirection.emotionalArc || 'curiosity → tension → confidence → excitement → trust'}` : ''}
+## Design System — "${brandName}"
+Primary: ${ds.colors.primary} | Secondary: ${ds.colors.secondary} | Accent: ${ds.colors.accent}
+Background: ${ds.colors.background} | Text: ${ds.colors.text}
+Heading: ${ds.typography.headingSize}px | Body: ${ds.typography.bodySize}px
+${ds.creativeDirection ? `Creative Metaphor: ${ds.creativeDirection.visualMetaphor || ''}
+Visual Tension: ${ds.creativeDirection.visualTension || ''}
+Color Story: ${ds.creativeDirection.colorStory || 'dark → accent burst → restrained ending'}` : ''}
 
-## Few-Shot Examples (do NOT include _reasoning in your output)
+## Examples (do NOT include _reasoning in output)
 ${examplesJson}
 
 ## HARD RULES
 
-### Content
-1. NEVER output pixel values. Use tokens ONLY.
-2. ALL text in Hebrew. Copy EXACT text from slide data below.
-3. Every slide: exactly ONE element with weight "dominant" — the visual anchor.
-4. Maximum 6 elements per slide. Whitespace is design. Less is more.
+### Elements
+1. NEVER output pixel values. Tokens ONLY.
+2. ALL text in Hebrew. Copy EXACT text from slide data.
+3. Exactly ONE element with weight "dominant" per slide.
+4. Max 6 elements. Prefer 3–4.
 
 ### Cards
-5. Per card: { role: "card-title", color: "accent" } + { role: "card-body", color: "muted" }. Sequential pairs. Max 4 cards.
+5. Per card: { role: "card-title", color: "accent" } + { role: "card-body", color: "muted" }. Sequential pairs.
 
 ### Images
-6. If image URL provided → ALWAYS include type="image", role="decorative".
-7. full-bleed: imageOpacity 0.25-0.4. split: imageOpacity 1.0.
+6. Image URL provided → MUST include type="image", role="decorative".
+7. full-bleed: imageOpacity 0.25–0.4. split: imageOpacity 1.0.
 
-### Composition Constraints
-8. cover → hero-center, hero-bottom, or hero-left ONLY.
-9. closing → closing-cta or closing-minimal ONLY.
+### Constraints
+8. cover → hero-center / hero-bottom / hero-left ONLY.
+9. closing → closing-cta / closing-minimal ONLY.
 10. NEVER same composition on consecutive slides.
 
-### Variety (HARD — violations = rejection)
-11. Max 2 slides per mood in this batch. If batch has 6 slides, need at least 3 different moods.
-12. Max 2 slides per background in this batch.
-13. At least ONE slide must use gradient-subtle, solid-light, or aurora (break the darkness).
-14. At least ONE slide must use size "hero" on a title or stat.
-15. Use "on-dark" for dark backgrounds, "on-light" for light. Match or break intentionally.
+### Variety (violations = batch rejection)
+11. Max 2 slides with same mood per batch.
+12. Max 2 slides with same background per batch.
+13. At least 1 slide with light/subtle bg (gradient-subtle, solid-light, or aurora).
+14. At least 1 slide with size "hero" on a title or stat.
+15. EVERY composition in this batch must be UNIQUE — no duplicates within a batch.
+16. At least 2 slides must use image-driven compositions (full-bleed-image, split-image-left, split-image-right, image-showcase) when images are available.
+17. Do NOT use data-grid-3 or editorial-sidebar more than ONCE per batch. These are safe defaults — push beyond them.
 
-${previousIntents ? buildVarietyConstraints(previousIntents) : `## First batch — set the tone.
-Use at least 4 different compositions. Start dramatic (cover), build tension, then breathe.`}
+### Color Coherence
+15. Dark bg (solid-dark, gradient-dramatic, aurora, image-dimmed) → text: "on-dark", "accent", "muted".
+16. Light bg (solid-light, gradient-subtle) → text: "on-light", "primary", "secondary".
 
-## Slides to Design (${plans.length} slides, part of a ${totalSlides}-slide deck)
+${previousIntents ? buildVarietyConstraints(previousIntents) : buildFirstBatchGuidance(plans.length)}
+
+## Slides to Design (${plans.length} slides, batch for a ${totalSlides}-slide deck)
 
 ${plans.map((plan, i) => {
   const globalIndex = slideOffset + i + 1
   const imageUrl = plan.existingImageKey ? images[plan.existingImageKey] : undefined
-  const narrativePos = globalIndex <= 2 ? 'OPENING — maximum impact' : globalIndex >= totalSlides - 1 ? 'CLOSING — leave them wanting more' : globalIndex <= totalSlides * 0.35 ? 'TENSION — build the need' : globalIndex <= totalSlides * 0.65 ? 'SOLUTION — deliver the answer' : 'PROOF — show the evidence'
+  const narrativePos = getNarrativePosition(globalIndex, totalSlides)
+
   return `### Slide ${globalIndex}/${totalSlides}: ${plan.slideType} [${narrativePos}]
 Title: ${plan.title}
 ${plan.subtitle ? `Subtitle: ${plan.subtitle}` : ''}
 ${plan.bodyText ? `Body: ${plan.bodyText}` : ''}
-${plan.bulletPoints?.length ? `Points:\n${plan.bulletPoints.map(p => `  - ${p}`).join('\n')}` : ''}
+${plan.bulletPoints?.length ? `Points (→ convert to cards): ${plan.bulletPoints.join(' | ')}` : ''}
 ${plan.cards?.length ? `Cards (${plan.cards.length}):\n${plan.cards.map(c => `  - ${c.title}: ${c.body}`).join('\n')}` : ''}
-${plan.keyNumber ? `Key stat: ${plan.keyNumber} (${plan.keyNumberLabel || ''})` : ''}
-${plan.tagline ? `Tagline: ${plan.tagline}` : ''}
-${imageUrl ? `IMAGE AVAILABLE: ${imageUrl} — USE IT.` : 'No image — rely on typography + shapes.'}
+${plan.keyNumber ? `KEY STAT: ${plan.keyNumber} — "${plan.keyNumberLabel || ''}" (→ use stat+label roles)` : ''}
+${plan.tagline ? `Tagline: ${plan.tagline} (→ subtitle or cta role)` : ''}
+${imageUrl ? `🖼 IMAGE AVAILABLE: ${imageUrl} — YOU MUST USE IT. Consider: ${suggestImageComposition(plan)}` : '⊘ No image — rely on typography + shapes.'}
 Tone: ${plan.emotionalTone || 'professional'}`
 }).join('\n\n')}
 
 ## Output
 { "slides": [ { composition, background, mood, elements: [ { type, role, content, size, weight, position, color, imageUrl, imageOpacity } ] } ] }
-Do NOT include _reasoning. Only the schema fields.`
+Do NOT include _reasoning. All fields required (use null for inapplicable).`
+}
+
+// ─── Narrative Position ───────────────────────────────
+
+function getNarrativePosition(index: number, total: number): string {
+  if (index === 1) return 'OPENING — first impression, maximum impact'
+  if (index === 2) return 'HOOK — establish the tension/need'
+  if (index >= total) return 'CLOSING — leave them wanting more'
+  if (index >= total - 1) return 'CLIMAX — strongest proof point'
+  const pct = index / total
+  if (pct <= 0.35) return 'TENSION — build the need'
+  if (pct <= 0.65) return 'SOLUTION — deliver the answer'
+  return 'PROOF — show the evidence'
+}
+
+// ─── Image Composition Suggestion ─────────────────────
+
+function suggestImageComposition(plan: SlidePlan): string {
+  if (plan.slideType === 'cover') return 'full-bleed-image or hero-center with image'
+  if (plan.keyNumber) return 'split-image-left (image + stat on other side)'
+  if (plan.bulletPoints?.length) return 'split-image-right (image right, cards left)'
+  return 'full-bleed-image, split-image-left, or image-showcase'
+}
+
+// ─── First Batch Guidance ─────────────────────────────
+
+function buildFirstBatchGuidance(batchSize: number): string {
+  return `## First Batch — Set the Tone
+This is the opening batch. Establish maximum variety:
+- Start with a DRAMATIC cover (hero-center or hero-bottom with impact).
+- Follow with a contrasting composition (editorial-stack or split-image).
+- Include at least one data/stat slide if the content has numbers.
+- Use at least ${Math.min(batchSize, 4)} different compositions.
+- Alternate between dark and light backgrounds.
+Suggested mood sequence: dramatic → professional → minimal → energetic → elegant`
 }
 
 // ─── Variety Constraints ──────────────────────────────
@@ -173,6 +231,8 @@ function buildVarietyConstraints(previous: SlideIntent[]): string {
   const usedComps = previous.map(i => i.composition)
   const usedBgs = previous.map(i => i.background)
   const usedMoods = previous.map(i => i.mood)
+  const lastComp = usedComps[usedComps.length - 1]
+  const lastBg = usedBgs[usedBgs.length - 1]
 
   const compCounts: Record<string, number> = {}
   usedComps.forEach(c => { compCounts[c] = (compCounts[c] || 0) + 1 })
@@ -181,15 +241,15 @@ function buildVarietyConstraints(previous: SlideIntent[]): string {
   const unused = ALL_COMPOSITION_TOKENS.filter(c => !usedComps.includes(c))
   const suggested = unused.slice(0, 5)
 
-  return `## Variety Constraints (previous batches already used)
-Compositions used: ${JSON.stringify(usedComps)}
-Backgrounds used: ${JSON.stringify(usedBgs)}
-Moods used: ${JSON.stringify(usedMoods)}
+  return `## Variety Constraints (previous batches)
+Previously used: ${JSON.stringify(usedComps)}
+Last slide was: composition="${lastComp}", background="${lastBg}"
 
-BANNED (overused): ${overused.length ? overused.join(', ') : 'none yet'}
-MUST use at least ONE of: ${suggested.join(', ')}
-MUST use at least ONE composition NOT in any previous batch.
-MUST NOT repeat background on consecutive slides.
+BANNED (used 2+ times): ${overused.length ? overused.join(', ') : 'none yet'}
+FIRST SLIDE of this batch MUST differ from "${lastComp}" (last slide of previous batch).
+FIRST SLIDE background MUST differ from "${lastBg}".
+
+MUST use at least 1 of these UNUSED compositions: ${suggested.join(', ')}
 Break the pattern. Surprise the viewer.`
 }
 

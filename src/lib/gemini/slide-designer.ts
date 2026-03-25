@@ -1164,7 +1164,31 @@ export async function pipelineBatch(
     console.log(`[SlideDesigner][${requestId}] 🏗️ Resolving layout...`)
     const slides: Slide[] = intents.map((intent, i) => {
       const plan = batchPlans[i] || batchPlans[0]
-      return resolveLayout(intent, plan, ds, slideOffset + i)
+      const slide = resolveLayout(intent, plan, ds, slideOffset + i)
+
+      // ── Auto-inject missing images ──
+      // If plan has an image but GPT didn't include it (or resolver didn't render it),
+      // force-inject as a background image with dark overlay
+      const planImageUrl = plan.existingImageKey ? foundation.images[plan.existingImageKey] : undefined
+      const hasImage = slide.elements.some(e => e.type === 'image' && (e as ImageElement).src)
+      if (planImageUrl && !hasImage) {
+        console.log(`[SlideDesigner][${requestId}]   📸 Auto-injecting image for ${plan.slideType}`)
+        const imgEl: ImageElement = {
+          id: `auto-img-${slideOffset + i}`, type: 'image',
+          x: 0, y: 0, width: 1920, height: 1080, zIndex: 0,
+          src: planImageUrl, alt: '', objectFit: 'cover' as const,
+          opacity: 0.25, filter: 'brightness(0.5) contrast(1.15)',
+        }
+        const overlayEl: ShapeElement = {
+          id: `auto-overlay-${slideOffset + i}`, type: 'shape',
+          x: 0, y: 0, width: 1920, height: 1080, zIndex: 1,
+          shapeType: 'background' as const,
+          fill: `linear-gradient(180deg, ${ds.colors.background}CC 0%, ${ds.colors.background}40 40%, ${ds.colors.background}CC 100%)`,
+        }
+        // Insert at beginning (behind everything)
+        slide.elements = [imgEl, overlayEl, ...slide.elements]
+      }
+      return slide
     })
 
     // ── Lite validation (bounds + contrast + overlap only) ──
