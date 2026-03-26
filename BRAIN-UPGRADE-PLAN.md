@@ -4,8 +4,8 @@
 
 | # | בעיה | חומרה | סטטוס | הערות |
 |---|------|-------|-------|-------|
-| 1 | Proposal Agent — פרומפט מנופח + מודל לא עקבי | 🔴 קריטי | 🔄 חלקי | מודל שונה ל-GPT-5.4, פרומפט עדיין צריך שכתוב |
-| 2 | משפיענים מומצאים — אפס ולידציה | 🔴 קריטי | ⬜ לא התחיל | |
+| 1 | Proposal Agent — פרומפט מנופח + מודל לא עקבי | 🔴 קריטי | ✅ הושלם | GPT-5.4 + prompt 150→30 lines |
+| 2 | משפיענים מומצאים — אפס ולידציה | 🔴 קריטי | ✅ הושלם | Google Search verification per name |
 | 3 | מחקר מותג ב-LOW thinking + אין cross-validation | 🔴 קריטי | ✅ הושלם | Flash+HIGH, Pro fallback, cross-validation=שלב 2 |
 | 4 | Wizard לא מבדיל עובדות מספקולציות | 🟡 גבוה | 🔄 חלקי | warnings banner הוסף, עדיין חסר per-field indicator |
 | 5 | תקציב 0 עובר בשקט | 🟡 גבוה | ✅ הושלם | null instead of 0, planner warned, display fixed |
