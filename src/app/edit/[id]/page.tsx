@@ -18,6 +18,8 @@ import AlignmentToolbar from '@/components/presentation/AlignmentToolbar'
 import LayerPanel from '@/components/presentation/LayerPanel'
 import TextFormatBar from '@/components/presentation/TextFormatBar'
 import GoogleDriveSaveButton from '@/components/google-drive-save-button'
+import HtmlSlideViewer from '@/components/presentation/HtmlSlideViewer'
+import HtmlSlideEditor from '@/components/presentation/HtmlSlideEditor'
 import FeedbackDialog from '@/components/feedback-dialog'
 import PresentationMode from '@/components/presentation/PresentationMode'
 import ShareDialog from '@/components/share/ShareDialog'
@@ -682,22 +684,16 @@ export default function PresentationEditorPage() {
 
   // ─── HTML-Native presentation mode (v6) ─────────────
   if (htmlSlides && htmlSlides.length > 0) {
-    const HtmlSlideViewer = require('@/components/presentation/HtmlSlideViewer').default
-    const HtmlSlideEditor = require('@/components/presentation/HtmlSlideEditor').default
-
     const handleHtmlSlideUpdate = (newHtml: string) => {
-      setHtmlSlides(prev => {
-        if (!prev) return prev
-        const updated = [...prev]
-        updated[activeHtmlSlide] = newHtml
-        return updated
-      })
-      // Auto-save to Supabase
+      const newSlides = [...(htmlSlides || [])]
+      newSlides[activeHtmlSlide] = newHtml
+      setHtmlSlides(newSlides)
+      // Save with fresh data (not stale closure)
       fetch(`/api/documents/${documentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ _htmlPresentation: { ...documentData?._htmlPresentation as Record<string, unknown>, htmlSlides: htmlSlides } }),
-      }).catch(() => {}) // silent save
+        body: JSON.stringify({ _htmlPresentation: { ...(documentData?._htmlPresentation as Record<string, unknown> || {}), htmlSlides: newSlides } }),
+      }).catch(() => {})
     }
 
     return (

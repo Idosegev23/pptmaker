@@ -1413,16 +1413,22 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
     const parsed = JSON.parse(rawText) as { slides: string[] }
     const htmlSlides = parsed.slides || []
 
-    console.log(`[SlideDesigner][${requestId}] ✅ Got ${htmlSlides.length} HTML slides:`)
-    for (let i = 0; i < htmlSlides.length; i++) {
+    // Validate count — align htmlSlides with batchPlans
+    const actualCount = Math.min(htmlSlides.length, batchPlans.length)
+    if (htmlSlides.length !== batchPlans.length) {
+      console.warn(`[SlideDesigner][${requestId}] ⚠️ Count mismatch: GPT returned ${htmlSlides.length} slides, expected ${batchPlans.length}`)
+    }
+
+    console.log(`[SlideDesigner][${requestId}] ✅ Got ${actualCount} HTML slides:`)
+    for (let i = 0; i < actualCount; i++) {
       const plan = batchPlans[i]
       console.log(`[SlideDesigner][${requestId}]   🎨 ${(plan?.slideType || '?').padEnd(18)} | ${htmlSlides[i].length} chars`)
     }
 
     return {
-      htmlSlides,
-      slideTypes: batchPlans.map(p => p.slideType),
-      slideIndex: slideOffset + htmlSlides.length,
+      htmlSlides: htmlSlides.slice(0, actualCount),
+      slideTypes: batchPlans.slice(0, actualCount).map(p => p.slideType),
+      slideIndex: slideOffset + actualCount,
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)

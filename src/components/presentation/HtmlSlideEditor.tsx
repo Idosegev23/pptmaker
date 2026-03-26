@@ -131,8 +131,12 @@ export default function HtmlSlideEditor({
   const W = 1920
   const H = 1080
 
-  // Inject editor script into HTML
-  const editableHtml = html.replace('</body>', EDITOR_SCRIPT + '</body>')
+  // Inject editor script into HTML (robust: handle missing </body>)
+  const editableHtml = html.includes('</body>')
+    ? html.replace('</body>', EDITOR_SCRIPT + '</body>')
+    : html.includes('</html>')
+    ? html.replace('</html>', EDITOR_SCRIPT + '</html>')
+    : html + EDITOR_SCRIPT
 
   // Listen for messages from iframe
   useEffect(() => {
@@ -179,6 +183,7 @@ export default function HtmlSlideEditor({
         <iframe
           ref={iframeRef}
           srcDoc={editableHtml}
+          sandbox="allow-same-origin allow-scripts"
           onLoad={handleLoad}
           style={{
             position: 'absolute',
