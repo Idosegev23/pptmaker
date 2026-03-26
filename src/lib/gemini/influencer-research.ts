@@ -220,8 +220,42 @@ ${criticalRules}
       const text = await callGemini(model)
       console.log(`[Influencer Research] Response received (${model}), parsing JSON...`)
       const strategy = parseGeminiJson<InfluencerStrategy>(text)
-      console.log(`[Influencer Research] Complete. Found ${strategy.recommendations?.length || 0} real recommendations.`)
+      console.log(`[Influencer Research] Complete. Found ${strategy.recommendations?.length || 0} recommendations.`)
       if (attempt > 0) console.log(`[Influencer Research] ✅ Succeeded with fallback model (${model})`)
+
+      // ── Verify influencer names via Google Search ──
+      if (strategy.recommendations?.length) {
+        console.log(`[Influencer Research] 🔍 Verifying ${strategy.recommendations.length} influencer names...`)
+        for (const rec of strategy.recommendations) {
+          if (!rec.name) continue
+          const recAny = rec as unknown as Record<string, unknown>
+          try {
+            const verifyResult = await callAI({
+              model: 'gemini-3-flash-preview',
+              prompt: `חפש את המשפיענ/ית "${rec.name}" ${rec.handle ? `(@${rec.handle})` : ''} בישראל. האם זה אדם אמיתי עם נוכחות ברשתות חברתיות? החזר JSON: { "verified": true/false, "confidence": "high/medium/low", "notes": "הערה קצרה" }`,
+              geminiConfig: { responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: 'LOW' as any }, maxOutputTokens: 500 },
+              thinkingLevel: 'LOW',
+              maxOutputTokens: 500,
+              useGoogleSearch: true,
+              callerId: `verify-influencer-${rec.name}`,
+            })
+            const vResult = parseGeminiJson<{ verified?: boolean; confidence?: string; notes?: string }>(verifyResult.text || '{}')
+            if (vResult) {
+              recAny._verified = vResult.verified ?? false
+              recAny._verifyConfidence = vResult.confidence || 'low'
+              if (vResult.notes) recAny._verifyNotes = vResult.notes
+              console.log(`[Influencer Research]   ${vResult.verified ? '✅' : '❌'} ${rec.name} — ${vResult.confidence} confidence${vResult.notes ? ` (${vResult.notes})` : ''}`)
+            }
+          } catch (verifyErr) {
+            console.warn(`[Influencer Research]   ⚠️ Could not verify "${rec.name}": ${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)}`)
+            recAny._verified = false
+            recAny._verifyConfidence = 'unverified'
+          }
+        }
+        const verifiedCount = strategy.recommendations.filter(r => (r as unknown as Record<string, unknown>)._verified).length
+        console.log(`[Influencer Research] 🔍 Verification complete: ${verifiedCount}/${strategy.recommendations.length} verified`)
+      }
+
       return strategy
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
