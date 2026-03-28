@@ -734,6 +734,34 @@ export default function PresentationEditorPage() {
               <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">HTML-Native ✨</span>
             </div>
             <div className="flex items-center gap-3">
+              {/* Regenerate current slide */}
+              <button
+                onClick={async () => {
+                  if (!htmlSlides) return
+                  setIsRegenerating(true)
+                  try {
+                    const res = await fetch('/api/regenerate-slide', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ documentId, slideIndex: activeHtmlSlide }),
+                    })
+                    if (res.ok) {
+                      const data = await res.json()
+                      if (data.html) {
+                        const updated = [...htmlSlides]
+                        updated[activeHtmlSlide] = data.html
+                        setHtmlSlides(updated)
+                      }
+                    }
+                  } finally { setIsRegenerating(false) }
+                }}
+                disabled={isRegenerating}
+                className="px-4 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg text-sm font-medium hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+              >
+                {isRegenerating ? 'מעצב מחדש...' : '🔄 עצב מחדש'}
+              </button>
+
+              {/* Download PDF */}
               <button
                 onClick={async () => {
                   setIsGeneratingPdf(true)
