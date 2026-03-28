@@ -761,6 +761,14 @@ export default function PresentationEditorPage() {
                 {isRegenerating ? 'מעצב מחדש...' : '🔄 עצב מחדש'}
               </button>
 
+              {/* Share button */}
+              <button
+                onClick={() => setShowShareDialog(true)}
+                className="px-4 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-lg text-sm font-medium hover:bg-blue-500/20 transition-colors"
+              >
+                🔗 שתף
+              </button>
+
               {/* Download PDF */}
               <button
                 onClick={async () => {
@@ -813,6 +821,13 @@ export default function PresentationEditorPage() {
             >←</button>
           </div>
         </div>
+
+        {/* Share dialog */}
+        <ShareDialog
+          isOpen={showShareDialog}
+          onClose={() => setShowShareDialog(false)}
+          documentId={documentId}
+        />
       </div>
     )
   }

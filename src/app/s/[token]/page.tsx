@@ -33,9 +33,13 @@ export default async function SharePage({ params }: SharePageProps) {
   if (!doc) notFound()
 
   const docData = doc.data as Record<string, unknown>
+  const htmlPres = docData._htmlPresentation as { htmlSlides?: string[]; title?: string; brandName?: string } | undefined
   const presentation = docData._presentation as Presentation | undefined
 
-  if (!presentation || !presentation.slides?.length) notFound()
+  // HTML-native takes priority
+  const isHtmlNative = !!(htmlPres?.htmlSlides?.length)
+
+  if (!isHtmlNative && (!presentation || !presentation.slides?.length)) notFound()
 
   // Increment view count
   supabase
@@ -47,8 +51,28 @@ export default async function SharePage({ params }: SharePageProps) {
     .eq('id', share.id)
     .then(() => {})
 
-  const brandName = (docData.brandName as string) || doc.title || presentation.title || ''
+  const brandName = (docData.brandName as string) || doc.title || (isHtmlNative ? htmlPres?.brandName : presentation?.title) || ''
   const viewerConfig = share.viewer_config as unknown as ViewerConfig
+
+  // HTML-native share — render iframes directly
+  if (isHtmlNative && htmlPres?.htmlSlides) {
+    return (
+      <html lang="he" dir="rtl">
+        <head>
+          <meta charSet="UTF-8" />
+          <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+        </head>
+        <body style={{ margin: 0, background: '#0a0a0f', fontFamily: "'Heebo', sans-serif" }}>
+          {htmlPres.htmlSlides.map((slideHtml, i) => (
+            <div key={i} dangerouslySetInnerHTML={{ __html: slideHtml }} style={{ marginBottom: 2 }} />
+          ))}
+        </body>
+      </html>
+    )
+  }
+
+  // AST share — use existing SharedPresentationViewer
+  if (!presentation) notFound()
 
   const publicData: PublicPresentationData = {
     presentation: {
