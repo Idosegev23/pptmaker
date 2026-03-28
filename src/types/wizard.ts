@@ -204,6 +204,19 @@ export interface AiVersionEntry {
   source: 'ai' | 'research' | 'manual'
 }
 
+// ─── Field Confidence ────────────────────────────────
+export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'derived'
+export type ConfidenceSource = 'extracted' | 'ai-generated' | 'research' | 'manual' | 'calculated'
+
+export interface FieldConfidenceEntry {
+  level: ConfidenceLevel
+  source: ConfidenceSource
+  note?: string // e.g. "חולץ מהבריף" or "נוצר ע״י AI"
+}
+
+/** Per-step, per-field confidence map. Key format: "stepId.fieldName" or nested "stepId.fieldName.subField" */
+export type FieldConfidenceMap = Record<string, FieldConfidenceEntry>
+
 // Full wizard state (persisted to document.data._wizardState)
 export interface WizardState {
   documentId: string | null
@@ -214,6 +227,8 @@ export interface WizardState {
   isDirty: boolean
   lastSavedAt: string | null
   aiVersionHistory?: Record<string, { versions: AiVersionEntry[]; currentIndex: number }>
+  /** Per-field confidence metadata — tracks source and reliability of each value */
+  fieldConfidence?: FieldConfidenceMap
 }
 
 // Wizard reducer action types

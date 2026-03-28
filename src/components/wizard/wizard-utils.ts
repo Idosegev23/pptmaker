@@ -1,4 +1,4 @@
-import type { WizardStepDataMap, WizardStepId } from '@/types/wizard'
+import type { WizardStepDataMap, WizardStepId, FieldConfidenceMap } from '@/types/wizard'
 import type { ExtractedBriefData } from '@/types/brief'
 
 /**
@@ -113,6 +113,93 @@ export function extractedDataToStepData(
   }
 
   return stepData
+}
+
+/**
+ * Build field confidence map based on data sources.
+ * Called after extractedDataToStepData + enrichStepData to track what came from where.
+ */
+export function buildFieldConfidence(
+  extractedData: Partial<WizardStepDataMap>,
+  aiGeneratedData: Partial<WizardStepDataMap>,
+  researchData?: { brandResearch?: unknown; influencerStrategy?: unknown },
+): FieldConfidenceMap {
+  const map: FieldConfidenceMap = {}
+
+  const tag = (step: string, field: string, level: 'high' | 'medium' | 'low', source: 'extracted' | 'ai-generated' | 'research' | 'manual', note?: string) => {
+    map[`${step}.${field}`] = { level, source, note }
+  }
+
+  // Brief step — extracted fields are HIGH
+  if (extractedData.brief) {
+    if (extractedData.brief.brandName) tag('brief', 'brandName', 'high', 'extracted', 'חולץ מהבריף')
+    if (extractedData.brief.brandBrief) tag('brief', 'brandBrief', 'high', 'extracted', 'חולץ מהבריף')
+    if (extractedData.brief.brandObjective) tag('brief', 'brandObjective', 'high', 'extracted', 'חולץ מהבריף')
+    if (extractedData.brief.successMetrics?.length) tag('brief', 'successMetrics', 'high', 'extracted', 'חולץ מהבריף')
+    if (extractedData.brief.clientSpecificRequests?.length) tag('brief', 'clientSpecificRequests', 'high', 'extracted', 'חולץ מהבריף')
+  }
+
+  // Goals — extracted titles are HIGH, descriptions are AI-generated
+  if (extractedData.goals?.goals?.length) {
+    tag('goals', 'goals', 'high', 'extracted', 'מטרות מהבריף')
+  }
+  if (aiGeneratedData.goals?.goals?.some(g => g.description)) {
+    tag('goals', 'goals.descriptions', 'medium', 'ai-generated', 'תיאורים נוצרו ע״י AI')
+  }
+
+  // Target audience — extracted is HIGH
+  if (extractedData.target_audience) {
+    if (extractedData.target_audience.targetGender) tag('target_audience', 'targetGender', 'high', 'extracted')
+    if (extractedData.target_audience.targetAgeRange) tag('target_audience', 'targetAgeRange', 'high', 'extracted')
+  }
+  // Research-enriched audience data
+  if (researchData?.brandResearch) {
+    tag('target_audience', 'targetDescription', 'medium', 'research', 'הועשר ממחקר מותג')
+    tag('target_audience', 'targetBehavior', 'medium', 'research', 'הועשר ממחקר מותג')
+    tag('target_audience', 'targetInsights', 'medium', 'research', 'תובנות ממחקר')
+  }
+
+  // Key insight — always AI-generated
+  tag('key_insight', 'keyInsight', 'medium', 'ai-generated', 'נוצר ע״י AI — מומלץ לבדוק')
+  tag('key_insight', 'insightSource', 'medium', 'ai-generated')
+  tag('key_insight', 'insightData', 'medium', researchData?.brandResearch ? 'research' : 'ai-generated')
+
+  // Strategy — AI-generated
+  tag('strategy', 'strategyHeadline', 'medium', 'ai-generated', 'נוצר ע״י AI')
+  tag('strategy', 'strategyDescription', 'medium', 'ai-generated')
+  tag('strategy', 'strategyPillars', 'medium', 'ai-generated')
+
+  // Creative — AI-generated
+  tag('creative', 'activityTitle', 'medium', 'ai-generated', 'נוצר ע״י AI')
+  tag('creative', 'activityConcept', 'medium', 'ai-generated')
+  tag('creative', 'activityDescription', 'medium', 'ai-generated')
+  tag('creative', 'activityApproach', 'medium', 'ai-generated')
+
+  // Deliverables — extracted is HIGH
+  if (extractedData.deliverables?.deliverables?.length) {
+    tag('deliverables', 'deliverables', 'high', 'extracted', 'חולץ מהבריף')
+  } else if (aiGeneratedData.deliverables?.deliverables?.length) {
+    tag('deliverables', 'deliverables', 'medium', 'ai-generated')
+  }
+
+  // Media targets — budget from brief is HIGH, calculated fields are MEDIUM
+  if (extractedData.media_targets?.budget) {
+    tag('media_targets', 'budget', 'high', 'extracted', 'תקציב מהבריף')
+  } else {
+    tag('media_targets', 'budget', 'low', 'manual', 'לא זוהה — יש להזין')
+  }
+  tag('media_targets', 'potentialReach', 'medium', 'ai-generated')
+  tag('media_targets', 'cpe', 'medium', 'ai-generated')
+
+  // Influencers — research-enriched
+  if (researchData?.influencerStrategy) {
+    tag('influencers', 'influencers', 'medium', 'research', 'ממחקר משפיענים')
+    tag('influencers', 'influencerStrategy', 'medium', 'research')
+  } else {
+    tag('influencers', 'influencers', 'low', 'manual', 'לא נמצא מחקר')
+  }
+
+  return map
 }
 
 /**

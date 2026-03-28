@@ -25,6 +25,7 @@ import {
 import {
   extractedDataToStepData,
   enrichStepData,
+  buildFieldConfidence,
   wizardDataToProposalData,
   validateStep,
 } from './wizard-utils'
@@ -63,6 +64,10 @@ export interface StepProps {
   briefContext?: string
   rawBriefText?: string
   rawKickoffText?: string
+  /** Per-field confidence metadata — for showing source/reliability indicators */
+  fieldConfidence?: import('@/types/wizard').FieldConfidenceMap
+  /** Current step ID — for looking up confidence by "stepId.fieldName" */
+  currentStepId?: string
 }
 
 // ---------- Step component map ----------
@@ -147,6 +152,16 @@ export default function ProposalWizard({
 
       base.stepData = stepData
       base.extractedData = stepData
+
+      // Build field confidence map
+      const extractedStepData = initialData._extractedData
+        ? extractedDataToStepData(initialData._extractedData as Parameters<typeof extractedDataToStepData>[0])
+        : {}
+      base.fieldConfidence = buildFieldConfidence(
+        extractedStepData,
+        stepData,
+        { brandResearch: initialData._brandResearch, influencerStrategy: initialData._influencerStrategy },
+      )
     } else if (initialData._extractedData) {
       // Legacy flow: old extraction format
       const extracted = initialData._extractedData as Record<string, unknown>
@@ -155,6 +170,7 @@ export default function ProposalWizard({
       )
       base.stepData = stepData
       base.extractedData = stepData
+      base.fieldConfidence = buildFieldConfidence(stepData, {})
     }
 
     // Set first step as active
@@ -599,6 +615,8 @@ export default function ProposalWizard({
                 extractedData={currentExtractedData}
                 onChange={handleStepDataChange}
                 errors={stepErrors}
+                fieldConfidence={state.fieldConfidence}
+                currentStepId={state.currentStep}
                 briefContext={`${state.stepData.brief?.brandName || ''}: ${state.stepData.brief?.brandBrief || ''}`}
                 rawBriefText={rawBriefText}
                 rawKickoffText={rawKickoffText}
