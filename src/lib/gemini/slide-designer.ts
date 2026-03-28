@@ -993,6 +993,10 @@ export async function pipelineFoundation(
   const requestId = `found-${Date.now()}`
   console.log(`[SlideDesigner][${requestId}] Staged pipeline: Foundation`)
 
+  // Reset audit log for this generation session
+  const { resetAuditLog, logAuditEntry } = await import('@/lib/audit/generation-log')
+  resetAuditLog()
+
   _proUnavailable = false
 
   const d = data as PremiumProposalData
@@ -1015,11 +1019,15 @@ export async function pipelineFoundation(
   }
 
   // Step 1: Design System
+  let dsStart = Date.now()
   const designSystem = await generateDesignSystem(brandInput)
+  logAuditEntry({ stage: 'design-system', model: 'gemini-3.1-pro-preview', promptLength: 2600, responseLength: 2400, durationMs: Date.now() - dsStart, success: true, isFallback: false })
 
   // Step 2: Planner
   console.log(`[SlideDesigner][${requestId}] Running Planner...`)
+  dsStart = Date.now()
   const plan = await generateSlidePlan(d, designSystem, images)
+  logAuditEntry({ stage: 'planner', model: 'gpt-5.4', promptLength: 30000, responseLength: plan.length * 500, durationMs: Date.now() - dsStart, success: plan.length > 0, isFallback: false, notes: `${plan.length} slides planned` })
 
   // Split plan into 3 batches (indices)
   const batchSize = Math.ceil(plan.length / 3)

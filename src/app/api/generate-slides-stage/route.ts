@@ -226,6 +226,14 @@ export async function POST(request: NextRequest) {
           } catch { /* non-critical */ }
         }
 
+        // Get audit log for this generation session
+        let auditLog = null
+        try {
+          const { getAuditSummary } = await import('@/lib/audit/generation-log')
+          auditLog = getAuditSummary()
+          console.log(`[${requestId}] 📋 Audit: ${auditLog.entries.length} AI calls, ${auditLog.totalDurationMs}ms total, ${auditLog.fallbackCount} fallbacks, ${auditLog.errorCount} errors`)
+        } catch { /* audit non-critical */ }
+
         await supabase
           .from('documents')
           .update({
@@ -233,6 +241,7 @@ export async function POST(request: NextRequest) {
               ...cleanData,
               _htmlPresentation: htmlPresentation,
               ...(astPresentation ? { _presentation: astPresentation } : {}),
+              ...(auditLog ? { _auditLog: auditLog } : {}),
             },
           })
           .eq('id', documentId)
