@@ -255,6 +255,17 @@ export async function POST(request: NextRequest) {
           console.log(`[${requestId}] 📋 Audit: ${auditLog.entries.length} AI calls, ${auditLog.totalDurationMs}ms total, ${auditLog.fallbackCount} fallbacks, ${auditLog.errorCount} errors`)
         } catch { /* audit non-critical */ }
 
+        // Version history
+        let versions = (cleanData._versions || []) as import('@/lib/version-history').VersionEntry[]
+        try {
+          const { addVersion, createHtmlVersion } = await import('@/lib/version-history')
+          versions = addVersion(versions, createHtmlVersion(
+            htmlPresentation.htmlSlides.length,
+            htmlPresentation.metadata.qualityScore,
+          ))
+          console.log(`[${requestId}] 📚 Version saved (${versions.length} total)`)
+        } catch { /* version non-critical */ }
+
         await supabase
           .from('documents')
           .update({
@@ -263,6 +274,7 @@ export async function POST(request: NextRequest) {
               _htmlPresentation: htmlPresentation,
               ...(astPresentation ? { _presentation: astPresentation } : {}),
               ...(auditLog ? { _auditLog: auditLog } : {}),
+              _versions: versions,
             },
           })
           .eq('id', documentId)
