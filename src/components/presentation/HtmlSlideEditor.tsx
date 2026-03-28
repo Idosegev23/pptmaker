@@ -183,7 +183,7 @@ export default function HtmlSlideEditor({
         <iframe
           ref={iframeRef}
           srcDoc={editableHtml}
-          sandbox="allow-same-origin allow-scripts"
+          sandbox="allow-scripts"
           onLoad={handleLoad}
           style={{
             position: 'absolute',

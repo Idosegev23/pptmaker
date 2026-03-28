@@ -1421,11 +1421,16 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
     const parsed = JSON.parse(rawText) as { slides: string[] }
     const htmlSlides = parsed.slides || []
 
-    // Validate count — align htmlSlides with batchPlans
-    const actualCount = Math.min(htmlSlides.length, batchPlans.length)
+    // Validate count — must match exactly or throw for fallback
     if (htmlSlides.length !== batchPlans.length) {
-      console.warn(`[SlideDesigner][${requestId}] ⚠️ Count mismatch: GPT returned ${htmlSlides.length} slides, expected ${batchPlans.length}`)
+      console.error(`[SlideDesigner][${requestId}] ❌ Count mismatch: GPT returned ${htmlSlides.length} slides, expected ${batchPlans.length}`)
+      if (htmlSlides.length === 0) throw new Error(`GPT returned 0 slides`)
+      // If GPT returned MORE, truncate. If LESS, throw to trigger fallback.
+      if (htmlSlides.length < batchPlans.length) {
+        throw new Error(`GPT returned only ${htmlSlides.length}/${batchPlans.length} slides`)
+      }
     }
+    const actualCount = Math.min(htmlSlides.length, batchPlans.length)
 
     console.log(`[SlideDesigner][${requestId}] ✅ Got ${actualCount} HTML slides:`)
     for (let i = 0; i < actualCount; i++) {
@@ -1487,10 +1492,19 @@ export async function pipelineFinalizeHtml(
       logos.push(`<img src="${clientLogoUrl}" alt="Brand" style="position:absolute;top:30px;right:40px;height:50px;opacity:0.85;z-index:999;" />`)
     }
     if (logos.length > 0) {
-      // Insert logos inside the .slide div (before closing </div>)
-      const slideCloseIdx = html.lastIndexOf('</div>')
-      if (slideCloseIdx > 0) {
-        return html.slice(0, slideCloseIdx) + logos.join('\n') + html.slice(slideCloseIdx)
+      // Insert logos inside the .slide div — find it specifically, not just any </div>
+      const slideIdx = html.indexOf('class="slide"')
+      if (slideIdx > 0) {
+        // Find the </body> tag and insert before it (logos are position:absolute, so they work anywhere in slide)
+        const bodyCloseIdx = html.indexOf('</body>')
+        if (bodyCloseIdx > 0) {
+          return html.slice(0, bodyCloseIdx) + logos.join('\n') + html.slice(bodyCloseIdx)
+        }
+      }
+      // Fallback: insert before </html>
+      const htmlCloseIdx = html.lastIndexOf('</html>')
+      if (htmlCloseIdx > 0) {
+        return html.slice(0, htmlCloseIdx) + logos.join('\n') + html.slice(htmlCloseIdx)
       }
     }
     return html

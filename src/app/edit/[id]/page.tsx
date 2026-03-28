@@ -702,7 +702,17 @@ export default function PresentationEditorPage() {
         <div className="w-48 bg-[#111118] border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-2">
           <div className="text-xs text-gray-500 font-medium px-1 mb-2">{brandName}</div>
           {htmlSlides.map((slideHtml, i) => (
-            <div key={i} onClick={() => setActiveHtmlSlide(i)} className="cursor-pointer">
+            <div
+              key={i}
+              data-slide-thumb={i}
+              onClick={() => {
+                setActiveHtmlSlide(i)
+                setTimeout(() => {
+                  document.querySelector(`[data-slide-thumb="${i}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                }, 0)
+              }}
+              className={`cursor-pointer rounded-lg transition-all ${activeHtmlSlide === i ? 'ring-2 ring-blue-500' : 'hover:ring-1 hover:ring-gray-600'}`}
+            >
               <HtmlSlideViewer
                 html={slideHtml}
                 scale={0.09}
@@ -758,11 +768,21 @@ export default function PresentationEditorPage() {
             />
           </div>
 
-          {/* Slide counter */}
-          <div className="h-10 bg-[#111118] border-t border-gray-800 flex items-center justify-center">
+          {/* Slide counter + navigation */}
+          <div className="h-10 bg-[#111118] border-t border-gray-800 flex items-center justify-center gap-4">
+            <button
+              onClick={() => setActiveHtmlSlide(Math.max(0, activeHtmlSlide - 1))}
+              disabled={activeHtmlSlide === 0}
+              className="text-gray-400 hover:text-white disabled:opacity-30 text-sm px-2"
+            >→</button>
             <span className="text-xs text-gray-500">
               שקף {activeHtmlSlide + 1} מתוך {htmlSlides.length}
             </span>
+            <button
+              onClick={() => setActiveHtmlSlide(Math.min(htmlSlides.length - 1, activeHtmlSlide + 1))}
+              disabled={activeHtmlSlide === htmlSlides.length - 1}
+              className="text-gray-400 hover:text-white disabled:opacity-30 text-sm px-2"
+            >←</button>
           </div>
         </div>
       </div>

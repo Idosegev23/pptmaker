@@ -156,16 +156,19 @@ export async function POST(request: NextRequest) {
 
       // HTML-Native pipeline (v6)
       const htmlResult = await pipelineBatchHtml(pipeline.foundation, idx)
-      const updatedHtmlResults = [...(pipeline.htmlBatchResults || []), htmlResult]
+
+      // Index-based storage (not append) — maintains correct batch order
+      const updatedHtmlResults = [...(pipeline.htmlBatchResults || [])]
+      updatedHtmlResults[idx] = htmlResult
 
       // Also run AST pipeline as fallback (for editor compatibility)
-      let astResult: BatchResult | null = null
+      const updatedBatchResults = [...(pipeline.batchResults || [])]
       try {
-        astResult = await pipelineBatch(pipeline.foundation, idx, null)
+        const astResult = await pipelineBatch(pipeline.foundation, idx, null)
+        updatedBatchResults[idx] = astResult
       } catch (e) {
         console.warn(`[${requestId}] AST fallback failed (non-critical):`, e)
       }
-      const updatedBatchResults = astResult ? [...(pipeline.batchResults || []), astResult] : (pipeline.batchResults || [])
 
       await supabase
         .from('documents')
@@ -213,8 +216,9 @@ export async function POST(request: NextRequest) {
 
       // HTML-Native finalize
       if (pipeline.htmlBatchResults?.length) {
-        const allHtmlSlides = pipeline.htmlBatchResults.flatMap(r => r.htmlSlides)
-        const allSlideTypes = pipeline.htmlBatchResults.flatMap(r => r.slideTypes)
+        const validHtmlBatches = pipeline.htmlBatchResults.filter(Boolean) // Skip null/undefined from out-of-order batches
+        const allHtmlSlides = validHtmlBatches.flatMap(r => r.htmlSlides)
+        const allSlideTypes = validHtmlBatches.flatMap(r => r.slideTypes)
         const htmlPresentation = await pipelineFinalizeHtml(pipeline.foundation, allHtmlSlides, allSlideTypes)
 
         // Also finalize AST if available (for editor)
