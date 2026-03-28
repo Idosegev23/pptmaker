@@ -33,7 +33,8 @@ export interface ImageStrategy {
 export async function analyzeAndPlanImages(
   brandResearch: BrandResearch,
   brandColors: BrandColors,
-  proposalContent?: Partial<ProposalContent>
+  proposalContent?: Partial<ProposalContent>,
+  slideDesignHints?: { visualMetaphor?: string; visualTension?: string; imageTreatment?: string },
 ): Promise<ImageStrategy> {
   console.log(`[Image Strategist] Analyzing brand: ${brandResearch.brandName}`)
 
@@ -54,7 +55,13 @@ export async function analyzeAndPlanImages(
 
 ## מטרות הקמפיין
 ${proposalContent?.goals?.map(g => `- ${g.title}: ${g.description}`).join('\n') || 'הגברת מודעות ומעורבות'}
-
+${slideDesignHints ? `
+## כיוון עיצובי מהמצגת (התאם את התמונות לשפה הזו!)
+- מטאפורה ויזואלית: ${slideDesignHints.visualMetaphor || 'לא צוין'}
+- מתח ויזואלי: ${slideDesignHints.visualTension || 'לא צוין'}
+- טיפול בתמונות: ${slideDesignHints.imageTreatment || 'full-bleed או split-screen'}
+התמונות חייבות לעבוד עם ה-design system של המצגת — רקעים כהים, גרדיאנטים, glassmorphism.
+` : ''}
 ## ההנחיות שלך
 
 תחשוב כמו מנהל אמנותי:

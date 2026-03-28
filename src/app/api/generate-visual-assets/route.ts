@@ -276,11 +276,20 @@ export async function POST(request: NextRequest) {
     try {
       console.log(`[Visual Assets][${requestId}] Calling generateSmartImages | Model: gemini-3-pro-image-preview | brand=${brandName}, hasLogo=${!!logoUrl}, hasBrandColors=${!!brandColors}`)
       // Pass logoUrl so Gemini integrates client logo natively into generated images
+      // Extract design hints from brand personality for image alignment
+      const personality = researchForImages.brandPersonality || []
+      const designHints = {
+        visualMetaphor: personality.length ? `${personality.join(' + ')} brand aesthetic` : undefined,
+        visualTension: researchForImages.marketPosition ? `${researchForImages.marketPosition} visual language` : undefined,
+        imageTreatment: 'full-bleed or split-screen — dark moody backgrounds with brand color accents',
+      }
+
       const smartImageSet = await generateSmartImages(
         researchForImages,
         brandColors,
         proposalContext,
         logoUrl,
+        designHints,
       )
 
       const { legacyMapping, images: allSmartImages } = smartImageSet

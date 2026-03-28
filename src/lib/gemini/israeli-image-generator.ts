@@ -461,6 +461,7 @@ export async function generateSmartImages(
   brandColors: BrandColors,
   proposalContent?: Partial<ProposalContent>,
   clientLogoUrl?: string | null,
+  slideDesignHints?: { visualMetaphor?: string; visualTension?: string; imageTreatment?: string },
 ): Promise<SmartImageSet> {
   console.log(`[Smart Image] Starting smart generation for ${brandResearch.brandName}`)
 
@@ -493,7 +494,7 @@ export async function generateSmartImages(
   console.log('[Smart Image] Step 1: Strategy + logo fetch (parallel)...')
   const [logoBuffer, strategy] = await Promise.all([
     fetchLogoBuffer(),
-    analyzeAndPlanImages(brandResearch, brandColors, proposalContent),
+    analyzeAndPlanImages(brandResearch, brandColors, proposalContent, slideDesignHints),
   ])
   console.log(`[Smart Image] Strategy created: ${strategy.images.length} images planned, logo=${!!logoBuffer}`)
 
