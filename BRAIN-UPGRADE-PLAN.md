@@ -7,13 +7,13 @@
 | 1 | Proposal Agent — פרומפט מנופח + מודל לא עקבי | 🔴 קריטי | ✅ הושלם | GPT-5.4 + prompt 150→30 lines |
 | 2 | משפיענים מומצאים — אפס ולידציה | 🔴 קריטי | ✅ הושלם | Google Search verification per name |
 | 3 | מחקר מותג ב-LOW thinking + אין cross-validation | 🔴 קריטי | ✅ הושלם | Flash+HIGH, Pro fallback, cross-validation=שלב 2 |
-| 4 | Wizard לא מבדיל עובדות מספקולציות | 🟡 גבוה | 🔄 חלקי | warnings banner הוסף, עדיין חסר per-field indicator |
+| 4 | Wizard לא מבדיל עובדות מספקולציות | 🟡 גבוה | ✅ הושלם | ConfidenceIndicator component + fieldConfidence map |
 | 5 | תקציב 0 עובר בשקט | 🟡 גבוה | ✅ הושלם | null instead of 0, planner warned, display fixed |
-| 6 | Data loss: Brief → Wizard mapping | 🟡 גבוה | ⬜ לא התחיל | |
-| 7 | Image Strategy מנותקת מ-Slide Design | 🟠 בינוני | ⬜ לא התחיל | |
+| 6 | Data loss: Brief → Wizard mapping | 🟡 גבוה | ✅ הושלם | influencer prefs mapped + _briefExtras for unmapped |
+| 7 | Image Strategy מנותקת מ-Slide Design | 🟠 בינוני | ✅ הושלם | slideDesignHints passed through chain |
 | 8 | Fallbacks שקטים — משתמש לא יודע | 🟠 בינוני | ✅ הושלם | _isFallback flags + wizard warnings banner |
 | 9 | מודלים לא עקביים | 🔵 מבנה | ✅ הושלם | GPT-5.4/Flash+HIGH/Pro model hierarchy |
-| 10 | אין audit trail | 🔵 מבנה | ⬜ לא התחיל | |
+| 10 | אין audit trail | 🔵 מבנה | ✅ הושלם | generation-log.ts + _auditLog saved to document |
 
 ---
 
