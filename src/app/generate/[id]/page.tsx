@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import FlowStepper from '@/components/flow-stepper'
 import { toast } from 'sonner'
+import { PRESENTATION_TEMPLATES } from '@/lib/templates/presentation-templates'
 
 // ── Progress weights — how much of the 100% bar each phase takes ──
 const PHASE_WEIGHTS = {
@@ -58,6 +59,8 @@ export default function GeneratePage() {
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [tipIndex, setTipIndex] = useState(0)
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+  const [showTemplates, setShowTemplates] = useState(false)
   const generationStartedRef = useRef(false)
 
   // Dynamic batch info — set after foundation
@@ -330,7 +333,7 @@ export default function GeneratePage() {
       const foundationRes = await fetch('/api/generate-slides-stage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId, stage: 'foundation' }),
+        body: JSON.stringify({ documentId, stage: 'foundation', templateId: selectedTemplate }),
       })
 
       const { ok: foundationOk, data: foundationData } = await safeJson(foundationRes)
@@ -543,6 +546,35 @@ export default function GeneratePage() {
           <div />
         </div>
       </header>
+
+      {/* Template selector — visible during loading */}
+      {stage === 'loading' && !generationStartedRef.current && (
+        <div className="max-w-[1000px] mx-auto px-4 pt-6">
+          <button
+            onClick={() => setShowTemplates(!showTemplates)}
+            className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-2 mb-3"
+          >
+            🎨 בחר סגנון מצגת (אופציונלי)
+            <span className="text-xs">{showTemplates ? '▲' : '▼'}</span>
+            {selectedTemplate && <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">{PRESENTATION_TEMPLATES.find(t => t.id === selectedTemplate)?.name}</span>}
+          </button>
+          {showTemplates && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 animate-in fade-in duration-300">
+              {PRESENTATION_TEMPLATES.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { setSelectedTemplate(selectedTemplate === t.id ? null : t.id); setShowTemplates(false) }}
+                  className={`text-right p-3 rounded-xl border transition-all ${selectedTemplate === t.id ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-300' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}
+                >
+                  <div className="text-2xl mb-1">{t.thumbnail}</div>
+                  <div className="font-bold text-sm text-gray-800">{t.name}</div>
+                  <div className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{t.description}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex items-center justify-center px-4 py-10">

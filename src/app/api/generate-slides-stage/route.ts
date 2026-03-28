@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       userId = authUser.id
     }
 
-    const { documentId, stage, batchIndex } = await request.json()
+    const { documentId, stage, batchIndex, templateId } = await request.json()
 
     if (!documentId || !stage) {
       return NextResponse.json({ error: 'documentId and stage are required' }, { status: 400 })
@@ -78,6 +78,22 @@ export async function POST(request: NextRequest) {
         data: { ...documentData, _pipeline: { status: 'generating', startedAt: Date.now() } },
       }).eq('id', documentId)
 
+      // Template integration — if user selected a template, inject design hints
+      let templateHints: Record<string, unknown> | undefined
+      if (templateId) {
+        try {
+          const { getTemplateById } = await import('@/lib/templates/presentation-templates')
+          const template = getTemplateById(templateId)
+          if (template) {
+            templateHints = template.designHints as Record<string, unknown>
+            if (template.colorOverrides) {
+              templateHints._colorOverrides = template.colorOverrides
+            }
+            console.log(`[${requestId}] 🎨 Template selected: ${template.name} (${template.id})`)
+          }
+        } catch { /* template non-critical */ }
+      }
+
       console.log(`[${requestId}] Running foundation (stages 1-3)...`)
 
       const images = (documentData._generatedImages as Record<string, string>) || {}
@@ -108,6 +124,7 @@ export async function POST(request: NextRequest) {
         },
         extraImages: documentData._extraImages as { id: string; url: string; placement: string }[] | undefined,
         imageStrategy: documentData._imageStrategy as { conceptSummary?: string; visualDirection?: string; styleGuide?: string } | undefined,
+        templateHints,
       }
 
       const foundation = await pipelineFoundation(documentData, config)
