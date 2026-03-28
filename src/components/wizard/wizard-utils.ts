@@ -112,6 +112,33 @@ export function extractedDataToStepData(
     }
   }
 
+  // Influencers step — preferences from brief
+  if (extracted.influencerPreferences) {
+    const prefs = extracted.influencerPreferences
+    stepData.influencers = {
+      influencers: (prefs.specificNames || []).map(name => ({
+        name, handle: '', platform: 'instagram' as const, category: '', followers: '',
+        engagement: '', whyRelevant: 'הוזכר בבריף הלקוח', contentStyle: '',
+        estimatedCost: '', profileUrl: '',
+      })),
+      influencerCriteria: prefs.criteria || [],
+      influencerNote: prefs.types?.length ? `סוגי משפיענים מבוקשים: ${prefs.types.join(', ')}` : undefined,
+    }
+  }
+
+  // Store unmapped fields as _briefExtras for visibility
+  const _briefExtras: Record<string, unknown> = {}
+  if (extracted.brand?.industry) _briefExtras.industry = extracted.brand.industry
+  if (extracted.brand?.tagline) _briefExtras.tagline = extracted.brand.tagline
+  if (extracted.timeline?.duration) _briefExtras.timeline = extracted.timeline
+  if (extracted.additionalNotes?.length) _briefExtras.additionalNotes = extracted.additionalNotes
+  if (extracted.competitorMentions?.length) _briefExtras.competitorMentions = extracted.competitorMentions
+  if (extracted.brandTone) _briefExtras.brandTone = extracted.brandTone
+  if (extracted.gaps?.length) _briefExtras.gaps = extracted.gaps
+  if (Object.keys(_briefExtras).length > 0) {
+    ;(stepData as Record<string, unknown>)._briefExtras = _briefExtras
+  }
+
   return stepData
 }
 
