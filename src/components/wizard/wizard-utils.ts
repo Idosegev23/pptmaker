@@ -117,9 +117,9 @@ export function extractedDataToStepData(
     const prefs = extracted.influencerPreferences
     stepData.influencers = {
       influencers: (prefs.specificNames || []).map(name => ({
-        name, handle: '', platform: 'instagram' as const, category: '', followers: '',
-        engagement: '', whyRelevant: 'הוזכר בבריף הלקוח', contentStyle: '',
-        estimatedCost: '', profileUrl: '',
+        name, username: '', profileUrl: '', profilePicUrl: '',
+        categories: prefs.verticals || [], followers: 0, engagementRate: 0,
+        bio: 'הוזכר בבריף הלקוח',
       })),
       influencerCriteria: prefs.criteria || [],
       influencerNote: prefs.types?.length ? `סוגי משפיענים מבוקשים: ${prefs.types.join(', ')}` : undefined,
