@@ -239,6 +239,192 @@ check('Edit page has slide navigation arrows', () =>
 )
 
 // ═══════════════════════════════════════════════════════
+//  SECTION 7: API ROUTE SAFETY
+// ═══════════════════════════════════════════════════════
+
+console.log('\n🔒 API ROUTE SAFETY')
+
+const apiRoutes = [
+  'src/app/api/generate-slides-stage/route.ts',
+  'src/app/api/regenerate-slide/route.ts',
+  'src/app/api/pdf/route.ts',
+  'src/app/api/generate-visual-assets/route.ts',
+  'src/app/api/process-proposal/route.ts',
+  'src/app/api/research/route.ts',
+  'src/app/api/documents/[id]/route.ts',
+  'src/app/api/price-quote/route.ts',
+]
+
+for (const route of apiRoutes) {
+  if (!fileExists(route)) continue
+  const content = readFileSync(path.join(ROOT, route), 'utf-8')
+
+  check(`${route.split('/').pop()} has maxDuration`, () => {
+    if (!content.includes('maxDuration')) return `Missing maxDuration in ${route}`
+    return true
+  })
+
+  check(`${route.split('/').pop()} has try/catch`, () => {
+    if (!content.includes('catch')) return `No error handling in ${route}`
+    return true
+  })
+
+  check(`${route.split('/').pop()} returns error status`, () => {
+    if (!content.includes('status: 4') && !content.includes('status: 5')) return `No error status codes in ${route}`
+    return true
+  })
+}
+
+// ═══════════════════════════════════════════════════════
+//  SECTION 8: SECURITY
+// ═══════════════════════════════════════════════════════
+
+console.log('\n🛡️  SECURITY')
+
+check('No API keys in client components', () => {
+  const clientFiles = [
+    'src/app/dashboard/page.tsx',
+    'src/app/edit/[id]/page.tsx',
+    'src/app/generate/[id]/page.tsx',
+    'src/components/wizard/proposal-wizard.tsx',
+  ]
+  for (const f of clientFiles) {
+    if (!fileExists(f)) continue
+    const content = readFileSync(path.join(ROOT, f), 'utf-8')
+    if (content.includes('OPENAI_API_KEY') || content.includes('GEMINI_API_KEY') || content.includes('ANTHROPIC_API_KEY')) {
+      return `API key reference found in client file: ${f}`
+    }
+    if (content.includes('SUPABASE_SERVICE_ROLE_KEY')) {
+      return `Service role key in client file: ${f}`
+    }
+  }
+  return true
+})
+
+check('No hardcoded API keys in source', () => {
+  const srcFiles = [
+    'src/lib/gemini/slide-designer.ts',
+    'src/lib/gemini/proposal-agent.ts',
+    'src/lib/ai-provider.ts',
+  ]
+  for (const f of srcFiles) {
+    if (!fileExists(f)) continue
+    const content = readFileSync(path.join(ROOT, f), 'utf-8')
+    if (/sk-[a-zA-Z0-9]{20,}/.test(content) || /AIzaSy[a-zA-Z0-9]{30,}/.test(content)) {
+      return `Hardcoded API key found in ${f}`
+    }
+  }
+  return true
+})
+
+check('Auth check in protected routes', () => {
+  const protectedRoutes = [
+    'src/app/api/generate-slides-stage/route.ts',
+    'src/app/api/regenerate-slide/route.ts',
+    'src/app/api/documents/[id]/route.ts',
+  ]
+  for (const route of protectedRoutes) {
+    if (!fileExists(route)) continue
+    const content = readFileSync(path.join(ROOT, route), 'utf-8')
+    if (!content.includes('auth') && !content.includes('Unauthorized') && !content.includes('isDevMode')) {
+      return `No auth check in ${route}`
+    }
+  }
+  return true
+})
+
+// ═══════════════════════════════════════════════════════
+//  SECTION 9: CODE QUALITY PATTERNS
+// ═══════════════════════════════════════════════════════
+
+console.log('\n📐 CODE QUALITY')
+
+check('No TODO/FIXME/HACK comments in critical files', () => {
+  const critical = [
+    'src/lib/gemini/slide-designer.ts',
+    'src/app/api/generate-slides-stage/route.ts',
+    'src/app/edit/[id]/page.tsx',
+  ]
+  for (const f of critical) {
+    if (!fileExists(f)) continue
+    const content = readFileSync(path.join(ROOT, f), 'utf-8')
+    const todoMatch = content.match(/\/\/\s*(TODO|FIXME|HACK|XXX)[\s:]/i)
+    if (todoMatch) {
+      return `Found ${todoMatch[1]} in ${f}`
+    }
+  }
+  return true
+})
+
+check('Responses API used (not chat.completions)', () =>
+  fileNotContains('src/lib/gemini/slide-designer.ts', 'chat.completions.create')
+)
+
+check('Version history module exists', () =>
+  fileExists('src/lib/version-history.ts')
+)
+
+check('Brand memory module exists', () =>
+  fileExists('src/lib/brand-memory.ts')
+)
+
+check('Template gallery exists', () =>
+  fileExists('src/lib/templates/presentation-templates.ts')
+)
+
+check('At least 5 templates defined', () => {
+  if (!fileExists('src/lib/templates/presentation-templates.ts')) return 'Template file missing'
+  const content = readFileSync(path.join(ROOT, 'src/lib/templates/presentation-templates.ts'), 'utf-8')
+  const matches = content.match(/id:\s*'/g)
+  if (!matches || matches.length < 5) return `Only ${matches?.length || 0} templates (need 5+)`
+  return true
+})
+
+check('Share page handles HTML-native', () =>
+  fileContains('src/app/s/[token]/page.tsx', '_htmlPresentation')
+)
+
+check('Edit page has regenerate button', () =>
+  fileContains('src/app/edit/[id]/page.tsx', 'עצב מחדש')
+)
+
+check('Edit page has share button', () =>
+  fileContains('src/app/edit/[id]/page.tsx', 'שתף')
+)
+
+check('Generate page has template selector', () =>
+  fileContains('src/app/generate/[id]/page.tsx', 'PRESENTATION_TEMPLATES')
+)
+
+check('Price quote hides empty sections', () => {
+  if (!fileExists('src/templates/price-quote/price-quote-template.ts')) return 'Template file missing'
+  const content = readFileSync(path.join(ROOT, 'src/templates/price-quote/price-quote-template.ts'), 'utf-8')
+  if (!content.includes('contentRows ?') && !content.includes('contentRows?')) return 'Content mix section not conditional'
+  return true
+})
+
+check('Slide designer exports HTML pipeline', () =>
+  fileContains('src/lib/gemini/slide-designer.ts', 'export async function pipelineBatchHtml') &&
+  fileContains('src/lib/gemini/slide-designer.ts', 'export async function pipelineFinalizeHtml')
+)
+
+check('Lite validation used (not old heavy validation)', () =>
+  fileContains('src/lib/gemini/slide-designer.ts', 'liteValidateSlide')
+)
+
+check('Stage route handles templateId', () =>
+  fileContains('src/app/api/generate-slides-stage/route.ts', 'templateId')
+)
+
+check('Version history saved in finalize', () =>
+  fileContains('src/app/api/generate-slides-stage/route.ts', 'addVersion')
+)
+
+check('Audit log saved in finalize', () =>
+  fileContains('src/app/api/generate-slides-stage/route.ts', '_auditLog')
+)
+
+// ═══════════════════════════════════════════════════════
 //  SUMMARY
 // ═══════════════════════════════════════════════════════
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 
+export const maxDuration = 30
+
 // GET - Get single document
 export async function GET(
   request: NextRequest,
