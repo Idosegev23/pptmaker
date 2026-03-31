@@ -374,6 +374,7 @@ export function generatePage2(data: PriceQuoteData, logoUrl: string): string {
         </tbody>
       </table>
 
+      ${contentRows ? `
       <div class="section-header">תמהיל תוכן</div>
       <table class="quote-table">
         <thead>
@@ -387,7 +388,9 @@ export function generatePage2(data: PriceQuoteData, logoUrl: string): string {
           ${contentRows}
         </tbody>
       </table>
+      ` : ''}
 
+      ${(data.kpi.cpv || data.kpi.estimatedImpressions) ? `
       <div style="text-align:center; margin-top: 10px;">
         <span class="section-header" style="font-size: 20px; padding: 10px 40px; background: #333;">KPI</span>
       </div>
@@ -405,6 +408,7 @@ export function generatePage2(data: PriceQuoteData, logoUrl: string): string {
           </tr>
         </tbody>
       </table>
+      ` : ''}
     </div>
     ${footerHtml()}
   `)
