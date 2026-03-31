@@ -174,6 +174,28 @@ export default function PriceQuotePage() {
           >
             {isGenerating ? 'מייצר PDF...' : 'הורד PDF'}
           </button>
+          <button
+            onClick={async () => {
+              if (!data.clientName) { alert('יש למלא שם לקוח'); return }
+              try {
+                const res = await fetch('/api/follow-up', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ brandName: data.clientName, proposalType: 'quote', businessDays: 3 }),
+                })
+                const result = await res.json()
+                if (res.ok && result.success) {
+                  alert(`תזכורת פולואפ נקבעה ל-${result.formattedDate}`)
+                } else {
+                  alert(result.error || 'שגיאה ביצירת תזכורת')
+                }
+              } catch { alert('שגיאה ביצירת תזכורת') }
+            }}
+            disabled={!data.clientName}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-bold disabled:opacity-50"
+          >
+            📅 תזכורת פולואפ
+          </button>
         </div>
       </div>
 

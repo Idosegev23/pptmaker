@@ -769,6 +769,28 @@ export default function PresentationEditorPage() {
                 🔗 שתף
               </button>
 
+              {/* Follow-up reminder */}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/follow-up', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ brandName, proposalType: 'presentation', businessDays: 3 }),
+                    })
+                    const data = await res.json()
+                    if (res.ok && data.success) {
+                      alert(`תזכורת פולואפ נקבעה ל-${data.formattedDate}`)
+                    } else {
+                      alert(data.error || 'שגיאה ביצירת תזכורת')
+                    }
+                  } catch { alert('שגיאה ביצירת תזכורת') }
+                }}
+                className="px-4 py-2 bg-green-500/10 text-green-400 border border-green-500/30 rounded-lg text-sm font-medium hover:bg-green-500/20 transition-colors"
+              >
+                📅 פולואפ 3 ימים
+              </button>
+
               {/* Download PDF */}
               <button
                 onClick={async () => {
