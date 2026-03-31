@@ -442,6 +442,23 @@ export default function GeneratePage() {
         }),
       })
 
+      // Auto-schedule follow-up reminder (3 Israeli business days)
+      try {
+        const docRes2 = await fetch(`/api/documents/${documentId}`)
+        const docData2 = await docRes2.json()
+        const bn = docData2?.document?.data?.brandName || docData2?.data?.brandName || ''
+        if (bn) {
+          fetch('/api/follow-up', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brandName: bn, proposalType: 'presentation', businessDays: 3 }),
+          }).then(r => r.json()).then(d => {
+            if (d.success) console.log(`[Generate] Follow-up scheduled for ${d.formattedDate}`)
+            else console.warn('[Generate] Follow-up failed:', d.error)
+          }).catch(() => { /* non-critical */ })
+        }
+      } catch { /* follow-up is non-critical */ }
+
       setStage('done')
       setTimeout(() => router.push(`/edit/${documentId}`), 1500)
     } catch (err) {
