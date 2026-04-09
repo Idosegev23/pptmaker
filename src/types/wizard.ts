@@ -87,6 +87,7 @@ export interface DeliverablesStepData {
     quantity: number
     description: string
     purpose: string
+    linkedPillar?: string // Links to a strategy pillar title
   }[]
   deliverablesSummary?: string
   referenceImages: { url: string; caption?: string }[]

@@ -420,6 +420,41 @@ export default function StepBrief({ data, extractedData, onChange, errors, rawBr
         </div>
       )}
 
+      {/* ── Social Media Links ── */}
+      <div className="space-y-3">
+        <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
+          קישורי סושיאל מדיה (אופציונלי)
+          <span className="text-[11px] font-normal text-wizard-text-secondary/60 mr-2">
+            לניתוח נוכחות דיגיטלית
+          </span>
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Input
+            placeholder="Instagram — @handle או קישור"
+            value={(data as Record<string, unknown>).socialInstagram as string || ''}
+            onChange={(e) => onChange({ ...data, socialInstagram: e.target.value } as typeof data)}
+          />
+          <Input
+            placeholder="TikTok — @handle או קישור"
+            value={(data as Record<string, unknown>).socialTiktok as string || ''}
+            onChange={(e) => onChange({ ...data, socialTiktok: e.target.value } as typeof data)}
+          />
+          <Input
+            placeholder="Facebook — קישור לעמוד"
+            value={(data as Record<string, unknown>).socialFacebook as string || ''}
+            onChange={(e) => onChange({ ...data, socialFacebook: e.target.value } as typeof data)}
+          />
+          <Input
+            placeholder="YouTube — קישור לערוץ"
+            value={(data as Record<string, unknown>).socialYoutube as string || ''}
+            onChange={(e) => onChange({ ...data, socialYoutube: e.target.value } as typeof data)}
+          />
+        </div>
+      </div>
+
+      {/* ── Section divider ── */}
+      <div className="h-px bg-gradient-to-l from-transparent via-wizard-border to-transparent" />
+
       {/* ── Research Context ── */}
       {brandResearch && (
         <ResearchContext
