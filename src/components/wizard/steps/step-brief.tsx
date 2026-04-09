@@ -248,6 +248,23 @@ export default function StepBrief({ data, extractedData, onChange, errors, rawBr
         error={errors?.brandName}
       />
 
+      {/* ── Why This Brief — the challenge ── */}
+      <div className="space-y-2">
+        <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary">
+          למה הבריף הזה? מה האתגר?
+          <span className="text-[11px] font-normal text-wizard-text-secondary/60 mr-2">
+            מה הבעיה שהלקוח מנסה לפתור? למה פנו אלינו?
+          </span>
+        </label>
+        <Textarea
+          placeholder="למשל: המותג רוצה לחזק את הנוכחות הדיגיטלית בקרב קהל צעיר, כי המתחרים מובילים ב-TikTok..."
+          value={data.brandObjective ?? ''}
+          onChange={(e) => onChange({ ...data, brandObjective: e.target.value })}
+          error={errors?.brandObjective}
+          className="min-h-[80px]"
+        />
+      </div>
+
       {/* ── Brand Brief (with dual field) ── */}
       <DualFieldSection
         label="רקע ובריף"
@@ -262,8 +279,11 @@ export default function StepBrief({ data, extractedData, onChange, errors, rawBr
           value={brandBrief}
           onChange={(e) => onChange({ ...data, brandBrief: e.target.value })}
           error={errors?.brandBrief}
-          className="min-h-[150px]"
+          className="min-h-[120px]"
         />
+        {brandBrief.length > 300 && (
+          <p className="text-[11px] text-amber-600 mt-1">💡 טיפ: תיאור ארוך ({brandBrief.length} תווים). מומלץ לקצר ל-2-3 משפטים מרכזיים.</p>
+        )}
       </DualFieldSection>
 
       {/* ── Section divider ── */}
@@ -293,11 +313,22 @@ export default function StepBrief({ data, extractedData, onChange, errors, rawBr
           </div>
         )}
 
-        {brandPainPoints.map((point, index) => (
+        {brandPainPoints.map((point, index) => {
+          const pointText = typeof point === 'string' ? point : (point as {title?: string})?.title || ''
+          // Detect source: if this exact text exists in extractedData, it came from the brief
+          const isFromBrief = extractedData?.brandPainPoints?.some(
+            ep => (typeof ep === 'string' ? ep : (ep as {title?: string})?.title || '') === pointText
+          )
+          return (
           <div key={index} className="flex items-center gap-2">
+            {isFromBrief ? (
+              <span className="shrink-0 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium" title="חולץ מהבריף">📋 בריף</span>
+            ) : pointText ? (
+              <span className="shrink-0 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium" title="נוצר ע״י AI">🤖 AI</span>
+            ) : null}
             <Input
               placeholder={`נקודת כאב ${index + 1}`}
-              value={typeof point === 'string' ? point : (point as {title?: string})?.title || ''}
+              value={pointText}
               onChange={(e) => updatePainPoint(index, e.target.value)}
             />
             <Button
@@ -313,10 +344,11 @@ export default function StepBrief({ data, extractedData, onChange, errors, rawBr
               </svg>
             </Button>
           </div>
-        ))}
+          )
+        })}
       </div>
 
-      {/* ── Brand Objective ── */}
+      {/* ── Brand Objective — removed as standalone, now at top as "למה הבריף" ── */}
       <Input
         label="מטרת המותג"
         placeholder="מהי המטרה העיקרית של הפנייה?"
