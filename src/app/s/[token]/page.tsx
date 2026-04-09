@@ -56,6 +56,9 @@ export default async function SharePage({ params }: SharePageProps) {
 
   // HTML-native share — render iframes directly
   if (isHtmlNative && htmlPres?.htmlSlides) {
+    // Sanitize: strip <script> tags from HTML slides (XSS prevention)
+    const sanitizeHtml = (html: string) => html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+
     return (
       <html lang="he" dir="rtl">
         <head>
@@ -64,7 +67,7 @@ export default async function SharePage({ params }: SharePageProps) {
         </head>
         <body style={{ margin: 0, background: '#0a0a0f', fontFamily: "'Heebo', sans-serif" }}>
           {htmlPres.htmlSlides.map((slideHtml, i) => (
-            <div key={i} dangerouslySetInnerHTML={{ __html: slideHtml }} style={{ marginBottom: 2 }} />
+            <div key={i} dangerouslySetInnerHTML={{ __html: sanitizeHtml(slideHtml) }} style={{ marginBottom: 2 }} />
           ))}
         </body>
       </html>

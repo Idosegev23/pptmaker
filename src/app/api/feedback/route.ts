@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const maxDuration = 30
 import { createClient } from '@supabase/supabase-js'
+
 import { getAuthenticatedUser } from '@/lib/auth/api-auth'
 
 export async function POST(request: NextRequest) {

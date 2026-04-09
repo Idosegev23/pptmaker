@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const maxDuration = 30
 import { createClient } from '@/lib/supabase/server'
+
 import { createServiceClient } from '@/lib/supabase/server'
 import { isDevMode, DEV_AUTH_USER } from '@/lib/auth/dev-mode'
 import type { UpdateSharePayload, ViewerConfig } from '@/types/share'

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
+
+export const maxDuration = 30
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
