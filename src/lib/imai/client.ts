@@ -127,29 +127,40 @@ export async function searchInfluencers(
 
   console.log(`[IMAI][${requestId}] Searching ${platform} influencers...`)
 
+  // Build IMAI v1 filter format (tested with real API)
   const filter: Record<string, unknown> = {}
   if (filters.followers_from || filters.followers_to) {
-    filter.followers = {}
-    if (filters.followers_from) (filter.followers as Record<string, number>).left_number = filters.followers_from
-    if (filters.followers_to) (filter.followers as Record<string, number>).right_number = filters.followers_to
+    filter.followers = {
+      left_number: filters.followers_from || 1000,
+      right_number: filters.followers_to || 10000000,
+    }
   }
-  if (filters.engagement_rate_from) {
-    filter.engagement_rate = { left_number: filters.engagement_rate_from }
-  }
-  if (filters.geo?.length) filter.geo = filters.geo
-  if (filters.language?.length) filter.language = filters.language
+  if (filters.geo?.length) filter.audience_geo = filters.geo.map(id => ({ id }))
+  if (filters.language?.length) filter.language = filters.language.map(code => ({ code }))
   if (filters.gender) filter.gender = filters.gender
   if (filters.relevance?.length) filter.relevance = filters.relevance
   if (filters.has_contact_details) filter.with_contact = [{ type: 'email' }]
 
-  const result = await imaiRequest<ImaiSearchResult>('POST', '/search/newv1/', {
+  const rawResult = await imaiRequest<{
+    total: number
+    accounts: Array<{
+      account: { user_profile: ImaiInfluencer }
+      match?: Record<string, unknown>
+    }>
+  }>('POST', '/search/newv1/', {
     filter,
-    sort: { field: 'followers', order: 'desc' },
+    sort: { field: 'followers', direction: 'desc' },
     paging: { skip: offset, limit },
   }, { platform })
 
-  console.log(`[IMAI][${requestId}] Found ${result.data?.length || 0} influencers`)
-  return result
+  // Normalize to our ImaiSearchResult format
+  const data = (rawResult.accounts || []).map(a => ({
+    ...a.account.user_profile,
+    platform: platform as 'instagram' | 'tiktok' | 'youtube',
+  }))
+
+  console.log(`[IMAI][${requestId}] Found ${data.length}/${rawResult.total} influencers`)
+  return { success: true, data, total: rawResult.total }
 }
 
 /**
@@ -206,8 +217,8 @@ export async function searchIsraeliInfluencers(
     limit?: number
   } = {},
 ): Promise<ImaiInfluencer[]> {
-  // Israel geo ID in IMAI = 62043
-  const ISRAEL_GEO_ID = 62043
+  // Israel geo ID in IMAI (verified via /geos/?q=Israel)
+  const ISRAEL_GEO_ID = 1473946
   const HEBREW_LANG = 'he'
 
   const result = await searchInfluencers({
