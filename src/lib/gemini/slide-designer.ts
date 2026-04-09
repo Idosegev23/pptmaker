@@ -136,6 +136,16 @@ function isValidCssShadow(value: string): boolean {
 }
 
 // ═══════════════════════════════════════════════════════════
+//  DESIGN SYSTEM CACHE — reuse if same brand generates again
+// ═══════════════════════════════════════════════════════════
+const _dsCache = new Map<string, { ds: PremiumDesignSystem; ts: number }>()
+const DS_CACHE_TTL = 1000 * 60 * 60 // 1 hour
+
+function getDsCacheKey(brand: BrandDesignInput): string {
+  return `${brand.brandName}|${brand.brandColors.primary}|${brand.brandColors.secondary}|${brand.industry || ''}`.toLowerCase()
+}
+
+// ═══════════════════════════════════════════════════════════
 //  STEP 1: GENERATE DESIGN SYSTEM
 // ═══════════════════════════════════════════════════════════
 
@@ -143,6 +153,14 @@ async function generateDesignSystem(
   brand: BrandDesignInput,
 ): Promise<PremiumDesignSystem> {
   const requestId = `ds-${Date.now()}`
+
+  // Check cache first
+  const cacheKey = getDsCacheKey(brand)
+  const cached = _dsCache.get(cacheKey)
+  if (cached && Date.now() - cached.ts < DS_CACHE_TTL) {
+    console.log(`[SlideDesigner][${requestId}] ⚡ Design System from cache (${brand.brandName})`)
+    return cached.ds
+  }
   console.log(`[SlideDesigner][${requestId}] Step 1: Design System for "${brand.brandName}"`)
 
   console.log(`[SlideDesigner][${requestId}] 📋 Brand input:`, JSON.stringify({ name: brand.brandName, industry: brand.industry, personality: brand.brandPersonality, colors: brand.brandColors, audience: brand.targetAudience }, null, 2))
@@ -251,6 +269,8 @@ Font: Heebo.
         console.log(`[SlideDesigner][${requestId}]   📐 Typography: heading=${parsed.typography?.headingSize}px body=${parsed.typography?.bodySize}px weights=${JSON.stringify(parsed.typography?.weightPairs)}`)
         console.log(`[SlideDesigner][${requestId}]   ✨ Effects: radius=${parsed.effects?.borderRadius} shadow=${parsed.effects?.shadowStyle} deco=${parsed.effects?.decorativeStyle}`)
         console.log(`[SlideDesigner][${requestId}]   🎭 Creative: metaphor="${parsed.creativeDirection?.visualMetaphor}" tension="${parsed.creativeDirection?.visualTension}" rule="${parsed.creativeDirection?.oneRule}"`)
+        // Cache for reuse
+        _dsCache.set(cacheKey, { ds: parsed, ts: Date.now() })
         return parsed
       }
       throw new Error(`Invalid design system — parsed colors missing`)

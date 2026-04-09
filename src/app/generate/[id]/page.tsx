@@ -163,13 +163,32 @@ export default function GeneratePage() {
       const pipelineStatus = data._pipelineStatus || {}
       const brandName = data.brandName || ''
 
-      // Check if background generation completed
-      if (data._presentation?.slides?.length > 0) {
-        console.log('[Generate] Presentation already exists, redirecting to editor')
+      // Check if presentation already exists (HTML-native or AST)
+      const htmlPres = data._htmlPresentation as { htmlSlides?: string[] } | undefined
+      if (htmlPres?.htmlSlides?.length || data._presentation?.slides?.length > 0) {
+        console.log(`[Generate] Presentation already exists (${htmlPres?.htmlSlides?.length || data._presentation?.slides?.length} slides), redirecting to editor`)
         animateProgressTo(100)
         setStage('done')
         setTimeout(() => router.push(`/edit/${documentId}`), 1000)
         return
+      }
+
+      // Resume: check if foundation already exists (refresh mid-generation)
+      const existingPipeline = data._pipeline as { foundation?: { batches?: number[][]; totalSlides?: number; batchSizes?: number[] }; htmlBatchResults?: unknown[]; status?: string } | undefined
+      if (existingPipeline?.foundation && existingPipeline.status !== 'complete') {
+        const completedBatches = (existingPipeline.htmlBatchResults || []).filter(Boolean).length
+        const totalBatches = existingPipeline.foundation.batches?.length || 3
+        if (completedBatches > 0 && completedBatches < totalBatches) {
+          console.log(`[Generate] Resuming: ${completedBatches}/${totalBatches} batches complete`)
+          // Skip to remaining batches
+          const f = existingPipeline.foundation
+          setBatchCount(totalBatches)
+          setTotalSlides(f.totalSlides || 15)
+          setBatchSizes(f.batchSizes || [5, 5, 5])
+          setSlidesDone(completedBatches * 5)
+          animateProgressTo(30 + (completedBatches / totalBatches) * 65)
+          // Don't return — continue to batch generation below which will skip completed batches
+        }
       }
 
       // Check if background generation is in progress
