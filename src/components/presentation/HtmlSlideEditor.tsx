@@ -28,6 +28,19 @@ const EDITOR_SCRIPT = `
   let elemStartX = 0, elemStartY = 0;
   let isEditing = false;
 
+  // Detect actual scale from CSS transform on the iframe
+  function getScale() {
+    try {
+      const iframe = window.frameElement;
+      if (iframe) {
+        const transform = iframe.style.transform || '';
+        const match = transform.match(/scale\\(([\\d.]+)\\)/);
+        if (match) return parseFloat(match[1]);
+      }
+    } catch(e) {}
+    return 1;
+  }
+
   // Make all positioned elements interactive
   function initElements() {
     const elements = slide.querySelectorAll('[style*="position"]');
@@ -35,59 +48,84 @@ const EDITOR_SCRIPT = `
       const style = window.getComputedStyle(el);
       if (style.position !== 'absolute' && style.position !== 'relative') return;
       if (el === slide) return;
+      if (el.tagName === 'IMG' && el.style.opacity && parseFloat(el.style.opacity) < 0.3) return; // skip bg images
+
+      el.style.cursor = 'grab';
 
       // Visual hover indicator
       el.addEventListener('mouseenter', () => {
-        if (!isEditing) el.style.outline = '2px dashed rgba(59,130,246,0.5)';
+        if (!isEditing && !dragTarget) el.style.outline = '2px dashed rgba(59,130,246,0.5)';
       });
       el.addEventListener('mouseleave', () => {
-        if (!isEditing || el !== dragTarget) el.style.outline = '';
+        if (!isEditing && el !== dragTarget) el.style.outline = '';
       });
 
       // Double-click to edit text
       el.addEventListener('dblclick', (e) => {
         e.stopPropagation();
-        if (el.textContent && el.textContent.trim()) {
-          el.contentEditable = 'true';
-          el.style.outline = '2px solid #3b82f6';
-          el.style.cursor = 'text';
-          el.focus();
-          isEditing = true;
+        const text = el.textContent && el.textContent.trim();
+        if (!text) return;
+        // Don't edit watermarks or decorative giant text
+        const fs = parseFloat(window.getComputedStyle(el).fontSize) || 0;
+        const op = parseFloat(window.getComputedStyle(el).opacity) || 1;
+        if (fs > 200 && op < 0.15) return; // watermark
 
-          const exitEdit = () => {
-            el.contentEditable = 'false';
-            el.style.outline = '';
-            el.style.cursor = '';
-            isEditing = false;
-            notifyParent();
-          };
-          el.addEventListener('blur', exitEdit, { once: true });
-          el.addEventListener('keydown', (ke) => {
-            if (ke.key === 'Escape') { el.blur(); }
-          });
-        }
+        el.contentEditable = 'true';
+        el.style.outline = '2px solid #3b82f6';
+        el.style.boxShadow = '0 0 0 4px rgba(59,130,246,0.2)';
+        el.style.cursor = 'text';
+        el.focus();
+        isEditing = true;
+
+        // Select all text for easy replacement
+        try {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } catch(e) {}
+
+        const exitEdit = () => {
+          el.contentEditable = 'false';
+          el.style.outline = '';
+          el.style.boxShadow = '';
+          el.style.cursor = 'grab';
+          isEditing = false;
+          notifyParent();
+        };
+        el.addEventListener('blur', exitEdit, { once: true });
+        el.addEventListener('keydown', (ke) => {
+          if (ke.key === 'Escape') { ke.preventDefault(); el.blur(); }
+        });
       });
 
       // Single click + drag to move
       el.addEventListener('mousedown', (e) => {
         if (isEditing) return;
-        if (e.detail >= 2) return; // double-click handled above
+        if (e.detail >= 2) return;
         e.preventDefault();
+        e.stopPropagation();
         dragTarget = el;
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
+        dragStartX = e.pageX;
+        dragStartY = e.pageY;
         elemStartX = parseInt(el.style.left) || el.offsetLeft;
         elemStartY = parseInt(el.style.top) || el.offsetTop;
         el.style.outline = '2px solid #3b82f6';
+        el.style.boxShadow = '0 0 0 4px rgba(59,130,246,0.15)';
+        el.style.cursor = 'grabbing';
         el.style.zIndex = '9999';
+        el.style.transition = 'none';
       });
     });
   }
 
   document.addEventListener('mousemove', (e) => {
     if (!dragTarget) return;
-    const dx = e.clientX - dragStartX;
-    const dy = e.clientY - dragStartY;
+    e.preventDefault();
+    // Use pageX/pageY — these are in the iframe's native coordinate space (1920x1080)
+    const dx = e.pageX - dragStartX;
+    const dy = e.pageY - dragStartY;
     dragTarget.style.left = (elemStartX + dx) + 'px';
     dragTarget.style.top = (elemStartY + dy) + 'px';
   });
@@ -95,7 +133,10 @@ const EDITOR_SCRIPT = `
   document.addEventListener('mouseup', () => {
     if (dragTarget) {
       dragTarget.style.outline = '';
+      dragTarget.style.boxShadow = '';
+      dragTarget.style.cursor = 'grab';
       dragTarget.style.zIndex = '';
+      dragTarget.style.transition = '';
       dragTarget = null;
       notifyParent();
     }
@@ -103,19 +144,28 @@ const EDITOR_SCRIPT = `
 
   // Click on empty space = deselect
   slide.addEventListener('click', (e) => {
-    if (e.target === slide) {
+    if (e.target === slide || e.target === document.body) {
       document.querySelectorAll('[contenteditable="true"]').forEach(el => el.blur());
+      // Remove all outlines
+      slide.querySelectorAll('[style*="outline"]').forEach(el => { el.style.outline = ''; el.style.boxShadow = ''; });
     }
   });
 
   function notifyParent() {
-    // Send updated HTML back to parent
+    // Clean up editor artifacts before saving
+    slide.querySelectorAll('[style*="outline"]').forEach(el => { el.style.outline = ''; el.style.boxShadow = ''; });
+    slide.querySelectorAll('[contenteditable]').forEach(el => { el.removeAttribute('contenteditable'); });
+
     const fullHtml = document.documentElement.outerHTML;
     window.parent.postMessage({ type: 'slide-html-update', html: '<!DOCTYPE html>' + fullHtml }, window.location.ancestorOrigins?.[0] || '*');
   }
 
-  // Init after a short delay (let styles settle)
-  setTimeout(initElements, 100);
+  // Init after styles settle
+  setTimeout(initElements, 200);
+
+  // Re-init on dynamic content changes
+  const observer = new MutationObserver(() => { setTimeout(initElements, 100); });
+  observer.observe(slide, { childList: true, subtree: true });
 })();
 <\/script>
 `;
