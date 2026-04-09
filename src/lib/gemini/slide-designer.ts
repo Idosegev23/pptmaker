@@ -331,8 +331,21 @@ Emotional Arc: ${cd.emotionalArc}` : 'No creative direction available'}
 
 כתוב את הקופי העברי המדויק לכל שקף. אתה הקופירייטר והקריאייטיב דיירקטור — תהיה ספציפי, חד, ויצירתי.
 
-סוגי שקפים זמינים (בחר 12-17 מתוכם):
-cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, approach, deliverables, metrics, influencerStrategy, contentStrategy, influencers, timeline, closing
+סוגי שקפים — בדיוק 11, בסדר הזה. אל תוסיף ואל תדלג:
+cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influencers, metrics, closing
+
+הסבר:
+- cover: שקף פתיחה ויזואלי
+- brief: למה הבריף הזה? מה האתגר/הבעיה? (לא סיפור המותג — התמקד בסיבה שפנו אלינו)
+- goals: יעדי הקמפיין (2-3 יעדים ממוקדים)
+- audience: קהלי יעד
+- insight: תובנה חדה ומפתיעה שמובילה ישירות לאסטרטגיה. חייבת להיות מבוססת נתון אמיתי. חייבת "להכות"
+- strategy: אסטרטגיה קונקרטית — headline + 3 pillars + תוצאות צפויות. לא "באוויר"
+- bigIdea: הקריאייטיב — הרעיון המרכזי, פורמט התוכן, הקונספט
+- deliverables: תוצרים מדויקים (כמויות, סוגים)
+- influencers: משפיענים מומלצים ואסטרטגיית משפיענים ספציפית
+- metrics: KPI + תקציב + CPE + reach
+- closing: סגירה
 
 כללים:
 1. כל הטקסט בעברית בלבד! גם כותרת הcover חייבת להיות בעברית. שם המותג יכול להיות באנגלית אבל שאר הכותרת בעברית. דוגמה: "${brandName} — הסמכות של יוקרה חכמה" ולא "The Authority of Smart Luxury"
@@ -343,15 +356,20 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
 6. בולט פוינטס: מקסימום 5 נקודות, כל אחת עד 10 מילים
 7. מספרים מפתח: השתמש בנתונים אמיתיים מהדאטה (תקציב, reach, KPIs). אם תקציב לא מצוין בדאטה — אל תמציא מספר! השתמש ב-KPIs אחרים כמו reach, engagement, המרות
 8. שייך תמונות קיימות (existingImageKey) כשהן רלוונטיות. אם אין תמונה מתאימה — כתוב imageDirection לתמונה שצריך ליצור
-9. whyNow — רק אם יש נתונים רלוונטיים (whyNowTrigger, israeliMarketContext)
-10. competitive — רק אם יש מתחרים בדאטה
-11. contentStrategy — רק אם יש contentGuidelines
-12. timeline — רק אם יש suggestedTimeline
-13. influencers — רק אם יש scrapedInfluencers או recommendations
-14. כל שקף צריך emotionalTone שמתאים לסיפור הכולל
-15. המצגת היא מסע: פתיחה דרמטית → בניית צורך → פתרון → הוכחה → סגירה
-16. COVER: רק כותרת + כותרת משנה קצרה (עד 8 מילים). אין bodyText בcover! זה שקף פתיחה ויזואלי, לא מקום לפרגרף. דוגמה טובה: title="${brandName} — הסטנדרט החדש", subtitle="הקלאסיקה החדשה של המטבח הישראלי"
-17. CLOSING: רק כותרת + tagline קצר. אין הנחיות או הערות! כתוב רק תוכן שהקהל רואה. דוגמה: title="בואו נתחיל", tagline="Leaders × ${brandName}"
+9. influencers — כתוב אסטרטגיית משפיענים ספציפית (לא כללית!). אם יש שמות מומלצים — השתמש. אם לא — כתוב פרופילים לדוגמה
+10. כל שקף צריך emotionalTone שמתאים לסיפור הכולל
+11. המצגת היא מסע: אתגר → תובנה → פתרון → הוכחה → סגירה
+
+כללים קריטיים לתוכן:
+- BRIEF: לא סיפור המותג! כתוב את האתגר — למה פנו אלינו? מה הבעיה? מקסימום 3 משפטים.
+- INSIGHT: חייבת להיות חדה, מפתיעה, ומבוססת על נתון אמיתי. לא משפט גנרי. דוגמה טובה: "73% מהקונים מחליטים לפי המלצת חבר — לא לפי פרסום." דוגמה רעה: "השוק משתנה ומתפתח כל הזמן."
+  התובנה חייבת להוביל ישירות לאסטרטגיה — הקורא צריך להגיד "אה, עכשיו מובן למה האסטרטגיה הזו הגיונית"
+- STRATEGY: חייבת להיות קונקרטית! headline + 3 pillars (כל pillar = כותרת + תיאור קצר + תוצר צפוי). לא "נבנה נוכחות דיגיטלית" אלא "3 קמפיינים ממוקדים: awareness ב-Instagram, conversion ב-TikTok, retargeting ב-Meta"
+- BIGIDEA: הקריאייטיב — שם הקמפיין + קונספט + פורמט תוכן (UGC? הפקה? mashup?)
+- METRICS: CPE = תקציב ÷ מוערבות (engagement). ודא שהחישוב נכון!
+- גוף: מקסימום 2-3 משפטים בכל שקף. תמציתי וחד. פחות = יותר.
+- COVER: רק כותרת + כותרת משנה קצרה (עד 8 מילים). אין bodyText בcover!
+- CLOSING: רק כותרת + tagline. דוגמה: title="בואו נתחיל", tagline="Leaders × ${brandName}"
 </task>`
 
   console.log(`[SlideDesigner][${requestId}] 📝 Plan prompt length: ${prompt.length} chars`)
@@ -476,26 +494,20 @@ cover, brief, goals, audience, insight, whyNow, strategy, competitive, bigIdea, 
 /** Fallback plan when AI fails */
 function buildFallbackPlan(data: PremiumProposalData, images: Record<string, string>): SlidePlan[] {
   const brandName = data.brandName || 'המותג'
+  // Fixed 9+2 slide sequence per Liran's feedback
   const plans: SlidePlan[] = [
-    { slideType: 'cover', title: brandName, subtitle: data.campaignName || 'הצעת מחיר', emotionalTone: 'dramatic', existingImageKey: images.coverImage ? 'coverImage' : undefined },
-    { slideType: 'brief', title: `הסיפור של ${brandName}`, bodyText: data.brandBrief || data.brandObjective || '', emotionalTone: 'warm', existingImageKey: images.brandImage ? 'brandImage' : undefined },
+    { slideType: 'cover', title: brandName, subtitle: data.campaignName || 'הצעת קריאטיב', emotionalTone: 'dramatic', existingImageKey: images.coverImage ? 'coverImage' : undefined },
+    { slideType: 'brief', title: `האתגר של ${brandName}`, bodyText: data.brandObjective || data.brandBrief || '', emotionalTone: 'confident', existingImageKey: images.brandImage ? 'brandImage' : undefined },
     { slideType: 'goals', title: 'מטרות הקמפיין', bulletPoints: data.goals || [], emotionalTone: 'energetic' },
-    { slideType: 'audience', title: 'קהל היעד', bodyText: data.targetDescription || '', emotionalTone: 'analytical', existingImageKey: images.audienceImage ? 'audienceImage' : undefined },
-    { slideType: 'insight', title: data.keyInsight || 'התובנה המרכזית', bodyText: data.insightData || '', emotionalTone: 'dramatic' },
+    { slideType: 'audience', title: 'קהל היעד', bodyText: data.targetDescription || '', emotionalTone: 'warm', existingImageKey: images.audienceImage ? 'audienceImage' : undefined },
+    { slideType: 'insight', title: data.keyInsight || 'התובנה', bodyText: data.insightData || '', emotionalTone: 'dramatic' },
     { slideType: 'strategy', title: data.strategyHeadline || 'האסטרטגיה', bodyText: data.strategyDescription || '', cards: (data.strategyPillars || []).map(p => ({ title: p.title, body: p.description })), emotionalTone: 'confident' },
-    { slideType: 'bigIdea', title: data.activityTitle || 'הרעיון הגדול', bodyText: data.activityDescription || '', emotionalTone: 'bold' },
-    { slideType: 'approach', title: 'הגישה שלנו', cards: (data.activityApproach || []).map(a => ({ title: a.title, body: a.description })), emotionalTone: 'warm', existingImageKey: images.activityImage ? 'activityImage' : undefined },
-    { slideType: 'deliverables', title: 'מה אנחנו מספקים', bulletPoints: data.deliverables || [], emotionalTone: 'confident' },
-    { slideType: 'metrics', title: 'מדדי הצלחה', bulletPoints: data.successMetrics || [], keyNumber: data.budget != null && data.budget > 0 ? `₪${data.budget.toLocaleString()}` : undefined, keyNumberLabel: 'תקציב', emotionalTone: 'analytical' },
-    { slideType: 'closing', title: `בואו נעשה את זה`, subtitle: brandName, tagline: 'מוכנים להתחיל?', emotionalTone: 'inspiring' },
+    { slideType: 'bigIdea', title: data.activityTitle || 'הקריאייטיב', bodyText: data.activityDescription || '', emotionalTone: 'bold', existingImageKey: images.activityImage ? 'activityImage' : undefined },
+    { slideType: 'deliverables', title: 'תוצרים', bulletPoints: data.deliverables || [], emotionalTone: 'confident' },
+    { slideType: 'influencers', title: 'משפיענים', bodyText: data.influencerResearch?.strategySummary || '', emotionalTone: 'energetic' },
+    { slideType: 'metrics', title: 'KPI', bulletPoints: data.successMetrics || [], keyNumber: data.budget != null && data.budget > 0 ? `₪${data.budget.toLocaleString()}` : undefined, keyNumberLabel: 'תקציב', emotionalTone: 'analytical' },
+    { slideType: 'closing', title: `בואו נתחיל`, subtitle: brandName, tagline: `Leaders × ${brandName}`, emotionalTone: 'inspiring' },
   ]
-
-  if (data._brandResearch?.competitors?.length) {
-    plans.splice(5, 0, { slideType: 'competitive', title: 'הנוף התחרותי', cards: data._brandResearch.competitors.map(c => ({ title: c.name || '', body: c.differentiator || '' })), emotionalTone: 'analytical' })
-  }
-  if (data.influencerResearch?.recommendations?.length || data.scrapedInfluencers?.length) {
-    plans.splice(-1, 0, { slideType: 'influencerStrategy', title: 'אסטרטגיית משפיענים', bodyText: data.influencerResearch?.strategySummary || '', emotionalTone: 'energetic' })
-  }
 
   return plans
 }
