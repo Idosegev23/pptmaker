@@ -1384,9 +1384,19 @@ IMAGE TREATMENT:
 5. EVERY title gets multi-layer text-shadow (depth + glow + ambient). No flat text.
 6. EVERY slide gets at least one watermark OR floating label OR accent stripe (Layer 4).
 7. EVERY slide gets atmospheric depth — glow orbs, aurora mesh, or vignette (Layer 1).
-8. VARY layouts DRAMATICALLY. No two slides should feel similar. Mix: full-bleed images, centered typography, split layouts, card grids, massive stats, minimal closings.
-9. Some slides = 80% whitespace. Others = rich overlapping glass cards. The CONTRAST between slides makes the deck alive.
-10. Think Vogue spread, not PowerPoint. This should look like it cost $50,000 to design.
+8. VARY layouts DRAMATICALLY. No two slides should feel similar.
+9. The CONTRAST between slides makes the deck alive.
+10. Think Vogue spread, not PowerPoint.
+
+TEXT OVERFLOW PREVENTION (CRITICAL):
+11. ALL text containers MUST have overflow:hidden and max-height set. Text must NEVER bleed outside the slide.
+12. Title: max 2 lines. If title is long, reduce font-size to fit. Use CSS: display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+13. Body text: max 3 lines per paragraph. Same clamp technique.
+14. Cards: each card has fixed height. Text inside gets overflow:hidden.
+15. Bullet lists: max 5 items. Each item max 1 line with text-overflow:ellipsis.
+16. LESS TEXT = BETTER DESIGN. If content is long, summarize. Use icons and numbers instead of sentences.
+17. Every text element: white-space:normal; word-break:break-word; overflow-wrap:break-word;
+18. Safe zone: keep ALL readable text within 80px margin from slide edges (1920-160=1760px usable width, 1080-160=920px usable height).
 </rules>
 
 <slides>
