@@ -427,30 +427,60 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
     },
   }
 
-  const models = ['gpt-5.4', 'gpt-4o-mini']
-  for (let attempt = 0; attempt < models.length; attempt++) {
-    const model = models[attempt]
+  // ── Claude Opus 4.6 for Planner (best Hebrew writing + narrative quality) ──
+  // Fallback to GPT-5.4 if Claude fails
+  const plannerAttempts = [
+    { provider: 'anthropic', model: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+    { provider: 'openai', model: 'gpt-5.4', label: 'GPT-5.4 (fallback)' },
+  ]
+
+  for (let attempt = 0; attempt < plannerAttempts.length; attempt++) {
+    const { provider, model, label } = plannerAttempts[attempt]
     try {
-      console.log(`[SlideDesigner][${requestId}] 🤖 Calling ${model} for plan (attempt ${attempt + 1}/${models.length})...`)
-      const OpenAI = (await import('openai')).default
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      console.log(`[SlideDesigner][${requestId}] 🤖 Calling ${label} for plan (attempt ${attempt + 1}/${plannerAttempts.length})...`)
 
-      const response = await openai.responses.create({
-        model,
-        instructions: 'אתה קריאייטיב דיירקטור בכיר. תכנן מצגות הצעת מחיר פרימיום בעברית. החזר JSON בלבד.',
-        input: prompt,
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'slide_plan',
-            strict: true,
-            schema: jsonSchema,
+      let rawText = ''
+
+      if (provider === 'anthropic') {
+        const Anthropic = (await import('@anthropic-ai/sdk')).default
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+        const response = await anthropic.messages.create({
+          model,
+          max_tokens: 16384,
+          system: 'אתה קריאייטיב דיירקטור בכיר. תכנן מצגות הצעת מחיר פרימיום בעברית. החזר JSON בלבד — אובייקט עם מפתח "slides" שמכיל מערך. ללא markdown, ללא הסבר.',
+          messages: [{ role: 'user', content: prompt }],
+        })
+
+        rawText = response.content
+          .filter(c => c.type === 'text')
+          .map(c => c.text)
+          .join('') || '{}'
+
+        // Claude might wrap in markdown fences
+        rawText = rawText.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+      } else {
+        const OpenAI = (await import('openai')).default
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+        const response = await openai.responses.create({
+          model,
+          instructions: 'אתה קריאייטיב דיירקטור בכיר. תכנן מצגות הצעת מחיר פרימיום בעברית. החזר JSON בלבד.',
+          input: prompt,
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'slide_plan',
+              strict: true,
+              schema: jsonSchema,
+            },
           },
-        },
-      })
+        })
 
-      const rawText = response.output_text || '{}'
-      console.log(`[SlideDesigner][${requestId}] ✅ ${model} responded: ${rawText.length} chars`)
+        rawText = response.output_text || '{}'
+      }
+
+      console.log(`[SlideDesigner][${requestId}] ✅ ${label} responded: ${rawText.length} chars`)
 
       let parsed: { slides: SlidePlan[] }
       try {
@@ -486,8 +516,8 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
       throw new Error(`Plan too short: ${parsed?.slides?.length || 0} slides`)
     } catch (error) {
       const msg = detailedError(error)
-      console.error(`[SlideDesigner][${requestId}] Plan attempt ${attempt + 1} failed (${model}): ${msg}`)
-      if (attempt < models.length - 1) {
+      console.error(`[SlideDesigner][${requestId}] Plan attempt ${attempt + 1} failed (${label}): ${msg}`)
+      if (attempt < plannerAttempts.length - 1) {
         await new Promise(r => setTimeout(r, 1500))
       }
     }
@@ -1440,38 +1470,50 @@ Return a JSON object: { "slides": ["<!DOCTYPE html>...", "<!DOCTYPE html>...", .
 Each item is a COMPLETE, self-contained HTML document for one slide. Make them BREATHTAKING.`
 
   try {
-    console.log(`[SlideDesigner][${requestId}] 🤖 Calling GPT-5.4 for HTML slides (${prompt.length} chars)...`)
-    const OpenAI = (await import('openai')).default
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    // ── Claude Sonnet 4.6 for HTML (5x cheaper, excellent code) → GPT-5.4 fallback ──
+    let rawText = ''
+    let usedModel = ''
 
-    const htmlSchema = {
-      type: 'object' as const,
-      additionalProperties: false,
-      required: ['slides'],
-      properties: {
-        slides: {
-          type: 'array' as const,
-          items: { type: 'string' as const },
-        },
-      },
+    try {
+      console.log(`[SlideDesigner][${requestId}] 🤖 Calling Claude Sonnet 4.6 for HTML slides (${prompt.length} chars)...`)
+      const Anthropic = (await import('@anthropic-ai/sdk')).default
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6-20250514',
+        max_tokens: 32768,
+        system: 'You are a legendary web designer. Return ONLY valid JSON: { "slides": ["<!DOCTYPE html>...", ...] }. Each string is a complete HTML document. No markdown fences. Make them breathtaking.',
+        messages: [{ role: 'user', content: prompt }],
+      })
+
+      rawText = response.content.filter(c => c.type === 'text').map(c => c.text).join('') || '{}'
+      rawText = rawText.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+      usedModel = 'Claude Sonnet 4.6'
+    } catch (claudeErr) {
+      console.warn(`[SlideDesigner][${requestId}] ⚠️ Claude failed, falling back to GPT-5.4: ${claudeErr instanceof Error ? claudeErr.message : String(claudeErr)}`)
+
+      const OpenAI = (await import('openai')).default
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+      const htmlSchema = {
+        type: 'object' as const,
+        additionalProperties: false,
+        required: ['slides'],
+        properties: { slides: { type: 'array' as const, items: { type: 'string' as const } } },
+      }
+
+      const response = await openai.responses.create({
+        model: 'gpt-5.4',
+        instructions: 'You are a legendary web designer. Return ONLY valid JSON with an array of complete HTML document strings.',
+        input: prompt,
+        text: { format: { type: 'json_schema', name: 'html_slides', strict: true, schema: htmlSchema } },
+      })
+
+      rawText = response.output_text || '{}'
+      usedModel = 'GPT-5.4 (fallback)'
     }
 
-    const response = await openai.responses.create({
-      model: 'gpt-5.4',
-      instructions: 'You are a legendary web designer. Return ONLY valid JSON with an array of complete HTML document strings. Each string starts with <!DOCTYPE html> and ends with </html>. Make them breathtaking.',
-      input: prompt,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'html_slides',
-          strict: true,
-          schema: htmlSchema,
-        },
-      },
-    })
-
-    const rawText = response.output_text || '{}'
-    console.log(`[SlideDesigner][${requestId}] ✅ GPT-5.4 responded: ${rawText.length} chars`)
+    console.log(`[SlideDesigner][${requestId}] ✅ ${usedModel} responded: ${rawText.length} chars`)
 
     const parsed = JSON.parse(rawText) as { slides: string[] }
     const htmlSlides = parsed.slides || []
