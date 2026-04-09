@@ -849,6 +849,71 @@ export default function PresentationEditorPage() {
               >
                 {isGeneratingPdf ? 'מייצר PDF...' : 'הורד PDF'}
               </button>
+
+              {/* PPTX Export */}
+              <button
+                onClick={async () => {
+                  if (!htmlSlides?.length) return
+                  toast.info('מייצר PPTX...')
+                  try {
+                    const { domToPptx } = await import('dom-to-pptx')
+                    // Create a hidden container with all slides
+                    const container = document.createElement('div')
+                    container.style.position = 'fixed'
+                    container.style.left = '-9999px'
+                    container.style.top = '0'
+                    document.body.appendChild(container)
+
+                    for (const slideHtml of htmlSlides) {
+                      const frame = document.createElement('iframe')
+                      frame.style.width = '1920px'
+                      frame.style.height = '1080px'
+                      frame.style.border = 'none'
+                      container.appendChild(frame)
+                      frame.contentDocument?.open()
+                      frame.contentDocument?.write(slideHtml)
+                      frame.contentDocument?.close()
+                    }
+
+                    // Wait for iframes to render
+                    await new Promise(r => setTimeout(r, 2000))
+
+                    // Convert each iframe's slide div to PPTX
+                    const slideElements: HTMLElement[] = []
+                    for (const frame of Array.from(container.querySelectorAll('iframe'))) {
+                      const slideEl = (frame as HTMLIFrameElement).contentDocument?.querySelector('.slide') as HTMLElement
+                      if (slideEl) slideElements.push(slideEl)
+                    }
+
+                    if (slideElements.length === 0) {
+                      toast.error('לא נמצאו שקפים לייצוא')
+                      document.body.removeChild(container)
+                      return
+                    }
+
+                    const pptxBlob = await domToPptx(slideElements, {
+                      slideWidth: 10,
+                      slideHeight: 5.625,
+                    })
+
+                    // Download
+                    const url = URL.createObjectURL(pptxBlob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${brandName}.pptx`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                    document.body.removeChild(container)
+                    toast.success('PPTX הורד בהצלחה')
+                  } catch (err) {
+                    console.error('PPTX export failed:', err)
+                    toast.error('שגיאה בייצוא PPTX')
+                  }
+                }}
+                className="px-4 py-2 bg-orange-500/10 text-orange-400 border border-orange-500/30 rounded-lg text-sm font-medium hover:bg-orange-500/20 transition-colors"
+              >
+                📊 PPTX
+              </button>
             </div>
           </div>
 
