@@ -1383,7 +1383,34 @@ IMAGE TREATMENT:
 </css_arsenal>
 
 <rules>
-1. Each slide = COMPLETE HTML document: <!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Heebo:wght@100;300;400;500;700;800;900&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box;}</style></head><body><div class="slide" style="width:1920px;height:1080px;position:relative;overflow:hidden;font-family:'Heebo',sans-serif;direction:rtl;">...</div></body></html>
+1. Each slide = COMPLETE HTML document with this EXACT boilerplate:
+<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@100;300;400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+.slide{width:1920px;height:1080px;position:relative;overflow:hidden;font-family:'Heebo',sans-serif;direction:rtl;}
+/* TEXT OVERFLOW PROTECTION — mandatory on every text element */
+.slide h1,.slide h2,.slide h3,.slide [data-role="title"]{
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;
+  word-break:break-word;overflow-wrap:break-word;text-wrap:balance;
+}
+.slide p,.slide [data-role="body"]{
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;
+  word-break:break-word;overflow-wrap:break-word;
+}
+.slide li,.slide [data-role="bullet"]{
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  text-overflow:ellipsis;
+}
+.slide [data-role="card-body"]{
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;
+}
+.slide [data-role="subtitle"]{
+  overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  text-wrap:balance;
+}
+</style>
+</head><body><div class="slide">...</div></body></html>
 2. ALL text in Hebrew. RTL.
 3. Design system colors ONLY. No random colors.
 4. Images: use ONLY provided URLs. Always with object-fit:cover and a gradient overlay for text readability.
@@ -1466,8 +1493,26 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
       console.log(`[SlideDesigner][${requestId}]   🎨 ${(plan?.slideType || '?').padEnd(18)} | ${htmlSlides[i].length} chars`)
     }
 
+    // Post-process: inject overflow safety CSS if GPT didn't include it
+    const SAFETY_CSS = `<style data-safety>
+.slide h1,.slide h2,.slide h3,.slide [data-role="title"]{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;word-break:break-word;text-wrap:balance;}
+.slide p,.slide [data-role="body"]{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;word-break:break-word;}
+.slide li{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-overflow:ellipsis;}
+.slide [data-role="card-body"]{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;}
+.slide [data-role="subtitle"]{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-wrap:balance;}
+</style>`
+    const safeSlides = htmlSlides.slice(0, actualCount).map(html => {
+      // Only inject if GPT didn't already include line-clamp rules
+      if (html.includes('-webkit-line-clamp') || html.includes('line-clamp')) return html
+      // Inject before </head> or before </style> or before </body>
+      if (html.includes('</head>')) return html.replace('</head>', SAFETY_CSS + '</head>')
+      if (html.includes('</style>')) return html.replace('</style>', '</style>' + SAFETY_CSS)
+      if (html.includes('</body>')) return html.replace('</body>', SAFETY_CSS + '</body>')
+      return html + SAFETY_CSS
+    })
+
     return {
-      htmlSlides: htmlSlides.slice(0, actualCount),
+      htmlSlides: safeSlides,
       slideTypes: batchPlans.slice(0, actualCount).map(p => p.slideType),
       slideIndex: slideOffset + actualCount,
     }
