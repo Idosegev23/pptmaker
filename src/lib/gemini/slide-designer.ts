@@ -448,7 +448,14 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
         const response = await anthropic.messages.create({
           model,
           max_tokens: 16384,
-          system: 'אתה קריאייטיב דיירקטור בכיר. תכנן מצגות הצעת מחיר פרימיום בעברית. החזר JSON בלבד — אובייקט עם מפתח "slides" שמכיל מערך. ללא markdown, ללא הסבר.',
+          // Prompt caching: system prompt cached across calls (70% cost saving)
+          system: [
+            {
+              type: 'text' as const,
+              text: 'אתה קריאייטיב דיירקטור בכיר ב-Leaders, סוכנות שיווק דיגיטלי ישראלית מובילה. תכנן מצגות הצעת מחיר פרימיום בעברית. התובנה חייבת להיות חדה ומבוססת נתון אמיתי. האסטרטגיה חייבת להיות קונקרטית עם 3 pillars ספציפיים. החזר JSON בלבד — אובייקט עם מפתח "slides" שמכיל מערך. ללא markdown, ללא הסבר.',
+              cache_control: { type: 'ephemeral' as const },
+            },
+          ],
           messages: [{ role: 'user', content: prompt }],
         })
 
@@ -1482,7 +1489,14 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-6-20250514',
         max_tokens: 32768,
-        system: 'You are a legendary web designer. Return ONLY valid JSON: { "slides": ["<!DOCTYPE html>...", ...] }. Each string is a complete HTML document. No markdown fences. Make them breathtaking.',
+        // Prompt caching: system prompt is cached across batches (70% cost saving)
+        system: [
+          {
+            type: 'text' as const,
+            text: 'You are a legendary web designer. Return ONLY valid JSON: { "slides": ["<!DOCTYPE html>...", ...] }. Each string is a complete HTML document (1920×1080px, RTL Hebrew, Heebo font). No markdown fences. Use glassmorphism, mesh gradients, text-stroke watermarks, multi-layer text-shadows. Make them breathtaking.',
+            cache_control: { type: 'ephemeral' as const },
+          },
+        ],
         messages: [{ role: 'user', content: prompt }],
       })
 
