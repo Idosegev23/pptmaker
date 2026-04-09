@@ -452,6 +452,7 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
   const plannerAttempts = [
     { provider: 'anthropic', model: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
     { provider: 'openai', model: 'gpt-5.4', label: 'GPT-5.4 (fallback)' },
+    { provider: 'gemini', model: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (fallback)' },
   ]
 
   for (let attempt = 0; attempt < plannerAttempts.length; attempt++) {
@@ -486,7 +487,7 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
 
         // Claude might wrap in markdown fences
         rawText = rawText.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
-      } else {
+      } else if (provider === 'openai') {
         const OpenAI = (await import('openai')).default
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -505,6 +506,21 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
         })
 
         rawText = response.output_text || '{}'
+      } else if (provider === 'gemini') {
+        const result = await callAI({
+          model,
+          prompt: `${prompt}\n\nהחזר JSON בלבד — אובייקט עם מפתח "slides" שמכיל מערך. ללא markdown.`,
+          geminiConfig: {
+            responseMimeType: 'application/json',
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+            maxOutputTokens: 16384,
+          },
+          thinkingLevel: 'MEDIUM',
+          maxOutputTokens: 16384,
+          callerId: `${requestId}-plan-gemini`,
+          noGlobalFallback: true,
+        })
+        rawText = result.text || '{}'
       }
 
       console.log(`[SlideDesigner][${requestId}] ✅ ${label} responded: ${rawText.length} chars`)
@@ -1526,25 +1542,48 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
     } catch (claudeErr) {
       console.warn(`[SlideDesigner][${requestId}] ⚠️ Claude failed, falling back to GPT-5.4: ${claudeErr instanceof Error ? claudeErr.message : String(claudeErr)}`)
 
-      const OpenAI = (await import('openai')).default
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      // Try GPT-5.4 first
+      try {
+        const OpenAI = (await import('openai')).default
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-      const htmlSchema = {
-        type: 'object' as const,
-        additionalProperties: false,
-        required: ['slides'],
-        properties: { slides: { type: 'array' as const, items: { type: 'string' as const } } },
+        const htmlSchema = {
+          type: 'object' as const,
+          additionalProperties: false,
+          required: ['slides'],
+          properties: { slides: { type: 'array' as const, items: { type: 'string' as const } } },
+        }
+
+        const response = await openai.responses.create({
+          model: 'gpt-5.4',
+          instructions: 'You are a legendary web designer. Return ONLY valid JSON with an array of complete HTML document strings.',
+          input: prompt,
+          text: { format: { type: 'json_schema', name: 'html_slides', strict: true, schema: htmlSchema } },
+        })
+
+        rawText = response.output_text || '{}'
+        usedModel = 'GPT-5.4 (fallback)'
+      } catch (gptErr) {
+        console.warn(`[SlideDesigner][${requestId}] ⚠️ GPT-5.4 also failed, trying Gemini: ${gptErr instanceof Error ? gptErr.message : String(gptErr)}`)
+
+        // Last resort: Gemini 3.1 Pro
+        const geminiResult = await callAI({
+          model: 'gemini-3.1-pro-preview',
+          prompt: prompt + '\n\nReturn a JSON object: { "slides": ["<!DOCTYPE html>...", ...] }. Each item is a complete HTML document.',
+          geminiConfig: {
+            responseMimeType: 'application/json',
+            thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+            maxOutputTokens: 32768,
+          },
+          thinkingLevel: 'HIGH',
+          maxOutputTokens: 32768,
+          callerId: `${requestId}-html-gemini`,
+          noGlobalFallback: true,
+        })
+
+        rawText = geminiResult.text || '{}'
+        usedModel = 'Gemini 3.1 Pro (last resort)'
       }
-
-      const response = await openai.responses.create({
-        model: 'gpt-5.4',
-        instructions: 'You are a legendary web designer. Return ONLY valid JSON with an array of complete HTML document strings.',
-        input: prompt,
-        text: { format: { type: 'json_schema', name: 'html_slides', strict: true, schema: htmlSchema } },
-      })
-
-      rawText = response.output_text || '{}'
-      usedModel = 'GPT-5.4 (fallback)'
     }
 
     console.log(`[SlideDesigner][${requestId}] ✅ ${usedModel} responded: ${rawText.length} chars`)
