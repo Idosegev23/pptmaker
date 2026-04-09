@@ -1587,8 +1587,57 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
       return html + SAFETY_CSS
     })
 
+    // ── Reflection Loop (DeepPresenter pattern) ──
+    // Inspect each slide visually, auto-revise defective ones
+    let finalSlides = safeSlides
+    try {
+      const { inspectAllSlides } = await import('@/lib/slide-engine/vision-inspector')
+      const slideTypes = batchPlans.slice(0, actualCount).map(p => p.slideType)
+      const imageFlags = batchPlans.slice(0, actualCount).map(p => !!(p.existingImageKey && foundation.images[p.existingImageKey]))
+
+      const reports = await inspectAllSlides(finalSlides, slideTypes, imageFlags)
+      const defective = reports.filter(r => r.hasDefects && r.score < 70)
+
+      if (defective.length > 0) {
+        console.log(`[SlideDesigner][${requestId}] 🔄 Reflection: ${defective.length} slides need revision`)
+
+        for (const report of defective) {
+          if (!report.revisionHint) continue
+          try {
+            console.log(`[SlideDesigner][${requestId}]   🔧 Revising slide ${report.slideIndex + 1} (${report.slideType}): ${report.revisionHint.slice(0, 80)}`)
+            const Anthropic = (await import('@anthropic-ai/sdk')).default
+            const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+            const revisionResponse = await anthropic.messages.create({
+              model: 'claude-sonnet-4-6-20250514',
+              max_tokens: 8192,
+              system: 'Fix the HTML slide based on the defect report. Return ONLY the fixed complete HTML document. No explanation.',
+              messages: [{
+                role: 'user',
+                content: `Original slide HTML:\n${finalSlides[report.slideIndex]}\n\nDefects found:\n${report.issues.join('\n')}\n\nFix: ${report.revisionHint}\n\nReturn the FIXED HTML:`,
+              }],
+            })
+
+            const fixedHtml = revisionResponse.content.filter(c => c.type === 'text').map(c => c.text).join('')
+              .replace(/^```html?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+
+            if (fixedHtml.includes('<!DOCTYPE') || fixedHtml.includes('<html')) {
+              finalSlides[report.slideIndex] = fixedHtml
+              console.log(`[SlideDesigner][${requestId}]   ✅ Slide ${report.slideIndex + 1} revised`)
+            }
+          } catch (revErr) {
+            console.warn(`[SlideDesigner][${requestId}]   ⚠️ Revision failed for slide ${report.slideIndex + 1}: ${revErr}`)
+          }
+        }
+      } else {
+        console.log(`[SlideDesigner][${requestId}] ✅ Reflection: all slides passed inspection`)
+      }
+    } catch (inspectErr) {
+      console.warn(`[SlideDesigner][${requestId}] ⚠️ Vision inspection skipped: ${inspectErr instanceof Error ? inspectErr.message : String(inspectErr)}`)
+    }
+
     return {
-      htmlSlides: safeSlides,
+      htmlSlides: finalSlides,
       slideTypes: batchPlans.slice(0, actualCount).map(p => p.slideType),
       slideIndex: slideOffset + actualCount,
     }
