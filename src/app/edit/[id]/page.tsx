@@ -24,6 +24,7 @@ import HtmlSlideEditor from '@/components/presentation/HtmlSlideEditor'
 import FeedbackDialog from '@/components/feedback-dialog'
 import PresentationMode from '@/components/presentation/PresentationMode'
 import ShareDialog from '@/components/share/ShareDialog'
+import HtmlSlideshow from '@/components/presentation/HtmlSlideshow'
 import VideoSourceModal from '@/components/presentation/VideoSourceModal'
 
 // ─── Empty presentation (placeholder while loading) ────────
@@ -57,6 +58,7 @@ export default function PresentationEditorPage() {
   const [showProperties, setShowProperties] = useState(true)
   const [showFeedback, setShowFeedback] = useState(false)
   const [showShareDialog, setShowShareDialog] = useState(false)
+  const [showPresentation, setShowPresentation] = useState(false)
   const [imageModalElementId, setImageModalElementId] = useState<string | null>(null)
   const [imageModalTab, setImageModalTab] = useState<'upload' | 'url' | 'ai'>('upload')
   const [imageModalMode, setImageModalMode] = useState<'replace' | 'add' | 'mockup-content'>('replace')
@@ -914,6 +916,14 @@ export default function PresentationEditorPage() {
               >
                 📊 PPTX
               </button>
+
+              {/* Presentation mode */}
+              <button
+                onClick={() => setShowPresentation(true)}
+                className="px-4 py-2 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-lg text-sm font-medium hover:bg-purple-500/20 transition-colors"
+              >
+                ▶ הצגה
+              </button>
             </div>
           </div>
 
@@ -950,6 +960,19 @@ export default function PresentationEditorPage() {
           onClose={() => setShowShareDialog(false)}
           documentId={documentId}
         />
+
+        {/* Presentation mode overlay */}
+        {showPresentation && htmlSlides && (
+          <div className="fixed inset-0 z-[9999] bg-black">
+            <button
+              onClick={() => setShowPresentation(false)}
+              className="absolute top-4 left-4 z-[10000] text-white/50 hover:text-white text-sm px-3 py-1.5 rounded border border-white/20 bg-black/50"
+            >
+              ESC — יציאה
+            </button>
+            <HtmlSlideshow htmlSlides={htmlSlides} brandName={brandName} />
+          </div>
+        )}
       </div>
     )
   }
