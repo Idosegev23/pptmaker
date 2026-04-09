@@ -111,7 +111,7 @@ const EDITOR_SCRIPT = `
   function notifyParent() {
     // Send updated HTML back to parent
     const fullHtml = document.documentElement.outerHTML;
-    window.parent.postMessage({ type: 'slide-html-update', html: '<!DOCTYPE html>' + fullHtml }, '*');
+    window.parent.postMessage({ type: 'slide-html-update', html: '<!DOCTYPE html>' + fullHtml }, window.location.ancestorOrigins?.[0] || '*');
   }
 
   // Init after a short delay (let styles settle)
@@ -183,7 +183,7 @@ export default function HtmlSlideEditor({
         <iframe
           ref={iframeRef}
           srcDoc={editableHtml}
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-same-origin"
           onLoad={handleLoad}
           style={{
             position: 'absolute',

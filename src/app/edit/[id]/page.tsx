@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import type { Presentation, Slide, SlideElement, TextElement, ShapeElement, ImageElement, VideoElement, MockupElement, CompareElement, LogoStripElement, MapElement, ShapeType, VideoProvider } from '@/types/presentation'
 import { isTextElement, detectVideoProvider, extractYouTubeId } from '@/types/presentation'
 import type { AdvancedElementType } from '@/components/presentation/EditorToolbar'
@@ -89,6 +90,18 @@ export default function PresentationEditorPage() {
     )
   }, [editor.presentation, editor.selectedSlideIndex, editor.selectedSlide, documentData])
 
+  // ─── Keyboard navigation for HTML-native mode ────────
+  useEffect(() => {
+    if (!htmlSlides) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'ArrowRight') setActiveHtmlSlide(prev => Math.max(0, prev - 1))
+      if (e.key === 'ArrowLeft') setActiveHtmlSlide(prev => Math.min(htmlSlides.length - 1, prev + 1))
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [htmlSlides])
+
   // ─── Load document ───────────────────────────────────
   useEffect(() => {
     loadDocument()
@@ -99,8 +112,12 @@ export default function PresentationEditorPage() {
     try {
       setPageState('loading')
 
-      const res = await fetch(`/api/documents/${documentId}`)
-      if (!res.ok) throw new Error('Document not found')
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      const res = await fetch(`/api/documents/${documentId}`, { signal: controller.signal })
+      clearTimeout(timeoutId)
+      if (res.status === 404) throw new Error('המצגת לא נמצאה — אולי נמחקה')
+      if (!res.ok) throw new Error('שגיאה בטעינת המסמך')
 
       const data = await res.json()
       const doc = data.document
@@ -737,22 +754,29 @@ export default function PresentationEditorPage() {
               {/* Regenerate current slide */}
               <button
                 onClick={async () => {
-                  if (!htmlSlides) return
+                  if (!htmlSlides || isRegenerating) return
                   setIsRegenerating(true)
                   try {
+                    const controller = new AbortController()
+                    const timeoutId = setTimeout(() => controller.abort(), 60000)
                     const res = await fetch('/api/regenerate-slide', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ documentId, slideIndex: activeHtmlSlide }),
+                      signal: controller.signal,
                     })
-                    if (res.ok) {
-                      const data = await res.json()
-                      if (data.html) {
-                        const updated = [...htmlSlides]
-                        updated[activeHtmlSlide] = data.html
-                        setHtmlSlides(updated)
-                      }
+                    clearTimeout(timeoutId)
+                    const data = await res.json()
+                    if (res.ok && data.html) {
+                      const updated = [...htmlSlides]
+                      updated[activeHtmlSlide] = data.html
+                      setHtmlSlides(updated)
+                      toast.success('השקף עוצב מחדש בהצלחה')
+                    } else {
+                      toast.error(data.error || 'שגיאה בעיצוב מחדש')
                     }
+                  } catch (err) {
+                    toast.error(err instanceof Error && err.name === 'AbortError' ? 'העיצוב לקח יותר מדי זמן' : 'שגיאה בעיצוב מחדש')
                   } finally { setIsRegenerating(false) }
                 }}
                 disabled={isRegenerating}
@@ -780,11 +804,11 @@ export default function PresentationEditorPage() {
                     })
                     const data = await res.json()
                     if (res.ok && data.success) {
-                      alert(`תזכורת פולואפ נקבעה ל-${data.formattedDate}`)
+                      toast.success(`📅 תזכורת פולואפ נקבעה ל-${data.formattedDate}`)
                     } else {
-                      alert(data.error || 'שגיאה ביצירת תזכורת')
+                      toast.error(data.error || 'שגיאה ביצירת תזכורת')
                     }
-                  } catch { alert('שגיאה ביצירת תזכורת') }
+                  } catch { toast.error('שגיאה ביצירת תזכורת') }
                 }}
                 className="px-4 py-2 bg-green-500/10 text-green-400 border border-green-500/30 rounded-lg text-sm font-medium hover:bg-green-500/20 transition-colors"
               >
@@ -795,18 +819,29 @@ export default function PresentationEditorPage() {
               <button
                 onClick={async () => {
                   setIsGeneratingPdf(true)
+                  toast.info('מייצר PDF — ייתכן שייקח עד 30 שניות...')
                   try {
+                    const controller = new AbortController()
+                    const timeoutId = setTimeout(() => controller.abort(), 120000)
                     const res = await fetch('/api/pdf', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ documentId, action: 'download' }),
+                      signal: controller.signal,
                     })
+                    clearTimeout(timeoutId)
                     if (res.ok) {
                       const blob = await res.blob()
+                      if (blob.size === 0) throw new Error('PDF ריק')
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a'); a.href = url; a.download = `${brandName}.pdf`; a.click()
                       URL.revokeObjectURL(url)
+                      toast.success('PDF הורד בהצלחה')
+                    } else {
+                      toast.error('שגיאה ביצירת PDF')
                     }
+                  } catch (err) {
+                    toast.error(err instanceof Error && err.name === 'AbortError' ? 'יצירת PDF לקחה יותר מדי זמן' : 'שגיאה ביצירת PDF')
                   } finally { setIsGeneratingPdf(false) }
                 }}
                 disabled={isGeneratingPdf}
@@ -832,7 +867,7 @@ export default function PresentationEditorPage() {
               onClick={() => setActiveHtmlSlide(Math.max(0, activeHtmlSlide - 1))}
               disabled={activeHtmlSlide === 0}
               className="text-gray-400 hover:text-white disabled:opacity-30 text-sm px-2"
-            >→</button>
+            >←</button>
             <span className="text-xs text-gray-500">
               שקף {activeHtmlSlide + 1} מתוך {htmlSlides.length}
             </span>
@@ -840,7 +875,7 @@ export default function PresentationEditorPage() {
               onClick={() => setActiveHtmlSlide(Math.min(htmlSlides.length - 1, activeHtmlSlide + 1))}
               disabled={activeHtmlSlide === htmlSlides.length - 1}
               className="text-gray-400 hover:text-white disabled:opacity-30 text-sm px-2"
-            >←</button>
+            >→</button>
           </div>
         </div>
 
