@@ -49,6 +49,35 @@ export default function StepKeyInsight({
   const handleRefineWithAI = useCallback(async () => {
     setIsRefining(true)
     try {
+      // Try the 3-stage Insight Chain first (Claude Opus — much sharper results)
+      const chainRes = await fetch('/api/insight-chain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName: briefContext?.split(':')[0] || '',
+          industry: (brandResearch as Record<string, unknown>)?.industry || '',
+          targetAudience: (brandResearch as Record<string, unknown>)?.primaryAudience || '',
+          brandBrief: briefContext || '',
+          painPoints: [],
+          researchData: brandResearch ? JSON.stringify(brandResearch).slice(0, 3000) : '',
+        }),
+      })
+
+      if (chainRes.ok) {
+        const chainResult = await chainRes.json()
+        if (chainResult.insight) {
+          const newData = {
+            keyInsight: chainResult.insight,
+            insightSource: chainResult.source || 'Insight Chain (Claude Opus)',
+            insightData: chainResult.dataPoint ? `${chainResult.dataPoint} (${chainResult.source})` : insightData,
+          }
+          onChange({ ...data, ...newData })
+          onPushVersion?.('key_insight.insight', newData, 'ai')
+          return
+        }
+      }
+
+      // Fallback: old refine method
       const res = await fetch('/api/ai-assist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,7 +108,7 @@ export default function StepKeyInsight({
     } finally {
       setIsRefining(false)
     }
-  }, [keyInsight, briefContext, data, onChange, insightSource, insightData])
+  }, [keyInsight, briefContext, data, onChange, insightSource, insightData, brandResearch])
 
   const hasExtractedInsight =
     extractedData?.keyInsight && extractedData.keyInsight !== keyInsight
