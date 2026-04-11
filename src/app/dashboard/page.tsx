@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { formatDate } from '@/lib/utils'
 import { isDevMode, DEV_USER } from '@/lib/auth/dev-mode'
+import { ConfirmSubmitButton } from '@/components/dashboard/confirm-submit-button'
 
 interface DocumentRow {
   id: string
@@ -191,16 +192,15 @@ export default async function DashboardPage() {
                     const supabase = await createClient()
                     await supabase.from('documents').delete().eq('id', doc.id)
                   }}>
-                    <button
-                      type="submit"
-                      className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-500"
+                    <ConfirmSubmitButton
+                      confirmMessage="למחוק את ההצעה?"
                       title="מחק הצעה"
-                      onClick={(e) => { if (!confirm('למחוק את ההצעה?')) e.preventDefault() }}
+                      className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-500"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
-                    </button>
+                    </ConfirmSubmitButton>
                   </form>
                   </div>
                 )
