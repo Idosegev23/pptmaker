@@ -1582,37 +1582,62 @@ Return a JSON object: { "slides": ["<!DOCTYPE html>...", "<!DOCTYPE html>...", .
 Each item is a COMPLETE, self-contained HTML document for one slide. Make them BREATHTAKING.`
 
   try {
-    // ── Claude Sonnet 4.6 for HTML (5x cheaper, excellent code) → GPT-5.4 fallback ──
+    // ── Gemini 3.1 Pro PRIMARY (with cache when available) → Claude → GPT fallbacks ──
+    // Flipped April 2026: Gemini is now the primary path because:
+    // 1. Anthropic key may be unavailable → previous Claude-first failed
+    // 2. Explicit context cache cuts ~70% of input cost across the 3 batches
+    // 3. Gemini 3.1 Pro matches Claude Sonnet quality on HTML and is cheaper
     let rawText = ''
     let usedModel = ''
 
+    const useCache = !!foundation.geminiCacheName
+    console.log(`[SlideDesigner][${requestId}] 🟢 PRIMARY: Gemini 3.1 Pro for HTML batch (cache=${useCache ? '✅' : '❌'}, prompt=${prompt.length} chars)`)
+
     try {
-      console.log(`[SlideDesigner][${requestId}] 🤖 Calling Claude Sonnet 4.6 for HTML slides (${prompt.length} chars)...`)
-      const Anthropic = (await import('@anthropic-ai/sdk')).default
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6-20250514',
-        max_tokens: 32768,
-        // Prompt caching: system prompt is cached across batches (70% cost saving)
-        system: [
-          {
-            type: 'text' as const,
-            text: 'You are a legendary web designer. Return ONLY valid JSON: { "slides": ["<!DOCTYPE html>...", ...] }. Each string is a complete HTML document (1920×1080px, RTL Hebrew, Heebo font). No markdown fences. Use glassmorphism, mesh gradients, text-stroke watermarks, multi-layer text-shadows. Make them breathtaking.',
-            cache_control: { type: 'ephemeral' as const },
-          },
-        ],
-        messages: [{ role: 'user', content: prompt }],
+      const geminiResult = await callAI({
+        model: 'gemini-3.1-pro-preview',
+        prompt: prompt + '\n\nReturn a JSON object: { "slides": ["<!DOCTYPE html>...", "<!DOCTYPE html>...", ...] }. Each item is a COMPLETE HTML document.',
+        ...(useCache ? { cachedContent: foundation.geminiCacheName } : {}),
+        geminiConfig: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          maxOutputTokens: 32768,
+        },
+        thinkingLevel: 'HIGH',
+        maxOutputTokens: 32768,
+        callerId: `${requestId}-html-gemini-primary`,
+        noGlobalFallback: true,
       })
+      rawText = geminiResult.text || '{}'
+      usedModel = useCache ? 'Gemini 3.1 Pro (cached)' : 'Gemini 3.1 Pro'
+      console.log(`[SlideDesigner][${requestId}] ✅ Gemini Pro returned ${rawText.length} chars`)
+    } catch (geminiErr) {
+      console.warn(`[SlideDesigner][${requestId}] ⚠️ Gemini Pro failed, falling back to Claude: ${geminiErr instanceof Error ? geminiErr.message : String(geminiErr)}`)
 
-      rawText = response.content.filter(c => c.type === 'text').map(c => c.text).join('') || '{}'
-      rawText = rawText.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
-      usedModel = 'Claude Sonnet 4.6'
-    } catch (claudeErr) {
-      console.warn(`[SlideDesigner][${requestId}] ⚠️ Claude failed, falling back to GPT-5.4: ${claudeErr instanceof Error ? claudeErr.message : String(claudeErr)}`)
-
-      // Try GPT-5.4 first
       try {
+        console.log(`[SlideDesigner][${requestId}] 🤖 Fallback: Claude Sonnet 4.6...`)
+        const Anthropic = (await import('@anthropic-ai/sdk')).default
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+        const response = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6-20250514',
+          max_tokens: 32768,
+          system: [
+            {
+              type: 'text' as const,
+              text: 'You are a legendary web designer. Return ONLY valid JSON: { "slides": ["<!DOCTYPE html>...", ...] }. Each string is a complete HTML document (1920×1080px, RTL Hebrew, Heebo font). No markdown fences. Use glassmorphism, mesh gradients, text-stroke watermarks, multi-layer text-shadows. Make them breathtaking.',
+              cache_control: { type: 'ephemeral' as const },
+            },
+          ],
+          messages: [{ role: 'user', content: prompt }],
+        })
+
+        rawText = response.content.filter(c => c.type === 'text').map(c => c.text).join('') || '{}'
+        rawText = rawText.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
+        usedModel = 'Claude Sonnet 4.6 (fallback)'
+      } catch (claudeErr) {
+        console.warn(`[SlideDesigner][${requestId}] ⚠️ Claude also failed, last resort GPT-5.4: ${claudeErr instanceof Error ? claudeErr.message : String(claudeErr)}`)
+
         const OpenAI = (await import('openai')).default
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -1631,32 +1656,7 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
         })
 
         rawText = response.output_text || '{}'
-        usedModel = 'GPT-5.4 (fallback)'
-      } catch (gptErr) {
-        console.warn(`[SlideDesigner][${requestId}] ⚠️ GPT-5.4 also failed, trying Gemini: ${gptErr instanceof Error ? gptErr.message : String(gptErr)}`)
-
-        // Last resort: Gemini 3 Flash with cached system prompt (70% cheaper input)
-        const useCache = !!foundation.geminiCacheName
-        const geminiModel = useCache ? 'gemini-3-flash-preview' : 'gemini-3.1-pro-preview'
-        console.log(`[SlideDesigner][${requestId}] Gemini fallback model=${geminiModel} cache=${useCache ? 'YES' : 'no'}`)
-
-        const geminiResult = await callAI({
-          model: geminiModel,
-          prompt: prompt + '\n\nReturn a JSON object: { "slides": ["<!DOCTYPE html>...", ...] }. Each item is a complete HTML document.',
-          ...(useCache ? { cachedContent: foundation.geminiCacheName } : {}),
-          geminiConfig: {
-            responseMimeType: 'application/json',
-            thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-            maxOutputTokens: 32768,
-          },
-          thinkingLevel: 'HIGH',
-          maxOutputTokens: 32768,
-          callerId: `${requestId}-html-gemini`,
-          noGlobalFallback: true,
-        })
-
-        rawText = geminiResult.text || '{}'
-        usedModel = useCache ? 'Gemini 3 Flash (cached)' : 'Gemini 3.1 Pro (last resort)'
+        usedModel = 'GPT-5.4 (last resort)'
       }
     }
 

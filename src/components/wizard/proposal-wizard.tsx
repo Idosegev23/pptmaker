@@ -632,6 +632,14 @@ export default function ProposalWizard({
                   budget: state.stepData.media_targets?.budget,
                   influencerCount: state.stepData.quantities?.influencerCount,
                 }}
+                kpiContext={{
+                  influencerCount: state.stepData.quantities?.influencerCount,
+                  campaignDurationMonths: state.stepData.quantities?.campaignDurationMonths,
+                  contentMix: state.stepData.quantities?.contentTypes?.map(c => ({
+                    type: c.type,
+                    quantityPerInfluencer: c.quantityPerInfluencer,
+                  })),
+                }}
                 onPushVersion={(key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') =>
                   dispatch({ type: 'PUSH_AI_VERSION', key, data, source })
                 }

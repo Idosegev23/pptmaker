@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useCallback } from 'react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MediaTargetsStepData } from '@/types/wizard'
 
@@ -14,6 +15,12 @@ interface StepMediaTargetsProps {
   errors: Record<string, string> | null
   briefContext?: string
   successMetrics?: string[]
+  /** Influencer count + content mix from earlier wizard steps — used for KPI auto-calc */
+  kpiContext?: {
+    influencerCount?: number
+    campaignDurationMonths?: number
+    contentMix?: Array<{ type: string; quantityPerInfluencer: number }>
+  }
 }
 
 const CURRENCY_OPTIONS = [
@@ -28,7 +35,62 @@ export default function StepMediaTargets({
   onChange,
   errors,
   successMetrics,
+  kpiContext,
 }: StepMediaTargetsProps) {
+  const [kpiLoading, setKpiLoading] = useState(false)
+  const [kpiError, setKpiError] = useState<string | null>(null)
+
+  // ── Gemini KPI Calculator (Code Execution) ──
+  const runKpiCalculator = useCallback(async () => {
+    if (!data.budget || data.budget <= 0) {
+      setKpiError('צריך תקציב כדי לחשב')
+      return
+    }
+    if (!kpiContext?.influencerCount || !kpiContext.contentMix?.length) {
+      setKpiError('חסרים נתוני תוצרים — מלא את שלב הכמויות קודם')
+      return
+    }
+    setKpiLoading(true)
+    setKpiError(null)
+    try {
+      const res = await fetch('/api/kpi/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          budget: data.budget,
+          influencerCount: kpiContext.influencerCount,
+          campaignDurationMonths: kpiContext.campaignDurationMonths || 1,
+          contentMix: kpiContext.contentMix,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'unknown' }))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+      const result = (await res.json()) as {
+        potentialReach: number
+        potentialEngagement: number
+        estimatedImpressions: number
+        cpe: number
+        cpm: number
+        notes: string
+      }
+      onChange({
+        ...data,
+        potentialReach: result.potentialReach,
+        potentialEngagement: result.potentialEngagement,
+        estimatedImpressions: result.estimatedImpressions,
+        cpe: result.cpe,
+        cpm: result.cpm,
+        metricsExplanation: result.notes,
+      })
+    } catch (err) {
+      setKpiError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setKpiLoading(false)
+    }
+  }, [data, kpiContext, onChange])
+
   const budget = data.budget ?? 0
   const currency = data.currency ?? '₪'
   const potentialReach = data.potentialReach ?? 0
@@ -59,6 +121,31 @@ export default function StepMediaTargets({
 
   return (
     <div dir="rtl" className="space-y-10">
+      {/* Gemini KPI Calculator */}
+      <div className="rounded-2xl border border-wizard-border bg-gradient-to-l from-brand-pearl/40 to-transparent p-5 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <h3 className="text-sm font-heebo font-bold text-wizard-text-primary mb-1">
+              🧮 חישוב KPI אוטומטי (Gemini Code Execution)
+            </h3>
+            <p className="text-xs text-wizard-text-tertiary leading-relaxed">
+              Gemini יכתוב Python ויחשב את ה-CPE, CPM, reach ו-impressions בהתבסס על
+              התקציב, מספר המשפיענים, ומיקס התוצרים — מספרים אמיתיים, לא ניחושים.
+            </p>
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={runKpiCalculator}
+            disabled={kpiLoading || !data.budget}
+            className="shrink-0"
+          >
+            {kpiLoading ? '⏳ מחשב...' : '🧮 חשב KPI'}
+          </Button>
+        </div>
+        {kpiError && <p className="text-xs text-destructive">⚠️ {kpiError}</p>}
+      </div>
+
       {/* Success metrics from brief */}
       {successMetrics && successMetrics.length > 0 && (
         <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/5 p-4">

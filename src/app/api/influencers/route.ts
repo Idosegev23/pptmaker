@@ -1,101 +1,156 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { scrapeMultipleInfluencers } from '@/lib/apify/influencer-scraper'
+/**
+ * POST /api/influencers
+ *
+ * REWRITTEN (April 2026): Now powered by Gemini IMAI Agent — calls real IMAI API
+ * via Gemini function calling. The model decides which keywords to search,
+ * refines results, and returns Hebrew rationale per influencer.
+ *
+ * Backwards compatible: returns the same shape that the wizard expects
+ * ({ success, strategy, recommendations, scrapedInfluencers }).
+ *
+ * Modes:
+ * - 'discover' / 'research' → IMAI agent (default)
+ * - 'scrape' → legacy Apify scraper for explicit usernames
+ */
 
-export const maxDuration = 600
-import { researchInfluencers } from '@/lib/gemini/influencer-research'
+import { NextRequest, NextResponse } from 'next/server'
+import { runInfluencerAgent } from '@/lib/gemini/imai-agent'
+import { scrapeMultipleInfluencers } from '@/lib/apify/influencer-scraper'
 import type { BrandResearch } from '@/lib/gemini/brand-research'
 
+export const maxDuration = 600
+
 export async function POST(request: NextRequest) {
+  const requestId = `infl-${Date.now()}`
+  const startTs = Date.now()
+
   try {
     const body = await request.json()
-    const { 
-      brandResearch, 
-      budget, 
+    const {
+      brandResearch,
+      brandName: explicitBrandName,
+      budget,
       goals,
       usernames,
-      mode = 'discover' // 'discover' | 'scrape' | 'research'
+      mode = 'discover',
+      influencerCount,
     } = body as {
       brandResearch?: BrandResearch
+      brandName?: string
       budget?: number
       goals?: string[]
       usernames?: string[]
       mode?: 'discover' | 'scrape' | 'research'
+      influencerCount?: number
     }
-    
-    console.log(`[API Influencers] Mode: ${mode}`)
-    
-    // Mode: Scrape specific usernames
+
+    console.log(`[API Influencers][${requestId}] ═══════════════════════════════════════`)
+    console.log(`[API Influencers][${requestId}] 🚀 Mode: ${mode}`)
+
+    // ── Mode: Scrape specific usernames (legacy path, kept for manual entry) ──
     if (mode === 'scrape' && usernames && usernames.length > 0) {
-      console.log(`[API Influencers] Scraping ${usernames.length} specific profiles`)
+      console.log(`[API Influencers][${requestId}] 🔧 Legacy scrape mode — ${usernames.length} profiles`)
       const scraped = await scrapeMultipleInfluencers(usernames)
-      
-      // Filter: Only include influencers with 10K+ followers
       const filteredScraped = scraped.filter(inf => inf.followers >= 10000)
-      console.log(`[API Influencers] Filtered to ${filteredScraped.length} influencers with 10K+ followers`)
-      
+      console.log(`[API Influencers][${requestId}] ✅ Scraped ${filteredScraped.length}/${scraped.length} (>=10K)`)
       return NextResponse.json({
         success: true,
         influencers: filteredScraped,
         count: filteredScraped.length,
       })
     }
-    
-    // Mode: AI research only (no scraping)
-    if (mode === 'research' && brandResearch && budget && goals) {
-      console.log('[API Influencers] AI research only')
-      const strategy = await researchInfluencers(brandResearch, budget, goals)
-      
-      return NextResponse.json({
-        success: true,
-        strategy,
-        recommendations: strategy.recommendations,
-      })
+
+    // ── Mode: discover / research → Gemini IMAI Agent (NEW DEFAULT PATH) ──
+    const brandName =
+      explicitBrandName || brandResearch?.brandName || brandResearch?.officialName || ''
+    if (!brandName) {
+      console.error(`[API Influencers][${requestId}] ❌ Missing brandName / brandResearch`)
+      return NextResponse.json(
+        { error: 'brandName or brandResearch required' },
+        { status: 400 },
+      )
     }
-    
-    // Mode: Full discovery - AI research + scrape recommended profiles
-    // Note: budget can be 0 (falsy) — check explicitly for brandResearch only
-    if (mode === 'discover' && brandResearch) {
-      console.log('[API Influencers] Full discovery mode (AI research + profile scraping)')
 
-      // Step 1: Get AI recommendations
-      const strategy = await researchInfluencers(brandResearch, budget ?? 0, goals ?? [])
-      console.log(`[API Influencers] AI recommended ${strategy.recommendations?.length || 0} influencers`)
+    // Build agent input from whatever the caller gave us
+    const industry = brandResearch?.industry || ''
+    const targetAudience = [
+      brandResearch?.targetDemographics?.primaryAudience?.gender,
+      brandResearch?.targetDemographics?.primaryAudience?.ageRange,
+      brandResearch?.targetDemographics?.primaryAudience?.lifestyle,
+    ]
+      .filter(Boolean)
+      .join(', ')
 
-      // Step 2: Scrape profiles from AI recommendations
-      const handles = (strategy.recommendations || [])
-        .slice(0, 8)
-        .map((rec: { handle?: string }) => rec.handle?.replace('@', '').trim())
-        .filter(Boolean) as string[]
+    console.log(`[API Influencers][${requestId}] 🤖 Calling Gemini IMAI Agent`)
+    console.log(`[API Influencers][${requestId}]    brand: "${brandName}"`)
+    console.log(`[API Influencers][${requestId}]    industry: ${industry}`)
+    console.log(`[API Influencers][${requestId}]    audience: ${targetAudience}`)
+    console.log(`[API Influencers][${requestId}]    goals: [${(goals || []).join(', ')}]`)
+    console.log(`[API Influencers][${requestId}]    budget: ${budget ? '₪' + budget.toLocaleString() : '(none)'}`)
 
-      let scrapedInfluencers: Awaited<ReturnType<typeof scrapeMultipleInfluencers>> = []
-      if (handles.length > 0) {
-        scrapedInfluencers = await scrapeMultipleInfluencers(handles)
-        console.log(`[API Influencers] Scraped ${scrapedInfluencers.length} profiles from AI recommendations`)
-      }
+    const agentResult = await runInfluencerAgent({
+      brandName,
+      industry,
+      targetAudience,
+      goals: goals || [],
+      budget,
+      influencerCount: influencerCount || 8,
+    })
 
-      const filteredScraped = scrapedInfluencers.filter(inf => inf.followers >= 10000)
+    // Map agent results to the legacy "strategy.recommendations" shape
+    // so the existing wizard step can consume them without changes.
+    const recommendations = agentResult.influencers.map(i => ({
+      name: i.fullname || i.username,
+      handle: i.username,
+      category: i.tier || '',
+      followers: i.followers ? `${(i.followers / 1000).toFixed(1)}K` : '?',
+      engagement: i.engagement_rate ? `${i.engagement_rate.toFixed(1)}%` : '?',
+      whyRelevant: i.rationale,
+      contentStyle: i.tier || '',
+    }))
 
-      return NextResponse.json({
-        success: true,
-        strategy,
-        recommendations: strategy.recommendations,
-        scrapedInfluencers: filteredScraped,
-        combinedCount: filteredScraped.length + (strategy.recommendations?.length || 0),
-      })
-    }
-    
-    return NextResponse.json(
-      { error: 'Missing required parameters for the selected mode' },
-      { status: 400 }
-    )
-    
+    // Also expose them as "scrapedInfluencers" with full numbers for cards
+    const scrapedInfluencers = agentResult.influencers.map(i => ({
+      username: i.username,
+      fullname: i.fullname,
+      followers: i.followers,
+      engagementRate: i.engagement_rate,
+      profileUrl: `https://instagram.com/${i.username}`,
+      profilePicUrl: '',
+      categories: [i.tier || ''],
+      bio: i.rationale,
+    }))
+
+    const elapsed = Date.now() - startTs
+    console.log(`[API Influencers][${requestId}] ✅ Done in ${elapsed}ms — ${recommendations.length} influencers, ${agentResult.toolCalls} tool calls`)
+    console.log(`[API Influencers][${requestId}] ═══════════════════════════════════════`)
+
+    return NextResponse.json({
+      success: true,
+      strategy: {
+        strategyTitle: 'אסטרטגיית ליהוק (Gemini + IMAI)',
+        strategySummary: agentResult.strategy,
+        recommendations,
+        // Empty placeholders to keep legacy consumers happy
+        tiers: [],
+        contentThemes: [],
+        expectedKPIs: [],
+      },
+      recommendations,
+      scrapedInfluencers,
+      combinedCount: scrapedInfluencers.length,
+      _source: 'gemini-imai-agent',
+      _toolCalls: agentResult.toolCalls,
+    })
   } catch (error) {
-    console.error('[API Influencers] Error:', error)
+    const elapsed = Date.now() - startTs
+    console.error(`[API Influencers][${requestId}] ❌ ERROR after ${elapsed}ms:`, error)
     return NextResponse.json(
-      { error: 'Failed to process influencer request', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      {
+        error: 'Failed to process influencer request',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 },
     )
   }
 }
-
-
