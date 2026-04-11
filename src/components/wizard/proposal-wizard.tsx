@@ -624,6 +624,14 @@ export default function ProposalWizard({
                 aiVersionHistory={state.aiVersionHistory}
                 brandResearch={brandResearch}
                 influencerStrategy={influencerStrategy}
+                brandContext={{
+                  brandName: state.stepData.brief?.brandName,
+                  industry: (brandResearch as Record<string, unknown> | null)?.industry as string | undefined,
+                  targetAudience: state.stepData.target_audience?.targetDescription,
+                  goals: state.stepData.goals?.goals?.map(g => g.title),
+                  budget: state.stepData.media_targets?.budget,
+                  influencerCount: state.stepData.quantities?.influencerCount,
+                }}
                 onPushVersion={(key: string, data: Record<string, unknown>, source: 'ai' | 'research' | 'manual') =>
                   dispatch({ type: 'PUSH_AI_VERSION', key, data, source })
                 }

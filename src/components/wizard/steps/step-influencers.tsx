@@ -15,6 +15,15 @@ interface StepInfluencersProps {
   onChange: (data: Partial<InfluencersStepData>) => void
   errors: Record<string, string> | null
   influencerStrategy?: Record<string, unknown> | null
+  /** Brand context passed from parent wizard — used for IMAI agent search */
+  brandContext?: {
+    brandName?: string
+    industry?: string
+    targetAudience?: string
+    goals?: string[]
+    budget?: number
+    influencerCount?: number
+  }
 }
 
 function createEmptyInfluencer(): InfluencerProfile {
@@ -35,6 +44,7 @@ export default function StepInfluencers({
   onChange,
   errors,
   influencerStrategy: influencerResearch,
+  brandContext,
 }: StepInfluencersProps) {
   const influencers = data.influencers ?? []
   const influencerStrategy = data.influencerStrategy ?? ''
@@ -43,6 +53,69 @@ export default function StepInfluencers({
 
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [agentLoading, setAgentLoading] = useState(false)
+  const [agentError, setAgentError] = useState<string | null>(null)
+
+  // ── IMAI Agent: real influencer search via Gemini function calling ──
+  const runImaiAgent = useCallback(async () => {
+    if (!brandContext?.brandName) {
+      setAgentError('חסר שם מותג — מלא את שלב הבריף קודם')
+      return
+    }
+    setAgentLoading(true)
+    setAgentError(null)
+    try {
+      const res = await fetch('/api/imai/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandName: brandContext.brandName,
+          industry: brandContext.industry || '',
+          targetAudience: brandContext.targetAudience || '',
+          goals: brandContext.goals || [],
+          budget: brandContext.budget,
+          influencerCount: brandContext.influencerCount || 6,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'unknown' }))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+      const result = (await res.json()) as {
+        influencers: Array<{
+          username: string
+          fullname: string
+          followers: number
+          engagement_rate: number
+          tier: string
+          rationale: string
+        }>
+        strategy: string
+      }
+
+      // Map IMAI results into our InfluencerProfile shape
+      const mapped: InfluencerProfile[] = result.influencers.map(i => ({
+        name: i.fullname || i.username,
+        username: i.username,
+        profileUrl: `https://instagram.com/${i.username}`,
+        profilePicUrl: '',
+        categories: [i.tier],
+        followers: i.followers,
+        engagementRate: i.engagement_rate,
+        bio: i.rationale,
+      }))
+
+      onChange({
+        ...data,
+        influencers: mapped,
+        influencerStrategy: result.strategy,
+      })
+    } catch (err) {
+      setAgentError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setAgentLoading(false)
+    }
+  }, [brandContext, data, onChange])
 
   // Add influencer
   const addInfluencer = useCallback(() => {
@@ -155,6 +228,33 @@ export default function StepInfluencers({
 
   return (
     <div dir="rtl" className="space-y-10">
+      {/* IMAI Agent — auto-search real Israeli influencers */}
+      <div className="rounded-2xl border border-wizard-border bg-gradient-to-l from-brand-pearl/40 to-transparent p-5 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <h3 className="text-sm font-heebo font-bold text-wizard-text-primary mb-1">
+              🤖 חיפוש משפיענים אוטומטי (IMAI + Gemini)
+            </h3>
+            <p className="text-xs text-wizard-text-tertiary leading-relaxed">
+              ה-AI יחקור את המותג, יחליט על אסטרטגיית ליהוק, וישלוף נתונים אמיתיים מ-IMAI ישירות.
+              ללא הזיות — כל מספר מגיע מה-API.
+            </p>
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={runImaiAgent}
+            disabled={agentLoading || !brandContext?.brandName}
+            className="shrink-0"
+          >
+            {agentLoading ? '⏳ מחפש...' : '🔍 חפש משפיענים'}
+          </Button>
+        </div>
+        {agentError && (
+          <p className="text-xs text-destructive">⚠️ {agentError}</p>
+        )}
+      </div>
+
       {/* Influencer Cards */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">

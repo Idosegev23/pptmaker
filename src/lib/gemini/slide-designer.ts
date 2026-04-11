@@ -1130,10 +1130,79 @@ export async function pipelineFoundation(
   }
 
   const batchSizes = batches.map(b => b.length)
+
+  // ── Create Gemini explicit cache for the design system context ──
+  // Reused across all batches → 70% savings on input tokens for the Gemini path
+  let geminiCacheName: string | undefined
+  try {
+    const cdBlock = designSystem.creativeDirection
+      ? `\nCreative metaphor: ${designSystem.creativeDirection.visualMetaphor}\nVisual tension: ${designSystem.creativeDirection.visualTension}\nOne rule: ${designSystem.creativeDirection.oneRule}\nColor story: ${designSystem.creativeDirection.colorStory || ''}`
+      : ''
+    const cacheableSystem = `You are a legendary web designer creating premium 1920×1080 RTL Hebrew presentation slides.
+
+Brand: ${d.brandName || ''}
+Industry: ${typeof d._brandResearch?.industry === 'string' ? d._brandResearch.industry : ''}
+
+DESIGN SYSTEM (use these exact values, never improvise):
+Colors:
+- Primary: ${designSystem.colors.primary}
+- Secondary: ${designSystem.colors.secondary}
+- Accent: ${designSystem.colors.accent}
+- Background: ${designSystem.colors.background || '#0C0C10'}
+- Text: ${designSystem.colors.text || '#F5F5F7'}
+- Card BG: ${designSystem.colors.cardBg || 'rgba(255,255,255,0.05)'}
+- Muted: ${designSystem.colors.muted || 'rgba(245,245,247,0.5)'}
+- Aurora: ${designSystem.effects?.auroraGradient || ''}
+
+Typography:
+- Display: ${designSystem.typography?.displaySize || 120}px
+- Heading: ${designSystem.typography?.headingSize || 56}px
+- Body: ${designSystem.typography?.bodySize || 22}px
+- Weight pairs: ${JSON.stringify(designSystem.typography?.weightPairs || [[900, 300]])}
+- Letter spacing tight: ${designSystem.typography?.letterSpacingTight ?? -3}
+- Letter spacing wide: ${designSystem.typography?.letterSpacingWide ?? 4}
+
+Effects:
+- Border radius: ${designSystem.effects?.borderRadius || 'soft'} (${designSystem.effects?.borderRadiusValue || 16}px)
+- Shadow style: ${designSystem.effects?.shadowStyle || 'glow'}
+- Decorative style: ${designSystem.effects?.decorativeStyle || 'minimal'}
+${cdBlock}
+
+CORE RULES (apply to every slide you generate):
+1. Output ONLY a JSON object: { "slides": ["<!DOCTYPE html>...", ...] }. No markdown fences.
+2. Each slide is a complete HTML document — boilerplate, <style>, .slide div with width:1920px;height:1080px;position:relative;overflow:hidden.
+3. Heebo font from Google Fonts. RTL direction. Hebrew text only.
+4. Five visual layers per slide: background → atmosphere (aurora/glow/vignette) → structural decor → content → overlay decor (watermark/floating label).
+5. Multi-layer text-shadow on every title (depth + glow + ambient).
+6. Use design system colors ONLY — never invent hex values.
+7. Images: when a URL is provided, use object-fit:cover with a gradient overlay for text legibility.
+8. Vary layouts dramatically — no two consecutive slides should feel similar.
+9. Text overflow protection: every text element needs overflow:hidden + line-clamp.
+10. Safe zone: keep readable text within 80px of slide edges.
+
+This system instruction is cached. Per-batch user prompts will only contain the slide-specific content.`
+
+    // Min tokens to cache: gemini-3.1-pro = 4096; gemini-3-flash = 1024
+    // Our cacheable block is ~1500-2000 tokens — qualifies for Flash, may not for Pro.
+    if (cacheableSystem.length > 4000) {
+      const { createGeminiCache } = await import('@/lib/ai-provider')
+      geminiCacheName = await createGeminiCache({
+        model: 'gemini-3-flash-preview',
+        systemInstruction: cacheableSystem,
+        ttlSeconds: 3600,
+        callerId: requestId,
+      })
+      console.log(`[SlideDesigner][${requestId}] 💾 Gemini cache created: ${geminiCacheName}`)
+    }
+  } catch (cacheErr) {
+    console.warn(`[SlideDesigner][${requestId}] ⚠️ Gemini cache creation failed (non-critical):`, cacheErr instanceof Error ? cacheErr.message : cacheErr)
+  }
+
   const foundation: import('./slide-design').PipelineFoundation = {
     designSystem, plan, batches, proposalData: d,
     brandName: d.brandName || '', clientLogo, leadersLogo,
     totalSlides: plan.length, images, batchCount: batches.length, batchSizes,
+    geminiCacheName,
   }
 
   console.log(`[SlideDesigner][${requestId}] Foundation complete: ${plan.length} slides planned in ${batches.length} batches (${batchSizes.join(', ')})`)
@@ -1566,10 +1635,15 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
       } catch (gptErr) {
         console.warn(`[SlideDesigner][${requestId}] ⚠️ GPT-5.4 also failed, trying Gemini: ${gptErr instanceof Error ? gptErr.message : String(gptErr)}`)
 
-        // Last resort: Gemini 3.1 Pro
+        // Last resort: Gemini 3 Flash with cached system prompt (70% cheaper input)
+        const useCache = !!foundation.geminiCacheName
+        const geminiModel = useCache ? 'gemini-3-flash-preview' : 'gemini-3.1-pro-preview'
+        console.log(`[SlideDesigner][${requestId}] Gemini fallback model=${geminiModel} cache=${useCache ? 'YES' : 'no'}`)
+
         const geminiResult = await callAI({
-          model: 'gemini-3.1-pro-preview',
+          model: geminiModel,
           prompt: prompt + '\n\nReturn a JSON object: { "slides": ["<!DOCTYPE html>...", ...] }. Each item is a complete HTML document.',
+          ...(useCache ? { cachedContent: foundation.geminiCacheName } : {}),
           geminiConfig: {
             responseMimeType: 'application/json',
             thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
@@ -1582,7 +1656,7 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
         })
 
         rawText = geminiResult.text || '{}'
-        usedModel = 'Gemini 3.1 Pro (last resort)'
+        usedModel = useCache ? 'Gemini 3 Flash (cached)' : 'Gemini 3.1 Pro (last resort)'
       }
     }
 

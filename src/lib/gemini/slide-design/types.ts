@@ -165,6 +165,8 @@ export interface PipelineFoundation {
   batchCount?: number
   /** Slide count per batch */
   batchSizes?: number[]
+  /** Gemini explicit cache name (if created) — reused across all batches for cost savings */
+  geminiCacheName?: string
 }
 
 export interface BatchResult {

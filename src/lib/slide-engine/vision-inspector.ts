@@ -2,10 +2,41 @@
  * Vision Inspector — renders a slide and inspects it visually for defects.
  *
  * Architecture (DeepPresenter pattern):
- *   HTML slide → Playwright screenshot → Vision model → Structured defect report → Auto-fix
+ *   HTML slide → Playwright screenshot → Gemini Flash Vision → Structured defect report → Auto-fix
  *
- * Uses Claude Opus 4.6 vision (best at detecting specific visual defects).
+ * Migrated to Gemini Flash vision (April 2026):
+ * - 10× cheaper than Claude Opus
+ * - Returns structured JSON via responseSchema
+ * - Object detection support for bounding boxes
+ * - Works even when Anthropic API key is unavailable
  */
+
+import { callAI } from '@/lib/ai-provider'
+
+const VISION_INSPECTOR_SCHEMA = {
+  type: 'object',
+  required: ['hasDefects', 'score', 'checks', 'issues'],
+  properties: {
+    hasDefects: { type: 'boolean' },
+    score: { type: 'integer', minimum: 0, maximum: 100 },
+    checks: {
+      type: 'object',
+      required: ['textOverflow', 'titleClipped', 'imageUsed', 'contrastOk', 'layoutBalanced', 'hebrewPresent', 'rtlCorrect', 'noBlankSlide'],
+      properties: {
+        textOverflow:    { type: 'boolean' },
+        titleClipped:    { type: 'boolean' },
+        imageUsed:       { type: 'boolean' },
+        contrastOk:      { type: 'boolean' },
+        layoutBalanced:  { type: 'boolean' },
+        hebrewPresent:   { type: 'boolean' },
+        rtlCorrect:      { type: 'boolean' },
+        noBlankSlide:    { type: 'boolean' },
+      },
+    },
+    issues: { type: 'array', items: { type: 'string' } },
+    revisionHint: { type: 'string', nullable: true },
+  },
+}
 
 export interface SlideDefectReport {
   slideIndex: number
@@ -71,82 +102,54 @@ export async function inspectSlide(
       return analyzeHtmlOnly(html, slideIndex, slideType, hasImage)
     }
 
-    // Step 2: Send to Vision model for inspection
-    console.log(`[VisionInspector][${requestId}] 🔍 Analyzing screenshot (${Math.round(screenshotBase64.length / 1024)}KB)...`)
+    // Step 2: Send to Gemini Flash vision for inspection
+    console.log(`[VisionInspector][${requestId}] 🔍 Analyzing screenshot with Gemini Flash (${Math.round(screenshotBase64.length / 1024)}KB)...`)
 
-    const Anthropic = (await import('@anthropic-ai/sdk')).default
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const inspectorPrompt = `Inspect this presentation slide (type: ${slideType}, index: ${slideIndex + 1}).
+${hasImage ? 'An image URL was provided to the slide generator — check whether it appears.' : 'No image was provided for this slide.'}
 
-    const response = await anthropic.messages.create({
-      model: 'claude-opus-4-6-20250514',
-      max_tokens: 2048,
-      system: [
-        {
-          type: 'text' as const,
-          text: `You are a presentation QA inspector. Analyze the slide screenshot and return a JSON defect report. Be STRICT — find every problem.
+You are a STRICT presentation QA inspector. Find every visual problem.
+Return ONLY a JSON defect report — no markdown, no commentary.
 
-Return ONLY this JSON:
-{
-  "hasDefects": boolean,
-  "score": 0-100,
-  "checks": {
-    "textOverflow": boolean (true = text is bleeding outside its container or the slide),
-    "titleClipped": boolean (true = title text is cut off or truncated unnaturally),
-    "imageUsed": boolean (true = slide contains a photo/image element),
-    "contrastOk": boolean (true = all text is readable against its background),
-    "layoutBalanced": boolean (true = content is distributed well, not crammed in one area),
-    "hebrewPresent": boolean (true = slide contains Hebrew text),
-    "rtlCorrect": boolean (true = Hebrew text is right-aligned),
-    "noBlankSlide": boolean (true = slide has visible content, not empty/white)
-  },
-  "issues": ["issue 1 in Hebrew", "issue 2 in Hebrew"],
-  "revisionHint": "specific fix instruction if hasDefects=true, null if no defects"
-}`,
-          cache_control: { type: 'ephemeral' as const },
-        },
-      ],
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: 'image/jpeg',
-                data: screenshotBase64,
-              },
-            },
-            {
-              type: 'text',
-              text: `Inspect this presentation slide (type: ${slideType}, index: ${slideIndex + 1}).${hasImage ? ' An image URL was provided — check if it appears.' : ' No image was provided.'} Return the JSON defect report.`,
-            },
-          ],
-        },
-      ],
+Issues should be in Hebrew. revisionHint should be a concrete fix instruction (in English, for the next AI to apply).`
+
+    const visionResult = await callAI({
+      model: 'gemini-3-flash-preview',
+      prompt: inspectorPrompt,
+      inlineImages: [{ mimeType: 'image/jpeg', data: screenshotBase64 }],
+      geminiConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: VISION_INSPECTOR_SCHEMA as any,
+        maxOutputTokens: 2048,
+      },
+      responseSchema: VISION_INSPECTOR_SCHEMA as Record<string, unknown>,
+      maxOutputTokens: 2048,
+      callerId: requestId,
+      noGlobalFallback: true,
     })
 
-    const responseText = response.content
-      .filter(c => c.type === 'text')
-      .map(c => c.text)
-      .join('')
+    const responseText = visionResult.text || ''
 
     // Parse JSON from response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      console.warn(`[VisionInspector][${requestId}] ⚠️ Could not parse vision response`)
-      return makeDefaultReport(slideIndex, slideType, 75)
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]) as {
+    let parsed: {
       hasDefects: boolean
       score: number
       checks: SlideDefectReport['checks']
       issues: string[]
       revisionHint: string | null
     }
+    try {
+      parsed = JSON.parse(responseText)
+    } catch {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        console.warn(`[VisionInspector][${requestId}] ⚠️ Could not parse vision response`)
+        return makeDefaultReport(slideIndex, slideType, 75)
+      }
+      parsed = JSON.parse(jsonMatch[0])
+    }
 
-    console.log(`[VisionInspector][${requestId}] ${parsed.hasDefects ? '❌' : '✅'} Slide ${slideIndex + 1}: score=${parsed.score}/100, issues=${parsed.issues.length}`)
+    console.log(`[VisionInspector][${requestId}] ${parsed.hasDefects ? '❌' : '✅'} Slide ${slideIndex + 1}: score=${parsed.score}/100, issues=${parsed.issues.length}, checks=${JSON.stringify(parsed.checks)}`)
     if (parsed.issues.length > 0) {
       for (const issue of parsed.issues) {
         console.log(`[VisionInspector][${requestId}]   → ${issue}`)

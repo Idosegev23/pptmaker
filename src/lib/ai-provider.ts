@@ -179,6 +179,19 @@ export async function resolveModels(
 
 // ─── Call options & result ─────────────────────────────────────────
 
+/** A Gemini function declaration for tool calling */
+export interface GeminiFunctionDeclaration {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+}
+
+/** Inline image content for multimodal Gemini calls */
+export interface InlineImage {
+  mimeType: string
+  data: string  // base64
+}
+
 export interface AICallOptions {
   /** Model ID (Gemini, Claude, or OpenAI) */
   model: string
@@ -196,6 +209,16 @@ export interface AICallOptions {
   callerId?: string
   /** If true, uses Google Search grounding (Gemini only) */
   useGoogleSearch?: boolean
+  /** If true, enables URL Context tool — model fetches URLs in prompt (Gemini only) */
+  useUrlContext?: boolean
+  /** If true, enables Python code execution sandbox (Gemini only) */
+  useCodeExecution?: boolean
+  /** Cached content name from createGeminiCache() — saves cost on repeated system prompts */
+  cachedContent?: string
+  /** Inline images for vision (Gemini only) */
+  inlineImages?: InlineImage[]
+  /** Function declarations for tool calling (Gemini only). Use callGeminiAgent for the call loop. */
+  functionDeclarations?: GeminiFunctionDeclaration[]
   /** JSON schema for structured output */
   responseSchema?: Record<string, unknown>
   /** Skip global fallback — caller manages retries. Error propagates directly. */
@@ -282,24 +305,205 @@ async function callGeminiDirect(options: AICallOptions): Promise<AICallResult> {
     maxOutputTokens = 16000,
     callerId = 'unknown',
     useGoogleSearch = false,
+    useUrlContext = false,
+    useCodeExecution = false,
+    cachedContent,
+    inlineImages,
+    functionDeclarations,
     responseSchema,
   } = options
 
   console.log(`[${callerId}] 🟢 Calling Gemini ${model}`)
 
   const client = getGeminiClient()
+
+  // Build tools array — Gemini 3 supports combining multiple tools
+  const tools: Array<Record<string, unknown>> = []
+  if (useGoogleSearch) tools.push({ googleSearch: {} })
+  if (useUrlContext) tools.push({ urlContext: {} })
+  if (useCodeExecution) tools.push({ codeExecution: {} })
+  if (functionDeclarations && functionDeclarations.length > 0) {
+    tools.push({ functionDeclarations })
+  }
+
+  // Build contents — text + optional inline images
+  const contents: unknown = inlineImages && inlineImages.length > 0
+    ? [
+        ...inlineImages.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
+        { text: prompt },
+      ]
+    : prompt
+
   const response = await client.models.generateContent({
     model,
-    contents: prompt,
+    contents: contents as any,
     config: {
       ...geminiConfig,
       maxOutputTokens: geminiConfig?.maxOutputTokens || maxOutputTokens,
       ...(responseSchema ? { responseSchema, responseMimeType: 'application/json' } : {}),
-      ...(useGoogleSearch ? { tools: [{ googleSearch: {} }] } : {}),
-    },
+      ...(tools.length > 0 ? { tools } : {}),
+      ...(cachedContent ? { cachedContent } : {}),
+    } as GenerateContentConfig,
   })
 
   return { text: response.text || '', provider: 'gemini', model }
+}
+
+// ─── Gemini Cache Helpers ────────────────────────────────────────────
+
+/**
+ * Create an explicit Gemini context cache.
+ * Use for large system prompts that get reused across many calls.
+ *
+ * Min tokens to cache:
+ * - gemini-3-flash-preview: 1,024
+ * - gemini-3.1-pro-preview: 4,096
+ *
+ * @returns the cache resource name (pass to callAI as cachedContent)
+ */
+export async function createGeminiCache(opts: {
+  model: string
+  systemInstruction?: string
+  contents?: string
+  ttlSeconds?: number
+  callerId?: string
+}): Promise<string> {
+  const { model, systemInstruction, contents, ttlSeconds = 3600, callerId = 'cache' } = opts
+  const client = getGeminiClient()
+
+  const sysLen = systemInstruction?.length || 0
+  const contLen = contents?.length || 0
+  console.log(`[${callerId}] 💾 Creating Gemini cache — model=${model}, sysInstr=${sysLen} chars, contents=${contLen} chars, TTL=${ttlSeconds}s`)
+  const t0 = Date.now()
+  const cache = await (client as any).caches.create({
+    model,
+    config: {
+      ...(systemInstruction ? { systemInstruction } : {}),
+      ...(contents ? { contents } : {}),
+      ttl: `${ttlSeconds}s`,
+    },
+  })
+
+  console.log(`[${callerId}] 💾 ✅ Cache created in ${Date.now() - t0}ms: ${cache.name}`)
+  return cache.name as string
+}
+
+/** Delete a Gemini cache (cleanup) */
+export async function deleteGeminiCache(name: string): Promise<void> {
+  try {
+    const client = getGeminiClient()
+    await (client as any).caches.delete({ name })
+  } catch (err) {
+    console.warn(`[cache] Failed to delete ${name}:`, err)
+  }
+}
+
+// ─── Gemini Function-Calling Agent Loop ──────────────────────────────
+
+/**
+ * Run a Gemini agentic loop with automatic function calling.
+ * The model decides which tools to call; we execute them and feed results back.
+ *
+ * @param options - normal AI call options + functionHandlers
+ * @returns final text response after all tool calls resolve
+ */
+export async function callGeminiAgent(options: AICallOptions & {
+  functionHandlers: Record<string, (args: Record<string, unknown>) => Promise<unknown>>
+  maxIterations?: number
+}): Promise<{ text: string; toolCalls: Array<{ name: string; args: unknown; result: unknown }> }> {
+  const {
+    model,
+    prompt,
+    systemPrompt,
+    functionDeclarations = [],
+    functionHandlers,
+    maxIterations = 6,
+    callerId = 'agent',
+    useGoogleSearch = false,
+    useUrlContext = false,
+    useCodeExecution = false,
+    maxOutputTokens = 16000,
+    geminiConfig,
+  } = options
+
+  const client = getGeminiClient()
+  const toolCalls: Array<{ name: string; args: unknown; result: unknown }> = []
+
+  // Build tools array
+  const tools: Array<Record<string, unknown>> = []
+  if (useGoogleSearch) tools.push({ googleSearch: {} })
+  if (useUrlContext) tools.push({ urlContext: {} })
+  if (useCodeExecution) tools.push({ codeExecution: {} })
+  if (functionDeclarations.length > 0) tools.push({ functionDeclarations })
+
+  // Conversation history
+  const history: Array<{ role: string; parts: Array<Record<string, unknown>> }> = [
+    { role: 'user', parts: [{ text: prompt }] },
+  ]
+
+  console.log(`[${callerId}] 🤖 Agent loop start — model=${model}, maxIters=${maxIterations}, tools=[${[useGoogleSearch && 'search', useUrlContext && 'url', useCodeExecution && 'code', functionDeclarations.length && `${functionDeclarations.length}fn`].filter(Boolean).join(',')}]`)
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const iterStart = Date.now()
+    console.log(`[${callerId}] 🔁 Agent iteration ${iter + 1}/${maxIterations} — history length=${history.length}`)
+
+    const response: any = await client.models.generateContent({
+      model,
+      contents: history as any,
+      config: {
+        ...geminiConfig,
+        ...(systemPrompt ? { systemInstruction: systemPrompt } : {}),
+        maxOutputTokens,
+        ...(tools.length > 0 ? { tools } : {}),
+      } as GenerateContentConfig,
+    })
+
+    // Look for function calls in response
+    const candidate = response.candidates?.[0]
+    const parts = candidate?.content?.parts || []
+    const functionCalls = parts.filter((p: any) => p.functionCall)
+
+    console.log(`[${callerId}]   ⏱️  iter ${iter + 1} took ${Date.now() - iterStart}ms, parts=${parts.length}, functionCalls=${functionCalls.length}`)
+
+    if (functionCalls.length === 0) {
+      // No more tool calls — return final text
+      const text = response.text || parts.filter((p: any) => p.text).map((p: any) => p.text).join('')
+      console.log(`[${callerId}] ✅ Agent finished after ${iter + 1} iterations, ${toolCalls.length} total tool calls, final text=${text.length} chars`)
+      return { text, toolCalls }
+    }
+
+    // Append model's function-call response to history
+    history.push({ role: 'model', parts })
+
+    // Execute each function call and collect results
+    const responseParts: Array<Record<string, unknown>> = []
+    for (const part of functionCalls) {
+      const fc = part.functionCall
+      const handler = functionHandlers[fc.name]
+      console.log(`[${callerId}]   🔧 Tool call: ${fc.name}(${JSON.stringify(fc.args).slice(0, 200)})`)
+
+      let result: unknown
+      try {
+        if (!handler) throw new Error(`No handler for function: ${fc.name}`)
+        result = await handler(fc.args || {})
+      } catch (err) {
+        result = { error: err instanceof Error ? err.message : String(err) }
+      }
+
+      toolCalls.push({ name: fc.name, args: fc.args, result })
+      responseParts.push({
+        functionResponse: {
+          name: fc.name,
+          response: { result },
+        },
+      })
+    }
+
+    history.push({ role: 'user', parts: responseParts })
+  }
+
+  console.warn(`[${callerId}] ⚠️ Agent hit max iterations (${maxIterations})`)
+  return { text: '', toolCalls }
 }
 
 // ─── OpenAI ───────────────────────────────────────────────────────

@@ -275,6 +275,8 @@ export async function runSingleAgent(
       thinkingLevel: 'HIGH',
       maxOutputTokens: 4000,
       useGoogleSearch: true,
+      // Gemini 3 supports combining tools — model can scrape URLs it finds via search
+      useUrlContext: true,
       callerId: `brand-research-agent-${angleName}`,
     })
     return result.text || `לא נאסף מידע עבור: ${angleName}`
