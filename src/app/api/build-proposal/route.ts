@@ -42,20 +42,24 @@ export async function POST(request: NextRequest) {
 
     const briefText: string = doc.data?._briefText || ''
     const kickoffText: string | undefined = doc.data?._kickoffText || undefined
+    const geminiFileUri: string | undefined = doc.data?._geminiFileUri || undefined
+    const geminiFileMime: string | undefined = doc.data?._geminiFileMime || undefined
 
     if (!briefText || briefText.trim().length < 20) {
       console.error(`[${requestId}] ❌ No brief text in document`)
       return NextResponse.json({ error: 'No brief text found in document' }, { status: 400 })
     }
 
-    console.log(`[${requestId}] 📄 Brief: ${briefText.length} chars, Kickoff: ${kickoffText ? kickoffText.length + ' chars' : 'none'}`)
+    console.log(`[${requestId}] 📄 Brief: ${briefText.length} chars, Kickoff: ${kickoffText ? kickoffText.length + ' chars' : 'none'}, GeminiFile: ${geminiFileUri || 'none'}`)
     console.log(`[${requestId}] 🔬 With research: ${!!brandResearch}`)
 
+    const briefFile = geminiFileUri && geminiFileMime ? { uri: geminiFileUri, mimeType: geminiFileMime } : undefined
     const result = await generateProposal(
       briefText,
       kickoffText,
       brandResearch ?? undefined,
-      influencerStrategy ?? undefined
+      influencerStrategy ?? undefined,
+      briefFile,
     )
 
     const elapsed = Date.now() - startTime

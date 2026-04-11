@@ -11,9 +11,24 @@
 import { parseGeminiJson } from '../utils/json-cleanup'
 import { getConfig } from '@/lib/config/admin-config'
 import { MODEL_DEFAULTS } from '@/lib/config/defaults'
-import { callAI, resolveModels } from '@/lib/ai-provider'
+import { callAI, resolveModels, createGeminiCache } from '@/lib/ai-provider'
+import { GoogleGenAI } from '@google/genai'
 import type { ExtractedBriefData } from '@/types/brief'
 import type { WizardStepDataMap } from '@/types/wizard'
+
+let _geminiClient: GoogleGenAI | null = null
+function getDirectGemini(): GoogleGenAI {
+  if (!_geminiClient) {
+    _geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' })
+  }
+  return _geminiClient
+}
+
+/** Optional file reference for Gemini Files API path — bypasses text extraction */
+export interface BriefFileRef {
+  uri: string
+  mimeType: string
+}
 
 async function getProposalModels() {
   return resolveModels(
@@ -37,9 +52,75 @@ export interface ProposalOutput {
  * Used in process-proposal before the popup so it returns fast (~15s).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function extractFromBrief(clientBriefText: string, kickoffText?: string): Promise<any> {
+export async function extractFromBrief(
+  clientBriefText: string,
+  kickoffText?: string,
+  briefFile?: BriefFileRef,
+): Promise<any> {
   const agentId = `extract-${Date.now()}`
   console.log(`[${agentId}] 🔍 EXTRACT FROM BRIEF - START`)
+  console.log(`[${agentId}]    text: ${clientBriefText.length} chars | kickoff: ${kickoffText?.length || 0} chars | file: ${briefFile?.uri || 'none'}`)
+
+  // ── Files API fast path: when we have a Gemini file reference, use it directly ──
+  // This preserves PDF layout/tables and skips lossy text extraction.
+  if (briefFile?.uri) {
+    console.log(`[${agentId}] 🚀 Using Gemini Files API path (fileUri=${briefFile.uri})`)
+    const filePrompt = `חלץ מידע עסקי בסיסי מהבריף המצורף (PDF). אל תייצר אסטרטגיה או קריאייטיב — רק חלץ עובדות.
+נאמנות לבריף: כל מטרה, מדד הצלחה, דרישה ספציפית ואזכור מתחרים שהלקוח הזכיר חייבים להופיע — ציטוט מדויק מהבריף.
+שים לב גם למה שהלקוח *לא* אומר: אם אין אזכור של מדדים כמותיים, אם התקציב לא ברור, אם אין קהל מוגדר — ציין זאת ב-gaps.
+
+${kickoffText ? `## מסמך התנעה (טקסט נוסף):\n${kickoffText}\n` : ''}
+
+החזר JSON עם המבנה המדויק:
+{
+  "brand": { "name": "שם המותג", "officialName": null, "industry": "תעשייה", "subIndustry": null, "website": null, "tagline": null, "background": "תיאור קצר" },
+  "budget": { "amount": 0, "currency": "₪", "breakdown": null },
+  "campaignGoals": ["מטרה 1"],
+  "targetAudience": { "primary": { "gender": "", "ageRange": "", "interests": [], "painPoints": [], "lifestyle": "", "socioeconomic": null }, "secondary": null, "behavior": "" },
+  "keyInsight": null,
+  "insightSource": null,
+  "deliverables": [{ "type": "", "quantity": null, "description": "" }],
+  "influencerPreferences": { "types": [], "specificNames": [], "criteria": [], "verticals": [] },
+  "timeline": { "startDate": null, "endDate": null, "duration": null, "milestones": [] },
+  "additionalNotes": [],
+  "successMetrics": [],
+  "clientSpecificRequests": [],
+  "competitorMentions": [],
+  "brandTone": "",
+  "gaps": [],
+  "_meta": { "confidence": "high", "warnings": [], "hasKickoff": ${!!kickoffText} }
+}`
+
+    try {
+      const t0 = Date.now()
+      const client = getDirectGemini()
+      const response = await client.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [{
+          role: 'user',
+          parts: [
+            { fileData: { mimeType: briefFile.mimeType, fileUri: briefFile.uri } },
+            { text: filePrompt },
+          ],
+        }] as any,
+        config: {
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: 'LOW' as any },
+          maxOutputTokens: 16000,
+        } as any,
+      })
+
+      const text = response.text || '{}'
+      console.log(`[${agentId}] ✅ Files API path done in ${Date.now() - t0}ms — ${text.length} chars`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const extracted = parseGeminiJson<any>(text)
+      console.log(`[${agentId}] ✅ Brand extracted: ${extracted?.brand?.name || 'N/A'}`)
+      return extracted
+    } catch (fileErr) {
+      console.warn(`[${agentId}] ⚠️ Files API path failed, falling back to text path:`, fileErr instanceof Error ? fileErr.message : fileErr)
+      // Fall through to text-based path below
+    }
+  }
 
   const prompt = `חלץ מידע עסקי בסיסי מהמסמכים הבאים. אל תייצר אסטרטגיה או קריאייטיב — רק חלץ עובדות.
 נאמנות לבריף: כל מטרה, מדד הצלחה, דרישה ספציפית ואזכור מתחרים שהלקוח הזכיר חייבים להופיע — ציטוט מדויק מהבריף.
@@ -114,7 +195,8 @@ export async function generateProposal(
   clientBriefText: string,
   kickoffText?: string,
   brandResearch?: Record<string, unknown>,
-  influencerStrategy?: Record<string, unknown>
+  influencerStrategy?: Record<string, unknown>,
+  briefFile?: BriefFileRef,
 ): Promise<ProposalOutput> {
   const agentId = `proposal-${Date.now()}`
   const startTime = Date.now()
@@ -132,10 +214,66 @@ export async function generateProposal(
   }
 
   const prompt = await buildProposalPrompt(clientBriefText, kickoffText, brandResearch, influencerStrategy)
-  console.log(`[${agentId}] 📝 Prompt length: ${prompt.length} chars, hasResearch=${!!brandResearch}`)
+  console.log(`[${agentId}] 📝 Prompt length: ${prompt.length} chars, hasResearch=${!!brandResearch}, hasFile=${!!briefFile?.uri}`)
+
+  // ── Files API fast path: when we have a Gemini file reference, use it directly ──
+  // Builder model = Pro per skill matrix (strategy writing → high reasoning)
+  if (briefFile?.uri) {
+    console.log(`[${agentId}] 🚀 Using Gemini Files API path (fileUri=${briefFile.uri}) with Pro builder`)
+    try {
+      const t0 = Date.now()
+      const builderModel = (await getConfig(
+        'ai_models',
+        'proposal_agent.builder_model',
+        MODEL_DEFAULTS['proposal_agent.builder_model'].value as string,
+      )) as string
+      const client = getDirectGemini()
+      const response = await client.models.generateContent({
+        model: builderModel,
+        contents: [{
+          role: 'user',
+          parts: [
+            { fileData: { mimeType: briefFile.mimeType, fileUri: briefFile.uri } },
+            { text: prompt },
+          ],
+        }] as any,
+        config: {
+          systemInstruction: 'אתה מנהל קריאייטיב ואסטרטג ראשי ב-Leaders. בנה הצעה מלאה בעברית מהבריף המצורף. החזר JSON בלבד.',
+          responseMimeType: 'application/json',
+          thinkingConfig: { thinkingLevel: 'MEDIUM' as any },
+          maxOutputTokens: 32000,
+        } as any,
+      })
+
+      const text = response.text || ''
+      console.log(`[${agentId}] ✅ Files API path done in ${Date.now() - t0}ms — ${text.length} chars (${builderModel})`)
+
+      if (!text) throw new Error('AI returned empty response')
+      const raw = parseGeminiJson<RawProposalResponse>(text)
+      const result = normalizeResponse(raw, !!kickoffText, agentId)
+      logProposalSummary(result, agentId)
+      console.log(`[${agentId}] ⏱️ TOTAL TIME: ${Date.now() - startTime}ms`)
+      return result
+    } catch (fileErr) {
+      console.warn(`[${agentId}] ⚠️ Files API path failed, falling back to text path:`, fileErr instanceof Error ? fileErr.message : fileErr)
+      // Fall through to text-based path
+    }
+  }
 
   // Primary model first, fallback second (configurable via admin)
   const models = await getProposalModels()
+  // Builder phase prefers Pro — swap primary if it's Flash
+  if (models[0].includes('flash')) {
+    const builderModel = (await getConfig(
+      'ai_models',
+      'proposal_agent.builder_model',
+      MODEL_DEFAULTS['proposal_agent.builder_model'].value as string,
+    )) as string
+    if (builderModel && !models.includes(builderModel)) {
+      models.unshift(builderModel)
+      console.log(`[${agentId}] 🔧 Builder phase — preferring ${builderModel} over extraction model`)
+    }
+  }
   for (let attempt = 0; attempt < models.length; attempt++) {
     const model = models[attempt]
     try {
@@ -155,7 +293,7 @@ export async function generateProposal(
       const text = aiResult.text || ''
       console.log(`[${agentId}] ✅ ${aiResult.provider} responded in ${Date.now() - callStart}ms (${aiResult.model})`)
       console.log(`[${agentId}] 📊 Response size: ${text.length} chars`)
-      if (aiResult.switched) console.warn(`[${agentId}] 🔄 Switched to Claude during proposal generation`)
+      if (aiResult.switched) console.warn(`[${agentId}] 🔄 Switched to fallback during proposal generation`)
 
       if (!text) throw new Error('AI returned empty response')
 

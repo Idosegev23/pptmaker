@@ -113,6 +113,7 @@ Return ONLY a JSON defect report — no markdown, no commentary.
 
 Issues should be in Hebrew. revisionHint should be a concrete fix instruction (in English, for the next AI to apply).`
 
+    // Per skill matrix: Vision QA → Flash + MEDIUM thinking (defect detection needs reasoning)
     const visionResult = await callAI({
       model: 'gemini-3-flash-preview',
       prompt: inspectorPrompt,
@@ -120,9 +121,11 @@ Issues should be in Hebrew. revisionHint should be a concrete fix instruction (i
       geminiConfig: {
         responseMimeType: 'application/json',
         responseSchema: VISION_INSPECTOR_SCHEMA as any,
+        thinkingConfig: { thinkingLevel: 'MEDIUM' as any },
         maxOutputTokens: 2048,
       },
       responseSchema: VISION_INSPECTOR_SCHEMA as Record<string, unknown>,
+      thinkingLevel: 'MEDIUM',
       maxOutputTokens: 2048,
       callerId: requestId,
       noGlobalFallback: true,

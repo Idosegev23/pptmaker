@@ -103,7 +103,10 @@ export default function CreateProposalPage() {
     [handleFileSelect]
   )
 
-  const parseFileUpload = async (file: File, docType: string): Promise<string> => {
+  const parseFileUpload = async (
+    file: File,
+    docType: string,
+  ): Promise<{ text: string; geminiFileUri?: string; geminiFileMime?: string }> => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('docType', docType)
@@ -112,7 +115,11 @@ export default function CreateProposalPage() {
     const data = await res.json()
 
     if (!res.ok) throw new Error(data.error || 'Failed to parse document')
-    return data.parsedText
+    return {
+      text: data.parsedText,
+      geminiFileUri: data.geminiFileUri,
+      geminiFileMime: data.geminiFileMime,
+    }
   }
 
   // Fetch dynamic brand facts in background
@@ -152,16 +159,21 @@ export default function CreateProposalPage() {
       addLog('info', 'מתחיל סריקה ועיבוד מסמכים...')
       let briefText = ''
       let kickoffText = ''
+      let geminiFileUri: string | undefined
+      let geminiFileMime: string | undefined
 
       if (briefFile) {
         const formatName = getFormatDisplayName(briefFile.type)
         addLog('info', `קורא בריף לקוח: ${briefDoc.fileName} (${formatName}, ${formatFileSize(briefFile.size)})`)
 
         const startTime = Date.now()
-        briefText = await parseFileUpload(briefFile, 'client_brief')
+        const briefResult = await parseFileUpload(briefFile, 'client_brief')
+        briefText = briefResult.text
+        geminiFileUri = briefResult.geminiFileUri
+        geminiFileMime = briefResult.geminiFileMime
         const elapsedMs = ((Date.now() - startTime) / 1000).toFixed(1)
 
-        addLog('success', `בריף לקוח פוענח בהצלחה - ${briefText.length.toLocaleString()} תווים חולצו (${elapsedMs}s)`)
+        addLog('success', `בריף לקוח פוענח בהצלחה - ${briefText.length.toLocaleString()} תווים חולצו (${elapsedMs}s)${geminiFileUri ? ' + Gemini Files API' : ''}`)
       }
 
       if (!briefText) {
@@ -174,7 +186,8 @@ export default function CreateProposalPage() {
 
         try {
           const startTime = Date.now()
-          kickoffText = await parseFileUpload(kickoffFile, 'kickoff')
+          const kickoffResult = await parseFileUpload(kickoffFile, 'kickoff')
+          kickoffText = kickoffResult.text
           const elapsedMs = ((Date.now() - startTime) / 1000).toFixed(1)
           addLog('success', `מסמך התנעה פוענח - ${kickoffText.length.toLocaleString()} תווים חולצו (${elapsedMs}s)`)
         } catch (kickoffErr) {
@@ -191,7 +204,12 @@ export default function CreateProposalPage() {
       const processRes = await fetch('/api/process-proposal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientBriefText: briefText, kickoffText: kickoffText || undefined }),
+        body: JSON.stringify({
+          clientBriefText: briefText,
+          kickoffText: kickoffText || undefined,
+          geminiFileUri,
+          geminiFileMime,
+        }),
       })
       const processData = await processRes.json()
       const processElapsed = ((Date.now() - processStart) / 1000).toFixed(1)
@@ -255,6 +273,8 @@ export default function CreateProposalPage() {
             _extractedData: extracted,
             _briefText: briefText,
             _kickoffText: kickoffText || null,
+            _geminiFileUri: geminiFileUri || null,
+            _geminiFileMime: geminiFileMime || null,
             _stepData: null, // built by /api/build-proposal after research
             _pipelineStatus: {
               textGeneration: 'pending',

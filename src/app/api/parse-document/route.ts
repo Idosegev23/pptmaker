@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { parseDocument, parseGoogleDoc } from '@/lib/parsers'
 import { getAuthenticatedUser } from '@/lib/auth/api-auth'
+import { uploadToGeminiFiles } from '@/lib/gemini/files-api'
 
 export const maxDuration = 600
 
@@ -115,10 +116,33 @@ export async function POST(request: NextRequest) {
       console.log(`[${requestId}] 🔗 Public URL: ${storageUrl?.slice(0, 80)}...`)
     }
 
+    // ── Upload to Gemini Files API in parallel with text extraction ──
+    // PDFs benefit hugely: Gemini reads layout/tables/charts natively (better than text extraction)
+    const isUploadable = /^(application\/pdf|image\/(png|jpeg|jpg|webp|heic|heif))/.test(file.type)
+    let geminiFileUri: string | undefined
+    let geminiFileMime: string | undefined
+    if (isUploadable) {
+      console.log(`[${requestId}] 📤 Uploading to Gemini Files API in parallel...`)
+    }
+    const geminiUploadPromise = isUploadable
+      ? uploadToGeminiFiles(buffer, file.type, file.name).catch(err => {
+          console.warn(`[${requestId}] ⚠️ Gemini Files upload failed (non-critical):`, err)
+          return null
+        })
+      : Promise.resolve(null)
+
     // Parse the document
     console.log(`[${requestId}] 🔍 Starting document parsing...`)
     const parseStart = Date.now()
-    const parsed = await parseDocument(buffer, file.type, file.name)
+    const [parsed, geminiFile] = await Promise.all([
+      parseDocument(buffer, file.type, file.name),
+      geminiUploadPromise,
+    ])
+    if (geminiFile) {
+      geminiFileUri = geminiFile.uri
+      geminiFileMime = geminiFile.mimeType
+      console.log(`[${requestId}] ✅ Gemini file ready: ${geminiFileUri}`)
+    }
     const parseTime = Date.now() - parseStart
 
     console.log(`[${requestId}] ✅ Document parsed in ${parseTime}ms`)
@@ -141,6 +165,8 @@ export async function POST(request: NextRequest) {
       metadata: parsed.metadata,
       fileName: file.name,
       docType,
+      geminiFileUri,
+      geminiFileMime,
     })
   } catch (error) {
     const elapsed = Date.now() - startTime

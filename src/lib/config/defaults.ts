@@ -657,10 +657,18 @@ export const MODEL_DEFAULTS = {
     group: 'גלובלי',
   },
 
-  // --- Proposal Agent ---
+  // --- Proposal Agent (Gemini-first April 2026) ---
+  // Per skill matrix: Brief extraction = Flash + LOW thinking (cheap, fast).
+  // Full proposal building = Pro + MEDIUM (strategy writing requires reasoning).
   'proposal_agent.primary_model': {
-    value: 'gpt-5.4',
-    description: 'מודל ראשי — סוכן הצעות (חילוץ + עיבוד מטרות). GPT-5.4 for Hebrew + long context.',
+    value: 'gemini-3-flash-preview',
+    description: 'מודל ראשי — חילוץ בריף (Flash + LOW + Files API)',
+    value_type: 'text' as const,
+    group: 'סוכן הצעות',
+  },
+  'proposal_agent.builder_model': {
+    value: 'gemini-3.1-pro-preview',
+    description: 'מודל בונה ההצעה המלאה (Pro + MEDIUM)',
     value_type: 'text' as const,
     group: 'סוכן הצעות',
   },
@@ -672,7 +680,7 @@ export const MODEL_DEFAULTS = {
   },
   'proposal_agent.thinking_level': {
     value: 'LOW',
-    description: 'רמת חשיבה (NONE/LOW/MEDIUM/HIGH)',
+    description: 'רמת חשיבה לחילוץ (LOW). לבונה משתמשים MEDIUM אוטומטית.',
     value_type: 'text' as const,
     group: 'סוכן הצעות',
   },
@@ -739,8 +747,8 @@ export const MODEL_DEFAULTS = {
     group: 'מחקר מותג',
   },
   'brand_research.thinking_level': {
-    value: 'LOW',
-    description: 'רמת חשיבה — מחקר מותג',
+    value: 'MEDIUM',
+    description: 'רמת חשיבה — מחקר מותג (MEDIUM per skill matrix for grounded research)',
     value_type: 'text' as const,
     group: 'מחקר מותג',
   },

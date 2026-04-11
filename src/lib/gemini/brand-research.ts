@@ -269,10 +269,10 @@ export async function runSingleAgent(
       model,
       prompt,
       geminiConfig: {
-        thinkingConfig: { thinkingLevel: 'HIGH' as any },
+        thinkingConfig: { thinkingLevel: 'MEDIUM' as any },
         maxOutputTokens: 4000,
       },
-      thinkingLevel: 'HIGH',
+      thinkingLevel: 'MEDIUM',
       maxOutputTokens: 4000,
       useGoogleSearch: true,
       // Gemini 3 supports combining tools — model can scrape URLs it finds via search

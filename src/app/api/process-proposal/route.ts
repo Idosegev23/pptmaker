@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   console.log(`[${requestId}] 🔍 PROCESS PROPOSAL (extract only) - START`)
 
   try {
-    const { clientBriefText, kickoffText } = await request.json()
+    const { clientBriefText, kickoffText, geminiFileUri, geminiFileMime } = await request.json()
 
     if (!clientBriefText || typeof clientBriefText !== 'string') {
       return NextResponse.json({ error: 'clientBriefText is required' }, { status: 400 })
@@ -19,9 +19,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'טקסט הבריף קצר מדי' }, { status: 400 })
     }
 
-    console.log(`[${requestId}] 📄 Brief: ${clientBriefText.length} chars, Kickoff: ${kickoffText ? kickoffText.length + ' chars' : 'none'}`)
+    console.log(`[${requestId}] 📄 Brief: ${clientBriefText.length} chars, Kickoff: ${kickoffText ? kickoffText.length + ' chars' : 'none'}, GeminiFile: ${geminiFileUri || 'none'}`)
 
-    const extracted = await extractFromBrief(clientBriefText, kickoffText || undefined)
+    const briefFile = geminiFileUri && geminiFileMime ? { uri: geminiFileUri, mimeType: geminiFileMime } : undefined
+    const extracted = await extractFromBrief(clientBriefText, kickoffText || undefined, briefFile)
 
     const elapsed = Date.now() - startTime
     console.log(`[${requestId}] ✅ Extraction done in ${elapsed}ms — Brand: ${extracted?.brand?.name || 'N/A'}`)

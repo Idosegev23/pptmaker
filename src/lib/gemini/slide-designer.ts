@@ -447,12 +447,13 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
     },
   }
 
-  // ── Claude Opus 4.6 for Planner (best Hebrew writing + narrative quality) ──
-  // Fallback to GPT-5.4 if Claude fails
+  // ── Gemini 3.1 Pro PRIMARY for Planner (April 2026) ──
+  // Per skill matrix: "Slide content planner → gemini-3.1-pro + HIGH thinking + no tools"
+  // Claude/GPT kept as fallbacks only.
   const plannerAttempts = [
-    { provider: 'anthropic', model: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-    { provider: 'openai', model: 'gpt-5.4', label: 'GPT-5.4 (fallback)' },
-    { provider: 'gemini', model: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (fallback)' },
+    { provider: 'gemini', model: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+    { provider: 'anthropic', model: 'claude-opus-4-6', label: 'Claude Opus 4.6 (fallback)' },
+    { provider: 'openai', model: 'gpt-5.4', label: 'GPT-5.4 (last resort)' },
   ]
 
   for (let attempt = 0; attempt < plannerAttempts.length; attempt++) {
@@ -510,12 +511,15 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
         const result = await callAI({
           model,
           prompt: `${prompt}\n\nהחזר JSON בלבד — אובייקט עם מפתח "slides" שמכיל מערך. ללא markdown.`,
+          systemPrompt: 'אתה קריאייטיב דיירקטור בכיר ב-Leaders. תכנן מצגות הצעת מחיר פרימיום בעברית. החזר JSON בלבד.',
           geminiConfig: {
+            systemInstruction: 'אתה קריאייטיב דיירקטור בכיר ב-Leaders. תכנן מצגות הצעת מחיר פרימיום בעברית. החזר JSON בלבד.',
             responseMimeType: 'application/json',
-            thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+            // Per skill matrix: planner = HIGH thinking
+            thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
             maxOutputTokens: 16384,
           },
-          thinkingLevel: 'MEDIUM',
+          thinkingLevel: 'HIGH',
           maxOutputTokens: 16384,
           callerId: `${requestId}-plan-gemini`,
           noGlobalFallback: true,
@@ -1247,26 +1251,28 @@ export async function pipelineBatch(
     let intents: SlideIntentType[]
 
     try {
-      console.log(`[SlideDesigner][${requestId}] 🤖 Calling GPT-5.4 for slide intents...`)
-      const OpenAI = (await import('openai')).default
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-      const response = await openai.responses.create({
-        model: 'gpt-5.4',
-        instructions: 'You are a world-class presentation art director. Choose the best visual composition for each slide. Return ONLY valid JSON.',
-        input: prompt,
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'slide_intents',
-            strict: true,
-            schema: SLIDE_INTENT_SCHEMA,
-          },
+      // Per skill matrix: art direction = Gemini Pro + HIGH thinking + structured output
+      console.log(`[SlideDesigner][${requestId}] 🟢 Calling Gemini 3.1 Pro for slide intents (PRIMARY)...`)
+      const intentResult = await callAI({
+        model: 'gemini-3.1-pro-preview',
+        prompt: prompt + '\n\nReturn ONLY valid JSON matching the schema. No markdown.',
+        systemPrompt: 'You are a world-class presentation art director. Choose the best visual composition for each slide. Return ONLY valid JSON.',
+        geminiConfig: {
+          systemInstruction: 'You are a world-class presentation art director. Choose the best visual composition for each slide. Return ONLY valid JSON.',
+          responseMimeType: 'application/json',
+          responseSchema: SLIDE_INTENT_SCHEMA as any,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+          maxOutputTokens: 16000,
         },
+        responseSchema: SLIDE_INTENT_SCHEMA as unknown as Record<string, unknown>,
+        thinkingLevel: 'HIGH',
+        maxOutputTokens: 16000,
+        callerId: `${requestId}-intent-gemini`,
+        noGlobalFallback: true,
       })
 
-      const rawText = response.output_text || '{}'
-      console.log(`[SlideDesigner][${requestId}] ✅ GPT-5.4 responded: ${rawText.length} chars`)
+      const rawText = intentResult.text || '{}'
+      console.log(`[SlideDesigner][${requestId}] ✅ Gemini Pro responded: ${rawText.length} chars`)
       const parsed = JSON.parse(rawText) as { slides: SlideIntentType[] }
       intents = parsed.slides || []
 
