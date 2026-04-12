@@ -177,112 +177,106 @@ export default function ResearchPage() {
       setExtractedRef(extracted)
       setPipelineStatusRef(pipelineStatus)
 
-      // Stage 2-3: Run research — client orchestrated for Vercel safety
+      // ── v8: Single Research Agent replaces 4 agents + synthesize + IMAI ──
       setStage('brand_research')
       setBrandDone(false)
       setInfluencerDone(false)
       setSynthesizing(false)
       setAgentStatuses(Array(AGENT_COUNT).fill('running'))
 
-      const brand = extracted.brand || {}
-      const targetAudience = extracted.targetAudience || {}
+      console.log('[Research] 🤖 Calling research agent (v8)...')
 
-      // Fire 4 research agents in parallel (was 7 — reduced to avoid Gemini rate limits)
-      const agentPromises = Array.from({ length: AGENT_COUNT }, (_, i) =>
-        fetch('/api/research/agent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ brandName: name, angleIndex: i }),
-        })
-          .then(async res => {
-            const data = res.ok ? await res.json() : { angle: AGENT_LABELS[i], data: 'שגיאה' }
-            setAgentStatuses(prev => { const next = [...prev]; next[i] = res.ok ? 'done' : 'failed'; return next })
-            return data
-          })
-          .catch(() => {
-            setAgentStatuses(prev => { const next = [...prev]; next[i] = 'failed'; return next })
-            return { angle: AGENT_LABELS[i], data: 'שגיאה באיסוף מידע.' }
-          })
-      )
+      const briefText = data._briefText || ''
+      const briefFileUri = data._geminiFileUri || undefined
+      const briefFileMime = data._geminiFileMime || undefined
 
-      // Wait for all 4 agents
-      const gatheredData = await Promise.all(agentPromises)
-
-      // Synthesize — separate Lambda call
-      setSynthesizing(true)
-      const synthesizePromise = fetch('/api/research/synthesize', {
+      const agentRes = await fetch('/api/research-agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandName: name, gatheredData }),
-      }).then(async res => {
-        setSynthesizing(false)
-        setBrandDone(true)
-        if (!res.ok) throw new Error('Synthesis failed')
-        return res.json()
+        body: JSON.stringify({ brandName: name, briefText, briefFileUri, briefFileMime }),
       })
 
-      // Wait for brand synthesis — with 2-min safety timeout so influencer can start even if synthesis hangs
-      console.log('[Research] Waiting for brand synthesis...')
-      const synthesisTimeout = new Promise<{ status: 'rejected'; reason: Error }>((resolve) =>
-        setTimeout(() => resolve({ status: 'rejected' as const, reason: new Error('Synthesis timeout (2min)') }), 120_000)
-      )
-      const brandResult = await Promise.allSettled([
-        Promise.race([synthesizePromise, synthesisTimeout.then(() => { throw new Error('Synthesis timeout') })])
-      ])
-      console.log('[Research] Brand synthesis settled:', brandResult[0].status)
-
-      // THEN run influencer research (sequential — avoids overloading Gemini API)
-      setStage('influencer_research')
-      console.log('[Research] Starting influencer research...')
-      const influencerResult = await Promise.allSettled([
-        fetch('/api/influencers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mode: 'discover',
-            brandResearch: {
-              brandName: name,
-              industry: brand.industry || '',
-              targetDemographics: {
-                primaryAudience: {
-                  gender: targetAudience.primary?.gender || '',
-                  ageRange: targetAudience.primary?.ageRange || '',
-                  interests: targetAudience.primary?.interests || [],
-                },
-              },
-            },
-            budget: extracted.budget?.amount || 0,
-            goals: extracted.campaignGoals || [],
-          }),
-        }).then(async res => {
-          setInfluencerDone(true)
-          console.log(`[Research] Influencer API returned: ${res.status}`)
-          if (!res.ok) throw new Error('Influencer research failed')
-          return res.json()
-        })
-      ])
-      console.log('[Research] Influencer research settled:', influencerResult[0].status)
-
-      const brandSettled = brandResult[0]
-      const influencerSettled = influencerResult[0]
-
-      const brandResearch = brandSettled.status === 'fulfilled' ? brandSettled.value.research : null
-      const colors = brandSettled.status === 'fulfilled' ? brandSettled.value.colors : null
-      const logoUrl = brandSettled.status === 'fulfilled' ? (brandSettled.value.logoUrl as string | null) : null
-      const influencerStrategy = influencerSettled.status === 'fulfilled'
-        ? (influencerSettled.value.strategy || influencerSettled.value)
-        : null
-
-      if (!brandResearch && !influencerStrategy) {
-        throw new Error('שני המחקרים נכשלו. נסה שוב.')
+      if (!agentRes.ok) {
+        const errData = await agentRes.json().catch(() => ({ error: 'unknown' }))
+        throw new Error(errData.error || 'Research agent failed')
       }
 
-      // Set status for each research section
-      setBrandStatus(brandSettled.status === 'fulfilled' ? 'success' : 'failed')
-      setInfluencerStatus(influencerSettled.status === 'fulfilled' ? 'success' : 'failed')
+      const agentResult = await agentRes.json()
+      console.log(`[Research] Agent returned: ${agentResult.totalToolCalls} tool calls, ${agentResult.durationMs}ms`)
+      console.log(`[Research] Influencers: ${agentResult.influencers?.length || 0}`)
+      console.log(`[Research] BrandContent: ${agentResult.brandContent ? 'YES' : 'NO'}`)
+      console.log(`[Research] StrategyContent: ${agentResult.strategyContent ? 'YES' : 'NO'}`)
 
-      // Save results for display — but DO NOT enrich yet (user must approve first)
-      setResearchResults({ brand: brandResearch, influencer: influencerStrategy, colors, logoUrl })
+      // Mark all agents as done
+      setAgentStatuses(Array(AGENT_COUNT).fill('done'))
+      setBrandDone(true)
+      setInfluencerDone(true)
+
+      // Build research display data from agent output
+      const brandResearch = agentResult.researchText ? {
+        brandName: name,
+        industry: extracted.brand?.industry || '',
+        companyDescription: agentResult.researchText,
+        confidence: 'high' as const,
+      } : null
+      const colors = agentResult.brandColors || null
+      const influencerStrategy = agentResult.influencers?.length > 0 ? {
+        strategySummary: agentResult.executionContent?.influencerStrategy || '',
+        recommendations: agentResult.influencers.map((i: any) => ({
+          name: i.fullname || i.username,
+          handle: i.username,
+          followers: `${(i.followers / 1000).toFixed(1)}K`,
+          engagement: `${(i.engagement_rate || 0).toFixed(1)}%`,
+        })),
+      } : null
+
+      // Save draft wizard data to document immediately
+      const draftStepData: Record<string, unknown> = {}
+      if (agentResult.brandContent) {
+        draftStepData.brandBrief = agentResult.brandContent.brandBrief
+        draftStepData.brandObjective = agentResult.brandContent.brandObjective
+        draftStepData.goals = agentResult.brandContent.goals
+        draftStepData.targetDescription = agentResult.brandContent.targetDescription
+        draftStepData.targetAgeRange = agentResult.brandContent.targetAgeRange
+        draftStepData.targetGender = agentResult.brandContent.targetGender
+      }
+      if (agentResult.strategyContent) {
+        draftStepData.keyInsight = agentResult.strategyContent.keyInsight
+        draftStepData.insightData = agentResult.strategyContent.insightData
+        draftStepData.strategyHeadline = agentResult.strategyContent.strategyHeadline
+        draftStepData.strategyPillars = agentResult.strategyContent.strategyPillars
+        draftStepData.activityTitle = agentResult.strategyContent.activityTitle
+        draftStepData.activityDescription = agentResult.strategyContent.activityDescription
+      }
+      if (agentResult.executionContent) {
+        draftStepData.deliverables = agentResult.executionContent.deliverables
+        draftStepData.influencerStrategy = agentResult.executionContent.influencerStrategy
+        draftStepData.influencerCriteria = agentResult.executionContent.influencerCriteria
+        draftStepData.budget = agentResult.executionContent.budget
+        draftStepData.potentialReach = agentResult.executionContent.potentialReach
+        draftStepData.successMetrics = agentResult.executionContent.successMetrics
+      }
+
+      // Save image prompts for background generation
+      if (agentResult.imagePrompts?.length > 0) {
+        draftStepData._imagePrompts = agentResult.imagePrompts
+      }
+
+      // Patch document with draft data (will be pre-populated in wizard)
+      if (Object.keys(draftStepData).length > 0) {
+        await fetch(`/api/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(draftStepData),
+        })
+        console.log('[Research] Draft wizard data saved to document')
+      }
+
+      // Set status for display
+      setBrandStatus(brandResearch ? 'success' : 'failed')
+      setInfluencerStatus(influencerStrategy ? 'success' : 'failed')
+
+      setResearchResults({ brand: brandResearch, influencer: influencerStrategy, colors, logoUrl: null })
       setStage('reviewing')
       setShowResults(true)
     } catch (err) {

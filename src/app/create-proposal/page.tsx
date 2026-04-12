@@ -347,11 +347,10 @@ export default function CreateProposalPage() {
 
       setStage('done')
 
-      // Go straight to generate — the single agent handles
-      // research + content + slides in one flow. No need for
-      // the old /research → /wizard → /generate pipeline.
+      // Research agent → wizard → generate (v8 architecture)
+      // Agent researches + drafts content → user reviews in wizard → rich slides
       setTimeout(() => {
-        router.push(`/generate/${docId}`)
+        router.push(`/research/${docId}`)
       }, 1500)
     } catch (err) {
       console.error('[Create Proposal] Error:', err)
