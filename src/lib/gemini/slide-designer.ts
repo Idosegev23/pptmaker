@@ -61,6 +61,31 @@ export type { PipelineFoundation, BatchResult, HtmlBatchResult, HtmlPresentation
 let _proUnavailable = false
 export function resetStickyFallback() { _proUnavailable = false }
 
+/** Build a simple HTML slide when AI returns fewer slides than expected */
+function buildFallbackHtmlSlide(
+  plan: SlidePlan,
+  colors: Record<string, string>,
+  brandName: string,
+): string {
+  const bg = colors.background || '#0C0C10'
+  const text = colors.text || '#F5F5F7'
+  const primary = colors.primary || '#E94560'
+  const title = plan.title || plan.slideType || ''
+  const subtitle = plan.subtitle || ''
+  const body = plan.bodyText || ''
+  const bullets = (plan.bulletPoints || []).map(b => `<li style="margin-bottom:12px;font-size:22px;">${b}</li>`).join('')
+  return `<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>*{margin:0;padding:0;box-sizing:border-box;}.slide{width:1920px;height:1080px;position:relative;overflow:hidden;font-family:'Heebo',sans-serif;direction:rtl;background:${bg};color:${text};display:flex;flex-direction:column;justify-content:center;padding:120px;}</style>
+</head><body><div class="slide">
+<h1 style="font-size:56px;font-weight:900;margin-bottom:24px;color:${primary};">${title}</h1>
+${subtitle ? `<h2 style="font-size:32px;font-weight:300;margin-bottom:32px;opacity:0.7;">${subtitle}</h2>` : ''}
+${body ? `<p style="font-size:24px;line-height:1.6;max-width:1200px;">${body}</p>` : ''}
+${bullets ? `<ul style="list-style:none;margin-top:32px;">${bullets}</ul>` : ''}
+<div style="position:absolute;bottom:40px;left:60px;font-size:14px;opacity:0.3;">${brandName}</div>
+</div></body></html>`
+}
+
 /** Fixed layout directive per slide type — mandatory, not a suggestion */
 const LAYOUT_MAP: Record<string, string> = {
   cover:              'Typographic Brutalism — oversized brand name 300px+ with textStroke, Aurora BG, dramatic negative space',
@@ -1671,13 +1696,16 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
     const parsed = JSON.parse(rawText) as { slides: string[] }
     const htmlSlides = parsed.slides || []
 
-    // Validate count — must match exactly or throw for fallback
+    // Validate count — fill missing slides with simple HTML fallbacks
     if (htmlSlides.length !== batchPlans.length) {
-      console.error(`[SlideDesigner][${requestId}] ❌ Count mismatch: GPT returned ${htmlSlides.length} slides, expected ${batchPlans.length}`)
-      if (htmlSlides.length === 0) throw new Error(`GPT returned 0 slides`)
-      // If GPT returned MORE, truncate. If LESS, throw to trigger fallback.
-      if (htmlSlides.length < batchPlans.length) {
-        throw new Error(`GPT returned only ${htmlSlides.length}/${batchPlans.length} slides`)
+      console.warn(`[SlideDesigner][${requestId}] ⚠️ Count mismatch: AI returned ${htmlSlides.length}/${batchPlans.length} slides`)
+      if (htmlSlides.length === 0) throw new Error(`AI returned 0 slides`)
+      // Fill missing slides with a simple HTML fallback instead of throwing
+      while (htmlSlides.length < batchPlans.length) {
+        const missingPlan = batchPlans[htmlSlides.length]
+        const fallbackHtml = buildFallbackHtmlSlide(missingPlan, ds.colors, foundation.brandName)
+        htmlSlides.push(fallbackHtml)
+        console.log(`[SlideDesigner][${requestId}]   📋 Filled missing slide ${htmlSlides.length}/${batchPlans.length} (${missingPlan.slideType}) with fallback HTML`)
       }
     }
     const actualCount = Math.min(htmlSlides.length, batchPlans.length)
