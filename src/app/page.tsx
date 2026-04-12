@@ -44,7 +44,7 @@ export default function HomePage() {
             הצעות מחיר ומצגות קריאטיב
           </p>
           <p className="text-xl md:text-3xl text-white/90 mb-14 font-bold max-w-2xl mx-auto">
-            מבריף ל-11 שקפים מעוצבים, באוטומט
+            מבריף למצגת מעוצבת או הצעת מחיר — באוטומט
           </p>
 
           {/* Value props — 4 pillars */}

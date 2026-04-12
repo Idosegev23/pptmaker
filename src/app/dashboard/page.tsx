@@ -186,7 +186,6 @@ export default async function DashboardPage() {
                         <Link
                           href={`/wizard/${doc.id}`}
                           className="px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
                         >
                           ערוך תוכן
                         </Link>
