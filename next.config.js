@@ -3,6 +3,10 @@ const nextConfig = {
   // Enable experimental features for server components
   experimental: {
     serverComponentsExternalPackages: ['puppeteer-core', '@sparticuz/chromium', 'pdf-lib', 'pdf-parse'],
+    // Allow large file uploads (PDF briefs up to 20MB)
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
   },
   
   // Image optimization

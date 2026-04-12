@@ -23,14 +23,55 @@ export async function POST(request: NextRequest) {
     const contentType = request.headers.get('content-type') || ''
     console.log(`[${requestId}] Content-Type: ${contentType}`)
 
-    // Handle Google Docs link (JSON body)
+    // Handle JSON body (Google Docs link OR storage URL for large files)
     if (contentType.includes('application/json')) {
       const body = await request.json()
-      const { googleDocsUrl, docType } = body
+      const { googleDocsUrl, storageUrl, fileName, fileType, docType } = body
+
+      // ── Large file path: client uploaded to Supabase, we download + parse ──
+      if (storageUrl) {
+        console.log(`[${requestId}] 📦 Large file via storage URL: ${storageUrl}`)
+        console.log(`[${requestId}] 📋 Name: ${fileName}, Type: ${fileType}, DocType: ${docType}`)
+
+        const fileRes = await fetch(storageUrl)
+        if (!fileRes.ok) {
+          return NextResponse.json({ error: 'Failed to download file from storage' }, { status: 400 })
+        }
+        const buffer = Buffer.from(await fileRes.arrayBuffer())
+        console.log(`[${requestId}] 📦 Downloaded ${(buffer.length / 1024 / 1024).toFixed(1)}MB from storage`)
+
+        // Upload to Gemini Files API
+        const isUploadable = /^(application\/pdf|image\/(png|jpeg|jpg|webp))/.test(fileType || '')
+        let geminiFileUri: string | undefined
+        let geminiFileMime: string | undefined
+        if (isUploadable) {
+          try {
+            const geminiFile = await uploadToGeminiFiles(buffer, fileType || 'application/pdf', fileName || 'document')
+            geminiFileUri = geminiFile.uri
+            geminiFileMime = geminiFile.mimeType
+          } catch (err) {
+            console.warn(`[${requestId}] ⚠️ Gemini Files upload failed (non-critical):`, err)
+          }
+        }
+
+        // Parse text
+        const parsed = await parseDocument(buffer, fileType || 'application/pdf', fileName || 'document.pdf')
+        console.log(`[${requestId}] ✅ Parsed via storage: ${parsed.text.length} chars`)
+
+        return NextResponse.json({
+          success: true,
+          parsedText: parsed.text,
+          metadata: parsed.metadata,
+          fileName,
+          docType,
+          geminiFileUri,
+          geminiFileMime,
+        })
+      }
 
       if (!googleDocsUrl) {
-        console.log(`[${requestId}] ❌ Missing googleDocsUrl`)
-        return NextResponse.json({ error: 'Missing googleDocsUrl' }, { status: 400 })
+        console.log(`[${requestId}] ❌ Missing googleDocsUrl or storageUrl`)
+        return NextResponse.json({ error: 'Missing googleDocsUrl or storageUrl' }, { status: 400 })
       }
 
       console.log(`[${requestId}] 🔗 Google Docs URL: ${googleDocsUrl}`)

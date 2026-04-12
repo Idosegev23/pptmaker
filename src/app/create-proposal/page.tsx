@@ -107,13 +107,48 @@ export default function CreateProposalPage() {
     file: File,
     docType: string,
   ): Promise<{ text: string; geminiFileUri?: string; geminiFileMime?: string }> => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('docType', docType)
+    const MAX_DIRECT_UPLOAD = 4 * 1024 * 1024 // 4MB — Vercel serverless body limit
 
-    const res = await fetch('/api/parse-document', { method: 'POST', body: formData })
+    if (file.size <= MAX_DIRECT_UPLOAD) {
+      // Small file → send directly as FormData
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('docType', docType)
+
+      const res = await fetch('/api/parse-document', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to parse document')
+      return {
+        text: data.parsedText,
+        geminiFileUri: data.geminiFileUri,
+        geminiFileMime: data.geminiFileMime,
+      }
+    }
+
+    // Large file → upload to Supabase Storage first, then send URL
+    console.log(`[Create Proposal] File too large for direct upload (${(file.size / 1024 / 1024).toFixed(1)}MB), uploading to storage first...`)
+
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+    const storagePath = `documents/briefs/${docType}_${Date.now()}_${sanitizedName}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('assets')
+      .upload(storagePath, file, { contentType: file.type, upsert: true })
+
+    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
+
+    const { data: urlData } = supabase.storage.from('assets').getPublicUrl(storagePath)
+    const storageUrl = urlData.publicUrl
+
+    // Send the URL to parse-document instead of the file itself
+    const res = await fetch('/api/parse-document', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storageUrl, fileName: file.name, fileType: file.type, docType }),
+    })
     const data = await res.json()
-
     if (!res.ok) throw new Error(data.error || 'Failed to parse document')
     return {
       text: data.parsedText,
