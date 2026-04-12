@@ -298,11 +298,17 @@ export async function runPresentationAgent(
   let influencerData: Array<{ username: string; followers: number; rationale: string }> | undefined
   let kpiData: Record<string, number> | undefined
 
-  // Build tools array — Gemini 3 multi-tool
-  const tools: Array<Record<string, unknown>> = [
+  // ── Two-phase tool strategy ──
+  // SDK 1.34.0 doesn't support combining built-in tools with function declarations.
+  // Phase 1: research with built-in tools (google_search, url_context, code_execution)
+  // Phase 2: generate slides with function declarations only
+  // Both phases share the same conversation history — no data loss.
+  const researchTools: Array<Record<string, unknown>> = [
     { googleSearch: {} },
     { urlContext: {} },
     { codeExecution: {} },
+  ]
+  const generationTools: Array<Record<string, unknown>> = [
     { functionDeclarations: FUNCTION_DECLARATIONS },
   ]
 
@@ -395,19 +401,75 @@ ${imagesContext}
     history.push({ role: 'user', parts: [{ text: contents as string }] })
   }
 
-  const config: GenerateContentConfig = {
+  // ════════════════════════════════════════════════════════════
+  // PHASE 1: Research — built-in tools (google_search, url_context, code_execution)
+  // The model researches the brand, discovers competitors, scrapes the website.
+  // No function declarations here — avoids the SDK limitation.
+  // ════════════════════════════════════════════════════════════
+
+  const needsResearch = !input.brandResearch
+  if (needsResearch) {
+    console.log(`[PresentationAgent][${requestId}] 📚 Phase 1: Research (built-in tools)`)
+    onProgress?.({ stage: 'research', message: '🔍 חוקר את המותג...' })
+
+    const researchConfig: GenerateContentConfig = {
+      systemInstruction: systemPrompt,
+      thinkingConfig: { thinkingLevel: 'HIGH' as any },
+      maxOutputTokens: 16000,
+      tools: researchTools,
+    } as GenerateContentConfig
+
+    const researchPrompt = `חקור את המותג "${input.brandName}" בשוק הישראלי.
+חפש באינטרנט וסרוק את האתר שלהם. מצא:
+1. תעשייה, מתחרים, מיצוב
+2. קהל יעד (גיל, מגדר, תחומי עניין)
+3. נוכחות דיגיטלית (אינסטגרם, טיקטוק)
+4. ערכי מותג, טון דיבור, סגנון ויזואלי
+5. צבעים עיקריים של המותג (primary, accent)
+
+בבריף כתוב: ${input.briefText.slice(0, 2000)}
+
+סכם את הממצאים בפסקאות מסודרות בעברית. כלול נתונים ספציפיים ו-URLs.`
+
+    try {
+      const researchResponse: any = await client.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: researchPrompt,
+        config: researchConfig,
+      })
+
+      const researchText = researchResponse.text || ''
+      console.log(`[PresentationAgent][${requestId}] ✅ Research complete: ${researchText.length} chars`)
+
+      // Inject research into history so Phase 2 has full context
+      history.push({ role: 'user', parts: [{ text: `מחקר מותג שנאסף:\n\n${researchText}\n\nעכשיו בנה את המצגת. קרא ל-generate_slide_html עבור כל אחד מ-11 השקפים.` }] })
+    } catch (researchErr) {
+      console.warn(`[PresentationAgent][${requestId}] ⚠️ Research failed (continuing without):`, researchErr instanceof Error ? researchErr.message : researchErr)
+      history.push({ role: 'user', parts: [{ text: `לא הצלחתי לחקור — השתמש במידע מהבריף בלבד. בנה את המצגת. קרא ל-generate_slide_html עבור כל אחד מ-11 השקפים.` }] })
+    }
+  } else {
+    console.log(`[PresentationAgent][${requestId}] ℹ️ Phase 1 skipped — brandResearch already provided`)
+    // Add instruction to generate slides immediately
+    history.push({ role: 'user', parts: [{ text: `מחקר מותג כבר קיים (ב-wizardData). בנה את המצגת עכשיו. קרא ל-generate_slide_html עבור כל אחד מ-11 השקפים, בסדר: cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influencers, metrics, closing.` }] })
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // PHASE 2: Generate slides — function declarations only
+  // The model calls generate_slide_html, search_influencers, etc.
+  // Research context is already in history from Phase 1.
+  // ════════════════════════════════════════════════════════════
+
+  console.log(`[PresentationAgent][${requestId}] 🎨 Phase 2: Generate slides (function calling)`)
+  onProgress?.({ stage: 'generating', message: '🎨 מתחיל ליצור שקפים...' })
+
+  const genConfig: GenerateContentConfig = {
     systemInstruction: systemPrompt,
-    thinkingConfig: { thinkingLevel: 'HIGH' as any },
+    thinkingConfig: { thinkingLevel: 'MEDIUM' as any },
     maxOutputTokens: 65536,
-    tools,
-    // Required when combining built-in tools (google_search, url_context, code_execution)
-    // with function declarations in the same request
-    toolConfig: {
-      includeServerSideToolInvocations: true,
-    },
+    tools: generationTools,
   } as GenerateContentConfig
 
-  const MAX_ITERATIONS = 35 // 11 slides + research + KPI + buffer
+  const MAX_ITERATIONS = 25 // 11 slides + IMAI searches + buffer
 
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
     const iterStart = Date.now()
@@ -416,7 +478,7 @@ ${imagesContext}
     const response: any = await client.models.generateContent({
       model: 'gemini-3.1-pro-preview',
       contents: history as any,
-      config,
+      config: genConfig,
     })
 
     const candidate = response.candidates?.[0]
@@ -428,7 +490,7 @@ ${imagesContext}
     if (functionCalls.length === 0) {
       // Agent finished — extract final text + designSystem
       const finalText = parts.filter((p: any) => p.text).map((p: any) => p.text).join('')
-      console.log(`[PresentationAgent][${requestId}] ✅ Agent finished: ${slides.length} slides, ${totalToolCalls} tool calls, ${Date.now() - startTs}ms`)
+      console.log(`[PresentationAgent][${requestId}] ✅ Phase 2 finished: ${slides.length} slides, ${totalToolCalls} tool calls, ${Date.now() - startTs}ms`)
 
       // Try to parse design system from final response
       try {
