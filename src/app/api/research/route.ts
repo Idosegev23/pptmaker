@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Run brand research + visual research in parallel
     const [research, brandColorData] = await Promise.all([
       researchBrand(brandName, researchWebsiteData),
-      extractColorsByBrandName(brandName),   // ← NEW: always runs, uses Google Search
+      extractColorsByBrandName(brandName, websiteData?.url || websiteData?.website),
     ])
 
     console.log(`[API Research] Research complete, confidence: ${research.confidence}`)

@@ -255,16 +255,95 @@ async function fetchImageAsBase64(url: string): Promise<string> {
  * Extract brand colors by brand name using Gemini's knowledge
  * Fallback when website scraping fails to extract colors
  */
-export async function extractColorsByBrandName(brandName: string): Promise<BrandColors & { logoUrl?: string; websiteDomain?: string }> {
-  console.log(`[Gemini Colors] Analyzing brand by name: ${brandName}`)
+/** Parse a color extraction response from Gemini (supports code fences and raw JSON) */
+function parseColorResponse(text: string): (BrandColors & { logoUrl?: string; websiteDomain?: string }) | null {
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
+  const raw = jsonMatch ? jsonMatch[1] : (() => {
+    const s = text.indexOf('{'), e = text.lastIndexOf('}')
+    return s !== -1 && e > s ? text.slice(s, e + 1) : null
+  })()
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    return {
+      primary: parsed.primary || '#111111',
+      secondary: parsed.secondary || '#666666',
+      accent: parsed.accent || parsed.primary || '#E94560',
+      background: parsed.background || '#FFFFFF',
+      text: parsed.text || '#111111',
+      palette: parsed.palette || [parsed.primary, parsed.secondary, parsed.accent].filter(Boolean),
+      style: parsed.style || 'corporate',
+      mood: parsed.mood || 'מקצועי',
+      logoUrl: parsed.logoUrl || undefined,
+      websiteDomain: parsed.websiteDomain || undefined,
+    }
+  } catch {
+    return null
+  }
+}
 
+export async function extractColorsByBrandName(brandName: string, websiteUrl?: string): Promise<BrandColors & { logoUrl?: string; websiteDomain?: string }> {
+  console.log(`[Gemini Colors] Analyzing brand by name: ${brandName}${websiteUrl ? ` (website: ${websiteUrl})` : ''}`)
+
+  // ── Primary path: if we have a website URL, scrape it and extract REAL CSS colors ──
+  // This is far more accurate than guessing from brand name alone.
+  if (websiteUrl) {
+    try {
+      console.log(`[Gemini Colors] 🌐 Scraping website for real CSS colors: ${websiteUrl}`)
+      const websiteResult = await callAI({
+        model: 'gemini-3-flash-preview',
+        prompt: `Visit this website and extract the REAL brand colors from its CSS/design:
+
+Website: ${websiteUrl}
+
+Look at:
+1. CSS custom properties (--primary-color, --brand-color, etc.)
+2. Header/nav background colors
+3. Button colors (CTA buttons)
+4. Logo colors visible on the page
+5. Accent/highlight colors used for links or headings
+
+Return JSON:
+\`\`\`json
+{
+  "primary": "#XXXXXX",
+  "secondary": "#XXXXXX",
+  "accent": "#XXXXXX",
+  "background": "#FFFFFF",
+  "text": "#111111",
+  "palette": ["#XXXXXX", "#XXXXXX", "#XXXXXX"],
+  "style": "minimal/bold/elegant/playful/corporate",
+  "mood": "תיאור קצר של האווירה",
+  "confidence": "high/medium/low",
+  "logoUrl": "URL of the logo image found on the page (or null)",
+  "websiteDomain": "${new URL(websiteUrl).hostname}"
+}
+\`\`\`
+
+IMPORTANT: Extract REAL colors from the actual website CSS. Do NOT guess.`,
+        useUrlContext: true,
+        useGoogleSearch: true,
+        callerId: `color-from-website-${brandName}`,
+      })
+
+      const result = parseColorResponse(websiteResult.text || '')
+      if (result) {
+        console.log(`[Gemini Colors] ✅ Real colors from website: primary=${result.primary}, accent=${result.accent}`)
+        return result
+      }
+    } catch (err) {
+      console.warn(`[Gemini Colors] ⚠️ Website scrape failed, falling back to brand name lookup:`, err instanceof Error ? err.message : err)
+    }
+  }
+
+  // ── Fallback: Ask Gemini with Google Search + URL Context grounding ──
   const prompt = `
 אתה מומחה מיתוג. ניתן לך שם מותג ואתה צריך לזהות את פלטת הצבעים הרשמית שלו.
 
 שם המותג: ${brandName}
 
-השתמש בידע שלך על מותגים, לוגואים ועיצוב. אם אתה מכיר את המותג הספציפי, החזר את הצבעים האמיתיים שלו.
-אם לא, נסה להסיק מהתעשייה ומהשם מהם הצבעים הצפויים.
+חפש באינטרנט את האתר הרשמי של המותג וחלץ את הצבעים האמיתיים שלו.
+אם לא מצאת — נסה להסיק מהתעשייה ומהשם.
 
 החזר JSON בפורמט הבא:
 \`\`\`json
@@ -288,28 +367,6 @@ export async function extractColorsByBrandName(brandName: string): Promise<Brand
 - primary = הצבע הדומיננטי של המותג
 - אל תחזיר צבעים כלליים אם אתה מכיר את המותג
 `
-
-  const parseColorResponse = (text: string): (BrandColors & { logoUrl?: string; websiteDomain?: string }) | null => {
-    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
-    const raw = jsonMatch ? jsonMatch[1] : (() => {
-      const s = text.indexOf('{'), e = text.lastIndexOf('}')
-      return s !== -1 && e > s ? text.slice(s, e + 1) : null
-    })()
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return {
-      primary: parsed.primary || '#111111',
-      secondary: parsed.secondary || '#666666',
-      accent: parsed.accent || parsed.primary || '#E94560',
-      background: parsed.background || '#FFFFFF',
-      text: parsed.text || '#111111',
-      palette: parsed.palette || [parsed.primary, parsed.secondary, parsed.accent].filter(Boolean),
-      style: parsed.style || 'corporate',
-      mood: parsed.mood || 'מקצועי',
-      logoUrl: parsed.logoUrl || undefined,
-      websiteDomain: parsed.websiteDomain || undefined,
-    }
-  }
 
   // Flash first (cheap + fast), Pro fallback if Flash fails
   const models = [MODEL, FALLBACK_MODEL]

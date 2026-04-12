@@ -194,6 +194,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Gemini URL Context: if all logo lookups failed, scrape the website for the logo ──
+    if (!logoUrl && siteUrl) {
+      console.log(`[Visual Assets][${requestId}] 🌐 All logo lookups failed — scraping website for logo tag...`)
+      try {
+        const { callAI: callAILogo } = await import('@/lib/ai-provider')
+        const urlResult = await callAILogo({
+          model: 'gemini-3-flash-preview',
+          prompt: `Visit ${siteUrl} and find the logo image URL. Look for:
+1. <img> tags with alt containing "logo" or the brand name
+2. <link rel="icon"> or <link rel="apple-touch-icon">
+3. og:image meta tag
+4. SVG logos inline or as <img src>
+Return ONLY the absolute URL of the best quality logo image. No explanation, just the URL.`,
+          useUrlContext: true,
+          callerId: `${requestId}-logo-scrape`,
+          maxOutputTokens: 512,
+        })
+        const foundUrl = (urlResult.text || '').trim()
+        if (foundUrl.startsWith('http') && !foundUrl.includes(' ')) {
+          logoUrl = foundUrl
+          console.log(`[Visual Assets][${requestId}] ✅ Logo found via website scrape: ${logoUrl}`)
+        }
+      } catch (scrapeErr) {
+        console.warn(`[Visual Assets][${requestId}] ⚠️ Website logo scrape failed:`, scrapeErr instanceof Error ? scrapeErr.message : scrapeErr)
+      }
+    }
+
     // ENHANCE: If Gemini failed but we have a logo, use vision to extract colors
     if (!brandColors && logoUrl) {
       console.log(`[Visual Assets][${requestId}] Gemini failed → trying logo vision: ${logoUrl}`)

@@ -17,9 +17,11 @@ export async function POST(request: NextRequest) {
     console.log(`[${requestId}] Synthesizing ${gatheredData.length} agent results for: ${brandName}`)
 
     // Run synthesis + colors in parallel
+    // Pass website URL if available so color extraction scrapes real CSS first
+    const websiteUrl = websiteData?.url || websiteData?.website || undefined
     const [research, brandColorData] = await Promise.all([
       synthesizeResearch(brandName, gatheredData, websiteData),
-      extractColorsByBrandName(brandName),
+      extractColorsByBrandName(brandName, websiteUrl),
     ])
 
     console.log(`[${requestId}] Synthesis complete. confidence=${research.confidence}, logoUrl=${brandColorData.logoUrl || 'none'}`)
