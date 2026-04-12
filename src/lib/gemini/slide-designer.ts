@@ -564,7 +564,15 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
       }
 
       if (parsed?.slides?.length >= 5) {
-        // Post-process: sanitize plan content
+        // Post-process: ensure slideType is always defined, sanitize content
+        const expectedTypes = ['cover', 'brief', 'goals', 'audience', 'insight', 'strategy', 'bigIdea', 'deliverables', 'influencers', 'metrics', 'closing']
+        for (let si = 0; si < parsed.slides.length; si++) {
+          const slide = parsed.slides[si]
+          if (!slide.slideType || typeof slide.slideType !== 'string' || slide.slideType.trim() === '') {
+            slide.slideType = expectedTypes[si] || 'brief'
+            console.log(`[SlideDesigner][${requestId}]   ⚠️ Fixed empty slideType at index ${si} → "${slide.slideType}"`)
+          }
+        }
         for (const slide of parsed.slides) {
           if (slide.slideType === 'cover') {
             delete slide.bodyText
@@ -580,7 +588,7 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
         console.log(`[SlideDesigner][${requestId}] ✅ Plan ready: ${parsed.slides.length} slides (model: ${model})`)
         console.log(`[SlideDesigner][${requestId}]   Types: ${parsed.slides.map(s => s.slideType).join(', ')}`)
         for (const s of parsed.slides) {
-          console.log(`[SlideDesigner][${requestId}]   📄 ${s.slideType.padEnd(18)} | title="${s.title}" | tone=${s.emotionalTone} | image=${s.existingImageKey || 'none'} | cards=${s.cards?.length || 0} | bullets=${s.bulletPoints?.length || 0} | number=${s.keyNumber || 'none'}`)
+          console.log(`[SlideDesigner][${requestId}]   📄 ${(s.slideType || '?').padEnd(18)} | title="${s.title}" | tone=${s.emotionalTone} | image=${s.existingImageKey || 'none'} | cards=${s.cards?.length || 0} | bullets=${s.bulletPoints?.length || 0} | number=${s.keyNumber || 'none'}`)
         }
         return parsed.slides
       }
@@ -1744,25 +1752,28 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
           if (!report.revisionHint) continue
           try {
             console.log(`[SlideDesigner][${requestId}]   🔧 Revising slide ${report.slideIndex + 1} (${report.slideType}): ${report.revisionHint.slice(0, 80)}`)
-            const Anthropic = (await import('@anthropic-ai/sdk')).default
-            const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-            const revisionResponse = await anthropic.messages.create({
-              model: 'claude-sonnet-4-6-20250514',
-              max_tokens: 8192,
-              system: 'Fix the HTML slide based on the defect report. Return ONLY the fixed complete HTML document. No explanation.',
-              messages: [{
-                role: 'user',
-                content: `Original slide HTML:\n${finalSlides[report.slideIndex]}\n\nDefects found:\n${report.issues.join('\n')}\n\nFix: ${report.revisionHint}\n\nReturn the FIXED HTML:`,
-              }],
+            // Gemini Flash for quick revisions (per skill matrix: single slide regen → Flash + MEDIUM)
+            const revisionResult = await callAI({
+              model: 'gemini-3-flash-preview',
+              prompt: `Original slide HTML:\n${finalSlides[report.slideIndex]}\n\nDefects found:\n${report.issues.join('\n')}\n\nFix: ${report.revisionHint}\n\nReturn the FIXED complete HTML document only. No explanation.`,
+              systemPrompt: 'Fix the HTML slide based on the defect report. Return ONLY the fixed complete HTML document. No explanation, no markdown fences.',
+              geminiConfig: {
+                thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+                maxOutputTokens: 8192,
+              },
+              thinkingLevel: 'MEDIUM',
+              maxOutputTokens: 8192,
+              callerId: `${requestId}-revise-${report.slideIndex}`,
+              noGlobalFallback: true,
             })
 
-            const fixedHtml = revisionResponse.content.filter(c => c.type === 'text').map(c => c.text).join('')
+            const fixedHtml = (revisionResult.text || '')
               .replace(/^```html?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
 
             if (fixedHtml.includes('<!DOCTYPE') || fixedHtml.includes('<html')) {
               finalSlides[report.slideIndex] = fixedHtml
-              console.log(`[SlideDesigner][${requestId}]   ✅ Slide ${report.slideIndex + 1} revised`)
+              console.log(`[SlideDesigner][${requestId}]   ✅ Slide ${report.slideIndex + 1} revised by Gemini Flash`)
             }
           } catch (revErr) {
             console.warn(`[SlideDesigner][${requestId}]   ⚠️ Revision failed for slide ${report.slideIndex + 1}: ${revErr}`)

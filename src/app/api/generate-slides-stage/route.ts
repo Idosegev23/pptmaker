@@ -174,35 +174,54 @@ export async function POST(request: NextRequest) {
       // HTML-Native pipeline (v6)
       const htmlResult = await pipelineBatchHtml(pipeline.foundation, idx)
 
-      // Index-based storage (not append) — maintains correct batch order
-      const updatedHtmlResults = [...(pipeline.htmlBatchResults || [])]
-      updatedHtmlResults[idx] = htmlResult
-
       // Also run AST pipeline as fallback (for editor compatibility)
-      const updatedBatchResults = [...(pipeline.batchResults || [])]
+      let astResult: BatchResult | null = null
       try {
-        const astResult = await pipelineBatch(pipeline.foundation, idx, null)
-        updatedBatchResults[idx] = astResult
+        astResult = await pipelineBatch(pipeline.foundation, idx, null)
       } catch (e) {
         console.warn(`[${requestId}] AST fallback failed (non-critical):`, e)
       }
+
+      // ── CRITICAL: Re-read document to avoid race condition ──
+      // Batches run in PARALLEL. Each takes ~60s. If we use the stale
+      // documentData from request start, the last batch to finish overwrites
+      // the results of the other two. Re-read + merge avoids this.
+      const { data: freshDoc } = await supabase
+        .from('documents')
+        .select('data')
+        .eq('id', documentId)
+        .single()
+
+      const freshData = (freshDoc?.data || documentData) as Record<string, unknown>
+      const freshPipeline = freshData._pipeline as {
+        foundation: PipelineFoundation
+        batchResults?: BatchResult[]
+        htmlBatchResults?: HtmlBatchResult[]
+        status: string
+      }
+
+      // Merge: only set OUR batch index, preserve other batches
+      const mergedHtmlResults = [...(freshPipeline.htmlBatchResults || [])]
+      mergedHtmlResults[idx] = htmlResult
+      const mergedBatchResults = [...(freshPipeline.batchResults || [])]
+      if (astResult) mergedBatchResults[idx] = astResult
 
       await supabase
         .from('documents')
         .update({
           data: {
-            ...documentData,
+            ...freshData,
             _pipeline: {
-              ...pipeline,
-              htmlBatchResults: updatedHtmlResults,
-              batchResults: updatedBatchResults,
+              ...freshPipeline,
+              htmlBatchResults: mergedHtmlResults,
+              batchResults: mergedBatchResults,
               status: `batch_${idx}_complete`,
             },
           },
         })
         .eq('id', documentId)
 
-      const totalAccumulated = updatedHtmlResults.reduce((sum, r) => sum + r.htmlSlides.length, 0)
+      const totalAccumulated = mergedHtmlResults.filter(Boolean).reduce((sum, r) => sum + r.htmlSlides.length, 0)
       console.log(`[${requestId}] Batch ${idx + 1} cached (${htmlResult.htmlSlides.length} HTML slides). Total accumulated: ${totalAccumulated}`)
 
       return NextResponse.json({
