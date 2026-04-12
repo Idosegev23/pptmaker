@@ -224,6 +224,48 @@ export default function GeneratePage() {
         return
       }
 
+      // ── SINGLE AGENT MODE (v7) ──
+      // One Gemini agent handles everything: research → plan → generate 11 slides
+      // No data loss between stages, no race conditions, no token starvation
+      const useAgent = true // TODO: make this a UI toggle or admin config
+      if (useAgent) {
+        setStage('foundation')
+        animateProgressTo(10)
+        console.log('[Generate] 🤖 Using single-agent mode (v7)...')
+
+        const agentRes = await fetch('/api/generate-full', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId }),
+        })
+
+        const { ok: agentOk, data: agentData } = await safeJson(agentRes)
+        if (!agentOk) {
+          throw new Error((agentData.details || agentData.error || 'Agent failed') as string)
+        }
+
+        const sc = (agentData.slideCount as number) || 11
+        setTotalSlides(sc)
+        setSlidesDone(sc)
+        animateProgressTo(100)
+        console.log(`[Generate] ✅ Agent completed: ${sc} slides, ${agentData.totalToolCalls} tool calls, ${agentData.durationMs}ms`)
+
+        // Schedule follow-up
+        try {
+          fetch('/api/follow-up', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brandName, documentId }),
+          })
+        } catch { /* non-critical */ }
+
+        setStage('done')
+        setTimeout(() => router.push(`/edit/${documentId}`), 2000)
+        return
+      }
+
+      // ── LEGACY PIPELINE (v6) — kept as fallback ──
+
       // 2. Research
       if (pipelineStatus.research === 'pending') {
         setStage('research')
