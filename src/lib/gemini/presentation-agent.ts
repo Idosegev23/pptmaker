@@ -400,6 +400,11 @@ ${imagesContext}
     thinkingConfig: { thinkingLevel: 'HIGH' as any },
     maxOutputTokens: 65536,
     tools,
+    // Required when combining built-in tools (google_search, url_context, code_execution)
+    // with function declarations in the same request
+    toolConfig: {
+      includeServerSideToolInvocations: true,
+    },
   } as GenerateContentConfig
 
   const MAX_ITERATIONS = 35 // 11 slides + research + KPI + buffer

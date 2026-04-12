@@ -334,6 +334,12 @@ async function callGeminiDirect(options: AICallOptions): Promise<AICallResult> {
       ]
     : prompt
 
+  // When combining built-in tools (google_search etc) with function declarations,
+  // Gemini requires toolConfig.includeServerSideToolInvocations = true
+  const hasBuiltIn = useGoogleSearch || useUrlContext || useCodeExecution
+  const hasFunctions = functionDeclarations && functionDeclarations.length > 0
+  const needsServerSideConfig = hasBuiltIn && hasFunctions
+
   const response = await client.models.generateContent({
     model,
     contents: contents as any,
@@ -343,6 +349,7 @@ async function callGeminiDirect(options: AICallOptions): Promise<AICallResult> {
       ...(responseSchema ? { responseSchema, responseMimeType: 'application/json' } : {}),
       ...(tools.length > 0 ? { tools } : {}),
       ...(cachedContent ? { cachedContent } : {}),
+      ...(needsServerSideConfig ? { toolConfig: { includeServerSideToolInvocations: true } } : {}),
     } as GenerateContentConfig,
   })
 
@@ -447,6 +454,9 @@ export async function callGeminiAgent(options: AICallOptions & {
     const iterStart = Date.now()
     console.log(`[${callerId}] 🔁 Agent iteration ${iter + 1}/${maxIterations} — history length=${history.length}`)
 
+    // When combining built-in tools with function declarations, Gemini requires this flag
+    const hasBuiltInTools = useGoogleSearch || useUrlContext || useCodeExecution
+    const hasFnDecls = functionDeclarations.length > 0
     const response: any = await client.models.generateContent({
       model,
       contents: history as any,
@@ -455,6 +465,7 @@ export async function callGeminiAgent(options: AICallOptions & {
         ...(systemPrompt ? { systemInstruction: systemPrompt } : {}),
         maxOutputTokens,
         ...(tools.length > 0 ? { tools } : {}),
+        ...(hasBuiltInTools && hasFnDecls ? { toolConfig: { includeServerSideToolInvocations: true } } : {}),
       } as GenerateContentConfig,
     })
 
