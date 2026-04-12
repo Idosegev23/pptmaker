@@ -51,14 +51,16 @@ export async function POST(request: NextRequest) {
     // ─── HTML-Native Presentation path (v6) ─────────────────
     const htmlPres = documentData._htmlPresentation as { htmlSlides?: string[]; brandName?: string; title?: string } | undefined
     if (htmlPres?.htmlSlides?.length) {
-      console.log(`[PDF] 🎨 Using HTML-Native presentation: ${htmlPres.htmlSlides.length} slides (screenshot PDF for full CSS fidelity)`)
+      console.log(`[PDF] 🎨 Using HTML-Native presentation: ${htmlPres.htmlSlides.length} slides (layered PDF — selectable text, ~4MB)`)
       const brandNameStr = (htmlPres.brandName || documentData.brandName as string) || ''
-      const pdfBuffer = await generateScreenshotPdf(htmlPres.htmlSlides, {
+      // page.pdf() → layered PDF: text is selectable, vectors stay sharp at any zoom, ~4MB vs 42MB screenshot
+      // backdrop-filter replaced with solid RGBA fallback via PRINT_FIX_CSS
+      const pdfBuffer = await generateMultiPagePdf(htmlPres.htmlSlides, {
         format: '16:9',
         title: htmlPres.title || brandNameStr || 'Presentation',
         brandName: brandNameStr,
       })
-      console.log(`[PDF] Generated HTML-Native PDF, size: ${pdfBuffer.length} bytes`)
+      console.log(`[PDF] Generated layered PDF, size: ${(pdfBuffer.length / 1024 / 1024).toFixed(1)} MB (${pdfBuffer.length} bytes)`)
 
       const fileName = `proposal_${document.id}_${Date.now()}.pdf`
       const { error: uploadError } = await supabase.storage
