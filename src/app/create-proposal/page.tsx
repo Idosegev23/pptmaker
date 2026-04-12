@@ -343,12 +343,15 @@ export default function CreateProposalPage() {
       if (!docRes.ok) throw new Error(docData.error || 'Failed to create document')
 
       const docId = docData.id || docData.document?.id
-      addLog('success', `המסמך מוכן! מעביר למחקר (ID: ${docId?.slice(0, 8)}...)`)
+      addLog('success', `המסמך מוכן! מעביר ליצירת מצגת (ID: ${docId?.slice(0, 8)}...)`)
 
       setStage('done')
 
+      // Go straight to generate — the single agent handles
+      // research + content + slides in one flow. No need for
+      // the old /research → /wizard → /generate pipeline.
       setTimeout(() => {
-        router.push(`/research/${docId}`)
+        router.push(`/generate/${docId}`)
       }, 1500)
     } catch (err) {
       console.error('[Create Proposal] Error:', err)
