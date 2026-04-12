@@ -11,6 +11,7 @@ interface WizardHeaderProps {
   isSaving: boolean
   lastSavedAt: string | null
   onExit: () => void
+  documentId?: string
 }
 
 function formatSavedTime(isoString: string): string {
@@ -27,6 +28,7 @@ export default function WizardHeader({
   isSaving,
   lastSavedAt,
   onExit,
+  documentId,
 }: WizardHeaderProps) {
   const router = useRouter()
 
@@ -99,7 +101,21 @@ export default function WizardHeader({
         </div>
       </div>
 
-      {/* Left side: Exit button */}
+      {/* Left side: Back to research + Exit */}
+      <div className="flex items-center gap-2">
+        {documentId && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(`/research/${documentId}`)}
+            className="gap-1.5 rounded-xl border border-wizard-border px-3 py-1.5 text-wizard-text-secondary hover:text-wizard-text-primary hover:bg-brand-pearl"
+          >
+            <svg className="h-3.5 w-3.5 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+            <span>חזרה למחקר</span>
+          </Button>
+        )}
       <Button
         variant="ghost"
         size="sm"
@@ -121,6 +137,7 @@ export default function WizardHeader({
           />
         </svg>
       </Button>
+      </div>
     </header>
   )
 }

@@ -22,8 +22,8 @@ const rubik = Rubik({
 })
 
 export const metadata: Metadata = {
-  title: 'DocMaker - יצירת מסמכים מקצועיים',
-  description: 'מערכת ליצירת הצעות מחיר ומצגות קריאטיב באיכות גבוהה',
+  title: 'Leaders AI — מצגות קריאטיב מבריף',
+  description: 'סוכן AI שחוקר, מנסח ומעצב מצגות הצעת מחיר פרימיום למותגים',
 }
 
 export default function RootLayout({

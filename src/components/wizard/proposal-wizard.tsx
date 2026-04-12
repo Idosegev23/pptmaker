@@ -519,6 +519,7 @@ export default function ProposalWizard({
         isSaving={isSaving}
         lastSavedAt={state.lastSavedAt}
         onExit={handleExit}
+        documentId={documentId}
       />
 
       {/* Progress bar */}

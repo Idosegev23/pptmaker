@@ -52,7 +52,7 @@ function LoginContent() {
             className="mx-auto mb-4"
           />
           <h1 className="text-4xl font-heebo font-black text-white tracking-tight">
-            Doc<span className="text-[#e94560]">Maker</span>
+            Leaders <span className="bg-gradient-to-l from-[#e94560] to-[#ff6b6b] bg-clip-text text-transparent">AI</span>
           </h1>
         </Link>
         <div className="h-0.5 w-16 bg-white mx-auto mt-4" />
@@ -61,7 +61,7 @@ function LoginContent() {
       <div className="border border-white/10 bg-[#1a1a1a] p-8">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold text-white mb-2">התחברות</h2>
-          <p className="text-white/50 text-sm">התחבר כדי להמשיך</p>
+          <p className="text-white/50 text-sm">מבריף למצגת — באוטומט</p>
         </div>
 
         {(error || authError) && (

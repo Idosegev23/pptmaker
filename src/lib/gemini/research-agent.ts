@@ -28,6 +28,8 @@ export interface ResearchAgentInput {
 export interface ResearchAgentOutput {
   /** Raw research text from google_search + url_context */
   researchText: string
+  /** Structured brand research (matches BrandResearch type for UI display) */
+  structuredResearch: Record<string, unknown> | null
   /** IMAI influencer results */
   influencers: Array<{
     username: string
@@ -229,6 +231,7 @@ export async function runResearchAgent(
   const client = getClient()
   let totalToolCalls = 0
   let researchText = ''
+  let structuredResearch: Record<string, unknown> | null = null
   const influencers: ResearchAgentOutput['influencers'] = []
   let brandContent: ResearchAgentOutput['brandContent'] = null
   let strategyContent: ResearchAgentOutput['strategyContent'] = null
@@ -244,20 +247,46 @@ export async function runResearchAgent(
   onProgress?.({ stage: 'research', message: '🔍 חוקר את המותג...', progress: 10 })
 
   const researchPrompt = `חקור את המותג "${input.brandName}" בשוק הישראלי.
-חפש באינטרנט וסרוק את האתר שלהם. מצא:
-1. תעשייה, מתחרים, מיצוב בשוק
-2. קהל יעד (גיל, מגדר, תחומי עניין, כאבים)
-3. נוכחות דיגיטלית (אינסטגרם, טיקטוק, פייסבוק)
-4. ערכי מותג, טון דיבור, סגנון ויזואלי
-5. צבעים עיקריים של המותג (primary hex, accent hex)
-6. קמפיינים קודמים (אם קיימים)
-7. מתחרים ומה הם עושים אחרת
+חפש באינטרנט וסרוק את האתר שלהם. מצא את כל המידע שתוכל.
 
 מהבריף:
 ${input.briefText.slice(0, 5000)}
 
-סכם את הממצאים בפסקאות מסודרות בעברית. כלול נתונים ספציפיים ו-URLs.
-בסוף, ציין את הצבעים העיקריים של המותג בפורמט: PRIMARY=#XXXXXX ACCENT=#XXXXXX`
+החזר את הממצאים כ-JSON מובנה בפורמט הבא (ללא markdown fences):
+{
+  "brandName": "${input.brandName}",
+  "officialName": "שם רשמי באנגלית",
+  "industry": "תעשייה",
+  "subIndustry": "תת-תעשייה",
+  "founded": "שנת הקמה",
+  "headquarters": "מיקום",
+  "website": "URL",
+  "companyDescription": "תיאור מקיף בעברית — 3-5 משפטים",
+  "marketPosition": "פסקה על הפוזיציה בשוק",
+  "pricePositioning": "budget/mid-range/premium/luxury",
+  "competitors": [{"name": "שם", "description": "תיאור", "differentiator": "מה מבדיל"}],
+  "uniqueSellingPoints": ["יתרון 1", "יתרון 2"],
+  "mainProducts": [{"name": "שם מוצר", "description": "תיאור"}],
+  "targetDemographics": {
+    "primaryAudience": {"gender": "", "ageRange": "", "socioeconomic": "", "lifestyle": "", "interests": [], "painPoints": []}
+  },
+  "brandPersonality": ["תכונה 1", "תכונה 2"],
+  "brandValues": ["ערך 1"],
+  "toneOfVoice": "תיאור הטון",
+  "visualIdentity": {"primaryColors": ["#XXXXXX"], "style": "", "moodKeywords": []},
+  "socialPresence": {"instagram": {"handle": "", "followers": ""}, "tiktok": {"handle": ""}},
+  "previousCampaigns": [{"name": "", "description": ""}],
+  "industryTrends": ["טרנד 1"],
+  "contentThemes": ["נושא 1"],
+  "suggestedApproach": "פסקה על אסטרטגיה מומלצת",
+  "dominantPlatformInIsrael": "אינסטגרם/טיקטוק",
+  "israeliMarketContext": "הקשר ישראלי ספציפי",
+  "confidence": "high/medium/low",
+  "sources": [{"title": "מקור", "url": "URL"}]
+}
+
+חשוב: החזר JSON בלבד. אל תעטוף ב-\`\`\`. כתוב תוכן עשיר בעברית.
+בסוף הJSON, בשורה חדשה, ציין: PRIMARY=#XXXXXX ACCENT=#XXXXXX`
 
   try {
     let contents: unknown
@@ -286,15 +315,35 @@ ${input.briefText.slice(0, 5000)}
     researchText = researchResponse.text || ''
     console.log(`[ResearchAgent][${requestId}] ✅ Research: ${researchText.length} chars`)
 
-    // Extract colors from research text
+    // Try to parse structured JSON from research
+    try {
+      const jsonMatch = researchText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        structuredResearch = JSON.parse(jsonMatch[0])
+        console.log(`[ResearchAgent][${requestId}]   📊 Structured research parsed: ${Object.keys(structuredResearch!).length} fields`)
+      }
+    } catch {
+      console.warn(`[ResearchAgent][${requestId}]   ⚠️ Could not parse structured research JSON`)
+    }
+
+    // Extract colors from research text or structured data
     const colorMatch = researchText.match(/PRIMARY=#([0-9A-Fa-f]{6})/)
     const accentMatch = researchText.match(/ACCENT=#([0-9A-Fa-f]{6})/)
+    const structColors = (structuredResearch as any)?.visualIdentity?.primaryColors
     if (colorMatch) {
       brandColors = {
         primary: `#${colorMatch[1]}`,
         accent: accentMatch ? `#${accentMatch[1]}` : `#${colorMatch[1]}`,
         background: '#0C0C10',
       }
+    } else if (structColors?.length) {
+      brandColors = {
+        primary: structColors[0],
+        accent: structColors[1] || structColors[0],
+        background: '#0C0C10',
+      }
+    }
+    if (brandColors) {
       console.log(`[ResearchAgent][${requestId}]   🎨 Colors: ${brandColors.primary} / ${brandColors.accent}`)
     }
   } catch (err) {
@@ -470,6 +519,7 @@ IMPORTANT:
 
   return {
     researchText,
+    structuredResearch,
     influencers,
     brandContent,
     strategyContent,

@@ -50,11 +50,12 @@ export default async function DashboardPage() {
     <div dir="rtl" className="max-w-5xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
+        <p className="text-sm text-muted-foreground mb-1">Leaders AI</p>
         <h1 className="text-3xl font-bold mb-1">
           שלום, {firstName}
         </h1>
         <p className="text-muted-foreground">
-          צור ונהל הצעות מחיר לקמפיינים
+          צור ונהל הצעות מחיר ומצגות קריאטיב
         </p>
       </div>
 
@@ -139,7 +140,7 @@ export default async function DashboardPage() {
                   href = `/edit/${doc.id}`
                   statusLabel = 'מצגת מוכנה'
                   statusColor = 'bg-green-100 text-green-700'
-                  flowHint = 'עורך מצגת'
+                  flowHint = 'צפייה ועריכה'
                 } else if (isWizardComplete) {
                   href = `/generate/${doc.id}`
                   statusLabel = 'ממתין ליצירה'
@@ -176,10 +177,20 @@ export default async function DashboardPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor}`}>
                         {statusLabel}
                       </span>
+                      {/* Quick actions for completed docs */}
+                      {slidesGenerated && (
+                        <Link
+                          href={`/wizard/${doc.id}`}
+                          className="px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          ערוך תוכן
+                        </Link>
+                      )}
                       <svg className="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                       </svg>

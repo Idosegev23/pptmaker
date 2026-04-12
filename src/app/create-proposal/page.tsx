@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import GoogleDrivePicker from '@/components/google-drive-picker'
 import type { UploadedDocument, ExtractedBriefData } from '@/types/brief'
 
-type ProcessingStage = 'idle' | 'parsing' | 'processing' | 'creating' | 'done' | 'error'
+type ProcessingStage = 'idle' | 'parsing' | 'processing' | 'confirming' | 'creating' | 'done' | 'error'
 
 // ---------- Data-Driven Generic Tips (WOW Effect) ----------
 const GENERIC_TIPS = [
@@ -291,7 +291,36 @@ export default function CreateProposalPage() {
         fetchBrandFacts(extracted.brand.name)
       }
 
-      // === STEP 3: Create Document (with raw texts for build-proposal later) ===
+      // === STEP 2.5: Save refs + show confirmation screen ===
+      briefTextRef.current = briefText
+      kickoffTextRef.current = kickoffText
+      geminiFileUriRef.current = geminiFileUri
+      geminiFileMimeRef.current = geminiFileMime
+      setStage('confirming')
+      addLog('info', 'ממתין לאישור...')
+      // The rest continues in confirmAndCreate() called from the confirmation UI
+      return
+    } catch (err) {
+      console.error('[Create Proposal] Error:', err)
+      setStage('error')
+      const msg = err instanceof Error ? err.message : 'שגיאה לא צפויה'
+      setError(msg)
+      addLog('error', `תהליך נעצר עקב שגיאה: ${msg}`)
+    }
+  }
+
+  // Store parsed texts for confirmAndCreate
+  const briefTextRef = useRef('')
+  const kickoffTextRef = useRef('')
+  const geminiFileUriRef = useRef<string | undefined>()
+  const geminiFileMimeRef = useRef<string | undefined>()
+
+  const confirmAndCreate = async () => {
+    const extracted = brandInfo
+    if (!extracted) return
+
+    try {
+      // === STEP 3: Create Document ===
       setStage('creating')
       addLog('info', 'שומר מסמך ומעביר למחקר...')
 
@@ -306,10 +335,10 @@ export default function CreateProposalPage() {
           data: {
             brandName: extracted.brand?.name || '',
             _extractedData: extracted,
-            _briefText: briefText,
-            _kickoffText: kickoffText || null,
-            _geminiFileUri: geminiFileUri || null,
-            _geminiFileMime: geminiFileMime || null,
+            _briefText: briefTextRef.current,
+            _kickoffText: kickoffTextRef.current || null,
+            _geminiFileUri: geminiFileUriRef.current || null,
+            _geminiFileMime: geminiFileMimeRef.current || null,
             _stepData: null, // built by /api/build-proposal after research
             _pipelineStatus: {
               textGeneration: 'pending',
@@ -404,7 +433,7 @@ export default function CreateProposalPage() {
     return () => { if (elapsedRef.current) clearInterval(elapsedRef.current) }
   }, [stage])
 
-  const isProcessing = stage !== 'idle' && stage !== 'error'
+  const isProcessing = stage !== 'idle' && stage !== 'error' && stage !== 'confirming'
 
   // ===================== RENDER =====================
 
@@ -660,6 +689,88 @@ export default function CreateProposalPage() {
         )}
 
         {/* ---------- Processing State (WOW Effect) ---------- */}
+        {/* ── Confirmation Screen ── */}
+        {stage === 'confirming' && brandInfo && (
+          <div dir="rtl" className="space-y-6 animate-in fade-in zoom-in-95 duration-500">
+            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0f172a] via-[#1e1b4b] to-[#020617] text-white p-8 shadow-2xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center text-green-400 text-xl">✓</div>
+                <div>
+                  <h2 className="text-2xl font-bold">הבריף נקרא בהצלחה</h2>
+                  <p className="text-white/50 text-sm">בדוק שהנתונים נכונים לפני שממשיכים</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {/* Brand */}
+                <div className="rounded-xl bg-white/5 border border-white/10 p-4">
+                  <div className="text-xs text-white/40 mb-1 font-medium">מותג</div>
+                  <div className="text-lg font-bold">{brandInfo.brand?.name || '—'}</div>
+                  {brandInfo.brand?.industry && <div className="text-sm text-white/50 mt-1">{brandInfo.brand.industry}</div>}
+                </div>
+                {/* Budget */}
+                <div className="rounded-xl bg-white/5 border border-white/10 p-4">
+                  <div className="text-xs text-white/40 mb-1 font-medium">תקציב</div>
+                  <div className="text-lg font-bold">
+                    {brandInfo.budget?.amount && brandInfo.budget.amount > 0
+                      ? `${brandInfo.budget.currency || '₪'}${brandInfo.budget.amount.toLocaleString()}`
+                      : 'לא צוין בבריף'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Goals */}
+              {brandInfo.campaignGoals?.length > 0 && (
+                <div className="rounded-xl bg-white/5 border border-white/10 p-4 mb-4">
+                  <div className="text-xs text-white/40 mb-2 font-medium">יעדי קמפיין ({brandInfo.campaignGoals.length})</div>
+                  <ul className="space-y-1">
+                    {brandInfo.campaignGoals.slice(0, 5).map((g: string, i: number) => (
+                      <li key={i} className="text-sm text-white/70 flex items-start gap-2">
+                        <span className="text-[#e94560] mt-0.5 shrink-0">•</span>
+                        <span>{g}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {brandInfo._meta?.warnings?.length > 0 && (
+                <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4 mb-4">
+                  <div className="text-xs text-amber-400 mb-2 font-medium">שים לב</div>
+                  {brandInfo._meta.warnings.map((w: string, i: number) => (
+                    <p key={i} className="text-sm text-amber-300/70">{w}</p>
+                  ))}
+                </div>
+              )}
+
+              {/* Confidence */}
+              <div className="flex items-center gap-2 mb-6">
+                <div className={`w-2 h-2 rounded-full ${brandInfo._meta?.confidence === 'high' ? 'bg-green-400' : brandInfo._meta?.confidence === 'medium' ? 'bg-amber-400' : 'bg-red-400'}`} />
+                <span className="text-xs text-white/40">
+                  רמת ביטחון: {brandInfo._meta?.confidence === 'high' ? 'גבוהה' : brandInfo._meta?.confidence === 'medium' ? 'בינונית' : 'נמוכה'}
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={confirmAndCreate}
+                  className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-l from-[#e94560] to-[#d63051] text-white font-bold text-lg hover:opacity-90 transition-opacity shadow-lg shadow-[#e94560]/20"
+                >
+                  הכל נכון, המשך למחקר
+                </button>
+                <button
+                  onClick={() => { setStage('idle'); setBrandInfo(null); setLogs([]) }}
+                  className="px-6 py-3 rounded-xl border border-white/15 text-white/60 font-medium hover:bg-white/5 transition-all"
+                >
+                  תקן ונסה שוב
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isProcessing && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-700">
             {/* Processing Hero Card - dark with brand accents & Glassmorphism */}
@@ -914,7 +1025,7 @@ export default function CreateProposalPage() {
 // === Helper Functions ===
 
 function getStepStatus(step: string, currentStage: ProcessingStage): 'pending' | 'active' | 'done' {
-  const order = ['parsing', 'processing', 'creating', 'done']
+  const order = ['parsing', 'processing', 'confirming', 'creating', 'done']
   const stepIdx = order.indexOf(step)
   const currentIdx = order.indexOf(currentStage)
   if (currentIdx > stepIdx) return 'done'

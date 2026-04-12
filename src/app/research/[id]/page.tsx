@@ -213,12 +213,12 @@ export default function ResearchPage() {
       setInfluencerDone(true)
 
       // Build research display data from agent output
-      const brandResearch = agentResult.researchText ? {
-        brandName: name,
-        industry: extracted.brand?.industry || '',
-        companyDescription: agentResult.researchText,
-        confidence: 'high' as const,
-      } : null
+      // Use structuredResearch (full BrandResearch shape) if available, fall back to text
+      const brandResearch = agentResult.structuredResearch
+        ? { ...agentResult.structuredResearch, brandName: name }
+        : agentResult.researchText
+          ? { brandName: name, industry: extracted.brand?.industry || '', companyDescription: agentResult.researchText, confidence: 'high' as const }
+          : null
       const colors = agentResult.brandColors || null
       const influencerStrategy = agentResult.influencers?.length > 0 ? {
         strategySummary: agentResult.executionContent?.influencerStrategy || '',
@@ -262,6 +262,11 @@ export default function ResearchPage() {
         draftStepData._imagePrompts = agentResult.imagePrompts
       }
 
+      // Save structured research + influencer strategy for slide-designer to use
+      if (brandResearch) draftStepData._brandResearch = brandResearch
+      if (influencerStrategy) draftStepData._influencerStrategy = influencerStrategy
+      if (colors) draftStepData._brandColors = colors
+
       // Patch document with draft data (will be pre-populated in wizard)
       if (Object.keys(draftStepData).length > 0) {
         await fetch(`/api/documents/${documentId}`, {
@@ -269,7 +274,7 @@ export default function ResearchPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(draftStepData),
         })
-        console.log('[Research] Draft wizard data saved to document')
+        console.log('[Research] Draft wizard data + research saved to document')
       }
 
       // Set status for display
@@ -366,55 +371,10 @@ export default function ResearchPage() {
     setBuilding(true)
 
     try {
-      const brandResearch = researchResults.brand
-      const influencerStrategy = researchResults.influencer
-      const colors = researchResults.colors
-
-      // Call build-proposal: generates full wizard content from docs + research together
-      let enriched = existingStepDataRef
-      try {
-        const buildRes = await fetch('/api/build-proposal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ documentId, brandResearch, influencerStrategy }),
-        })
-        if (buildRes.ok) {
-          const buildData = await buildRes.json()
-          if (buildData.stepData) {
-            enriched = buildData.stepData
-            console.log('[Research] build-proposal succeeded with research data')
-          }
-        } else {
-          console.warn('[Research] build-proposal failed, falling back to enrichStepData')
-          enriched = enrichStepData(existingStepDataRef, brandResearch, influencerStrategy)
-        }
-      } catch (buildErr) {
-        console.warn('[Research] build-proposal error, falling back:', buildErr)
-        enriched = enrichStepData(existingStepDataRef, brandResearch, influencerStrategy)
-      }
-
-      // Attach research data for wizard
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(enriched as any).research = {
-        brandResearch: brandResearch || null,
-        influencerStrategy: influencerStrategy || null,
-        brandColors: colors || null,
-      }
-
-      const logoUrl = researchResults.logoUrl ?? null
-
-      // Save everything to document
+      // v8: Agent already saved _stepData, _brandResearch, _influencerStrategy to document.
+      // Just mark research as complete and go to wizard.
       const patchPayload: Record<string, unknown> = {
         _pipelineStatus: { ...pipelineStatusRef, research: 'complete' },
-        _stepData: enriched,
-      }
-      if (brandResearch) patchPayload._brandResearch = brandResearch
-      if (influencerStrategy) patchPayload._influencerStrategy = influencerStrategy
-      if (colors) patchPayload._brandColors = colors
-      // Save logoUrl in _scraped.logoUrl format — used by slide-designer + export routes
-      if (logoUrl) {
-        patchPayload._scraped = { logoUrl }
-        patchPayload._brandLogoUrl = logoUrl
       }
 
       const patchRes = await fetch(`/api/documents/${documentId}`, {
@@ -424,9 +384,10 @@ export default function ResearchPage() {
       })
 
       if (!patchRes.ok) {
-        console.error('[Research] Failed to save research data')
+        console.error('[Research] Failed to update pipeline status')
       }
 
+      console.log('[Research] ✅ Research approved, navigating to wizard')
       setStage('done')
       router.push(`/wizard/${documentId}`)
     } catch (err) {
@@ -547,8 +508,8 @@ export default function ResearchPage() {
                       </h2>
                       <p className="text-[#94a3b8] text-sm mt-1 font-medium">
                         {stageStr === 'loading' && 'טוען נתוני המסמך...'}
-                        {stageStr === 'brand_research' && (synthesizing ? 'מסנתז תוצאות...' : `${agentStatuses.filter(s => s === 'done').length}/${AGENT_COUNT} סוכני מחקר הושלמו`)}
-                        {stageStr === 'influencer_research' && subStageMsg}
+                        {stageStr === 'brand_research' && 'סוכן AI חוקר את המותג, מחפש משפיענים ומנסח תוכן...'}
+                        {stageStr === 'influencer_research' && 'מעבד תוצאות ומשלים את הניסוח...'}
                         {stageStr === 'building' && 'בונה את תוכן ההצעה...'}
                         {stageStr === 'error' && error}
                       </p>

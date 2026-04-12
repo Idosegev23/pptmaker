@@ -138,7 +138,10 @@ export async function searchInfluencers(
   if (filters.geo?.length) filter.audience_geo = filters.geo.map(id => ({ id }))
   if (filters.language?.length) filter.language = filters.language.map(code => ({ code }))
   if (filters.gender) filter.gender = filters.gender
-  if (filters.relevance?.length) filter.relevance = filters.relevance
+  if (filters.relevance?.length) {
+    // IMAI relevance expects single-word tags. Split multi-word phrases.
+    filter.relevance = filters.relevance.flatMap(r => r.split(/\s+/)).filter(Boolean)
+  }
   if (filters.has_contact_details) filter.with_contact = [{ type: 'email' }]
 
   const rawResult = await imaiRequest<{
