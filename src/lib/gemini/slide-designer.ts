@@ -472,13 +472,12 @@ cover, brief, goals, audience, insight, strategy, bigIdea, deliverables, influen
     },
   }
 
-  // ── Gemini 3.1 Pro PRIMARY for Planner (April 2026) ──
+  // ── Gemini ONLY for Planner (April 2026) ──
   // Per skill matrix: "Slide content planner → gemini-3.1-pro + HIGH thinking + no tools"
-  // Claude/GPT kept as fallbacks only.
+  // No Claude/GPT fallback — Gemini Pro → Gemini Flash retry only.
   const plannerAttempts = [
     { provider: 'gemini', model: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
-    { provider: 'anthropic', model: 'claude-opus-4-6', label: 'Claude Opus 4.6 (fallback)' },
-    { provider: 'openai', model: 'gpt-5.4', label: 'GPT-5.4 (last resort)' },
+    { provider: 'gemini', model: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (retry)' },
   ]
 
   for (let attempt = 0; attempt < plannerAttempts.length; attempt++) {
@@ -1609,7 +1608,11 @@ TEXT OVERFLOW PREVENTION (CRITICAL):
 ${slidesBlock}
 </slides>
 
+CRITICAL: You MUST generate EXACTLY ${batchPlans.length} slides. Not 1, not 2 — exactly ${batchPlans.length}.
+Each slide maps to one <slide> element above. If you return fewer, the presentation will be broken.
+
 Return a JSON object: { "slides": ["<!DOCTYPE html>...", "<!DOCTYPE html>...", ...] }
+The "slides" array MUST contain exactly ${batchPlans.length} items.
 Each item is a COMPLETE, self-contained HTML document for one slide. Make them BREATHTAKING.`
 
   try {
@@ -1625,69 +1628,58 @@ Each item is a COMPLETE, self-contained HTML document for one slide. Make them B
     console.log(`[SlideDesigner][${requestId}] 🟢 PRIMARY: Gemini 3.1 Pro for HTML batch (cache=${useCache ? '✅' : '❌'}, prompt=${prompt.length} chars)`)
 
     try {
+      // MEDIUM thinking (not HIGH): HTML code gen doesn't need deep reasoning —
+      // the CSS arsenal already tells the model what techniques to use.
+      // HIGH burns ~15K thinking tokens out of maxOutputTokens → starves actual HTML.
+      // Dynamic output budget: 6K tokens per slide + overhead.
+      const perSlideTokens = 6000
+      const outputTokens = Math.max(32768, batchPlans.length * perSlideTokens + 4000)
+      console.log(`[SlideDesigner][${requestId}]   📏 ${batchPlans.length} slides × ${perSlideTokens} tok/slide = ${outputTokens} maxOutput (thinking=MEDIUM)`)
+
       const geminiResult = await callAI({
         model: 'gemini-3.1-pro-preview',
-        prompt: prompt + '\n\nReturn a JSON object: { "slides": ["<!DOCTYPE html>...", "<!DOCTYPE html>...", ...] }. Each item is a COMPLETE HTML document.',
+        prompt,
         ...(useCache ? { cachedContent: foundation.geminiCacheName } : {}),
         geminiConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-          maxOutputTokens: 32768,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+          maxOutputTokens: outputTokens,
         },
-        thinkingLevel: 'HIGH',
-        maxOutputTokens: 32768,
+        thinkingLevel: 'MEDIUM',
+        maxOutputTokens: outputTokens,
         callerId: `${requestId}-html-gemini-primary`,
         noGlobalFallback: true,
       })
       rawText = geminiResult.text || '{}'
       usedModel = useCache ? 'Gemini 3.1 Pro (cached)' : 'Gemini 3.1 Pro'
-      console.log(`[SlideDesigner][${requestId}] ✅ Gemini Pro returned ${rawText.length} chars`)
+      console.log(`[SlideDesigner][${requestId}] ✅ Gemini Pro returned ${rawText.length} chars (expected ~${batchPlans.length * 4000} for ${batchPlans.length} slides)`)
     } catch (geminiErr) {
-      console.warn(`[SlideDesigner][${requestId}] ⚠️ Gemini Pro failed, falling back to Claude: ${geminiErr instanceof Error ? geminiErr.message : String(geminiErr)}`)
+      const errMsg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr)
+      console.error(`[SlideDesigner][${requestId}] ❌ Gemini Pro failed: ${errMsg}`)
 
+      // Retry once with Flash (cheaper, faster, may handle the load better)
+      console.log(`[SlideDesigner][${requestId}] 🔄 Retrying with Gemini Flash...`)
+      const flashOutputTokens = batchPlans.length * 6000 + 4000
       try {
-        console.log(`[SlideDesigner][${requestId}] 🤖 Fallback: Claude Sonnet 4.6...`)
-        const Anthropic = (await import('@anthropic-ai/sdk')).default
-        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-        const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6-20250514',
-          max_tokens: 32768,
-          system: [
-            {
-              type: 'text' as const,
-              text: 'You are a legendary web designer. Return ONLY valid JSON: { "slides": ["<!DOCTYPE html>...", ...] }. Each string is a complete HTML document (1920×1080px, RTL Hebrew, Heebo font). No markdown fences. Use glassmorphism, mesh gradients, text-stroke watermarks, multi-layer text-shadows. Make them breathtaking.',
-              cache_control: { type: 'ephemeral' as const },
-            },
-          ],
-          messages: [{ role: 'user', content: prompt }],
+        const retryResult = await callAI({
+          model: 'gemini-3-flash-preview',
+          prompt,
+          geminiConfig: {
+            responseMimeType: 'application/json',
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+            maxOutputTokens: flashOutputTokens,
+          },
+          thinkingLevel: 'MEDIUM',
+          maxOutputTokens: flashOutputTokens,
+          callerId: `${requestId}-html-gemini-flash-retry`,
+          noGlobalFallback: true,
         })
-
-        rawText = response.content.filter(c => c.type === 'text').map(c => c.text).join('') || '{}'
-        rawText = rawText.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim()
-        usedModel = 'Claude Sonnet 4.6 (fallback)'
-      } catch (claudeErr) {
-        console.warn(`[SlideDesigner][${requestId}] ⚠️ Claude also failed, last resort GPT-5.4: ${claudeErr instanceof Error ? claudeErr.message : String(claudeErr)}`)
-
-        const OpenAI = (await import('openai')).default
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-        const htmlSchema = {
-          type: 'object' as const,
-          additionalProperties: false,
-          required: ['slides'],
-          properties: { slides: { type: 'array' as const, items: { type: 'string' as const } } },
-        }
-
-        const response = await openai.responses.create({
-          model: 'gpt-5.4',
-          instructions: 'You are a legendary web designer. Return ONLY valid JSON with an array of complete HTML document strings.',
-          input: prompt,
-          text: { format: { type: 'json_schema', name: 'html_slides', strict: true, schema: htmlSchema } },
-        })
-
-        rawText = response.output_text || '{}'
-        usedModel = 'GPT-5.4 (last resort)'
+        rawText = retryResult.text || '{}'
+        usedModel = 'Gemini 3 Flash (retry)'
+        console.log(`[SlideDesigner][${requestId}] ✅ Flash retry returned ${rawText.length} chars`)
+      } catch (flashErr) {
+        console.error(`[SlideDesigner][${requestId}] ❌ Flash retry also failed: ${flashErr instanceof Error ? flashErr.message : flashErr}`)
+        throw geminiErr // throw original error for outer catch
       }
     }
 
