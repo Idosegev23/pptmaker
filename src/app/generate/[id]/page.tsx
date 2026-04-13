@@ -106,16 +106,20 @@ export default function GeneratePage() {
     }
   }, [])
 
-  // ── Elapsed timer ──
+  // ── Elapsed timer — runs from first stage until done/error ──
   useEffect(() => {
-    if (stage !== 'done' && stage !== 'error' && stage !== 'loading') {
+    if (stage !== 'done' && stage !== 'error') {
+      // Start timer on ANY active stage (including 'loading')
       if (!elapsedRef.current) {
         setElapsed(0)
         elapsedRef.current = setInterval(() => setElapsed(prev => prev + 1), 1000)
       }
-    } else if (elapsedRef.current) {
-      clearInterval(elapsedRef.current)
-      elapsedRef.current = null
+    } else {
+      // Stop on done/error
+      if (elapsedRef.current) {
+        clearInterval(elapsedRef.current)
+        elapsedRef.current = null
+      }
     }
     return () => {
       if (elapsedRef.current) clearInterval(elapsedRef.current)

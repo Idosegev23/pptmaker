@@ -249,6 +249,12 @@ export async function runResearchAgent(
   const researchPrompt = `חקור את המותג "${input.brandName}" בשוק הישראלי.
 חפש באינטרנט וסרוק את האתר שלהם. מצא את כל המידע שתוכל.
 
+חשוב מאוד — חפש גם **משפיענים ישראלים** שעבדו עם המותג או פעילים בנישה שלו:
+- חפש "${input.brandName} influencer campaign" או "${input.brandName} שיתוף פעולה משפיענים"
+- חפש את ה-Instagram/TikTok של המותג ומצא משפיענים שתייגו אותם
+- מצא 5-10 שמות של משפיענים ישראלים (username של Instagram) שמתאימים למותג
+- ציין את ה-usernames בסוף ה-JSON בשדה "suggestedInfluencerHandles"
+
 מהבריף:
 ${input.briefText.slice(0, 5000)}
 
@@ -281,6 +287,7 @@ ${input.briefText.slice(0, 5000)}
   "suggestedApproach": "פסקה על אסטרטגיה מומלצת",
   "dominantPlatformInIsrael": "אינסטגרם/טיקטוק",
   "israeliMarketContext": "הקשר ישראלי ספציפי",
+  "suggestedInfluencerHandles": ["username1", "username2", "username3"],
   "confidence": "high/medium/low",
   "sources": [{"title": "מקור", "url": "URL"}]
 }
@@ -360,12 +367,18 @@ ${input.briefText.slice(0, 5000)}
   console.log(`[ResearchAgent][${requestId}] 🎯 Phase 2: Draft + IMAI`)
   onProgress?.({ stage: 'drafting', message: '📝 מנסח תוכן ראשוני...', progress: 40 })
 
+  // Extract influencer handles found by Google in Phase 1
+  const suggestedHandles = (structuredResearch as any)?.suggestedInfluencerHandles || []
+  const handlesList = suggestedHandles.length > 0
+    ? `\n\nInfluencer usernames found by Google research: ${suggestedHandles.join(', ')}\nUse these as search keywords in IMAI (search by single-word keywords from their niche, NOT by username directly).`
+    : ''
+
   const draftPrompt = `Based on the research below, do the following IN ORDER:
 
-1. Call search_influencers with relevant keywords for "${input.brandName}" (industry-related)
+1. Call search_influencers with 2-3 SINGLE-WORD keywords related to "${input.brandName}"'s niche (e.g. "food", "beauty", "parenting" — NOT multi-word phrases like "clean beauty").${handlesList}
 2. Call draft_brand_content — draft brief, goals, audience (Hebrew)
 3. Call draft_strategy_content — draft insight, strategy, creative (Hebrew)
-4. Call draft_execution_content — draft deliverables, influencers, KPIs (Hebrew)
+4. Call draft_execution_content — draft deliverables, influencers, KPIs (Hebrew). Include the influencers found from IMAI.
 5. Call suggest_image_prompts — suggest 3-4 images for the presentation
 
 RESEARCH RESULTS:
@@ -376,6 +389,7 @@ ${input.briefText.slice(0, 5000)}
 
 IMPORTANT:
 - All text content must be in Hebrew
+- search_influencers keywords must be SINGLE ENGLISH WORDS (not phrases!)
 - The insight must be sharp and data-backed — not generic
 - The strategy must be concrete with 3 specific pillars
 - Use REAL data from the research, don't invent
