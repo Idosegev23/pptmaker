@@ -249,11 +249,14 @@ export async function runResearchAgent(
   const researchPrompt = `חקור את המותג "${input.brandName}" בשוק הישראלי.
 חפש באינטרנט וסרוק את האתר שלהם. מצא את כל המידע שתוכל.
 
-חשוב מאוד — חפש גם **משפיענים ישראלים** שעבדו עם המותג או פעילים בנישה שלו:
-- חפש "${input.brandName} influencer campaign" או "${input.brandName} שיתוף פעולה משפיענים"
+חשוב מאוד — חפש **משפיענים ישראלים** שיכולים להתאים לקמפיין:
+- חפש "${input.brandName} influencer" או "${input.brandName} שיתוף פעולה"
 - חפש את ה-Instagram/TikTok של המותג ומצא משפיענים שתייגו אותם
-- מצא 5-10 שמות של משפיענים ישראלים (username של Instagram) שמתאימים למותג
-- ציין את ה-usernames בסוף ה-JSON בשדה "suggestedInfluencerHandles"
+- חפש **משפיענים ישראלים פופולריים בנישה** של המותג (גם אם מעולם לא עבדו איתו!)
+  למשל: אם המותג הוא אוכל — חפש בלוגרי אוכל ישראלים. אם יופי — חפש יוטיוברי יופי ישראליות.
+- חפש "top Israeli influencers {niche}" או "משפיענים ישראלים {תחום}"
+- מצא 5-10 שמות עם ה-Instagram username שלהם
+- ציין את ה-usernames בשדה "suggestedInfluencerHandles"
 
 מהבריף:
 ${input.briefText.slice(0, 5000)}
