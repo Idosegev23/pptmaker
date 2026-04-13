@@ -14,7 +14,7 @@
  */
 
 import { GoogleGenAI, type GenerateContentConfig } from '@google/genai'
-import { searchIsraeliInfluencers, getAudienceReport } from '@/lib/imai/client'
+import { searchIsraeliInfluencers, getAudienceReport, getInstagramUserInfo } from '@/lib/imai/client'
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -110,6 +110,21 @@ const FUNCTION_DECLARATIONS = [
         limit: { type: 'integer' },
       },
       required: ['keywords'],
+    },
+  },
+  {
+    name: 'enrich_influencer',
+    description:
+      'Look up a specific influencer by Instagram username using IMAI database. ' +
+      'Returns real follower count, engagement rate, avg likes. ' +
+      'Use this to enrich influencer names found via Google Search with real data. ' +
+      'Call this for EACH influencer username you found during research.',
+    parameters: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', description: 'Instagram username without @' },
+      },
+      required: ['username'],
     },
   },
   {
@@ -378,11 +393,19 @@ ${input.briefText.slice(0, 5000)}
 
   const draftPrompt = `Based on the research below, do the following IN ORDER:
 
-1. Call search_influencers with 2-3 SINGLE-WORD keywords related to "${input.brandName}"'s niche (e.g. "food", "beauty", "parenting" — NOT multi-word phrases like "clean beauty").${handlesList}
-2. Call draft_brand_content — draft brief, goals, audience (Hebrew)
-3. Call draft_strategy_content — draft insight, strategy, creative (Hebrew)
-4. Call draft_execution_content — draft deliverables, influencers, KPIs (Hebrew). Include the influencers found from IMAI.
-5. Call suggest_image_prompts — suggest 3-4 images for the presentation
+STEP 1 — ENRICH INFLUENCERS:
+${suggestedHandles.length > 0
+    ? `Google found these influencer usernames: ${suggestedHandles.join(', ')}
+Call enrich_influencer for EACH of these usernames to get real IMAI data (followers, verified status).
+This is the most important step — we need real numbers, not guesses.`
+    : `No influencer usernames found by Google. Call search_influencers with 2-3 SINGLE-WORD keywords related to "${input.brandName}"'s niche (e.g. "food", "beauty", "parenting").`}
+
+STEP 2 — Also call search_influencers with 1-2 niche keywords to find additional influencers beyond the Google list.
+
+STEP 3 — Call draft_brand_content — draft brief, goals, audience (Hebrew)
+STEP 4 — Call draft_strategy_content — draft insight, strategy, creative (Hebrew)
+STEP 5 — Call draft_execution_content — draft deliverables, influencers, KPIs (Hebrew). Include ALL influencers found (from enrich + search).
+STEP 6 — Call suggest_image_prompts — suggest 3-4 images for the presentation
 
 RESEARCH RESULTS:
 ${researchText.slice(0, 12000)}
@@ -396,7 +419,7 @@ IMPORTANT:
 - The insight must be sharp and data-backed — not generic
 - The strategy must be concrete with 3 specific pillars
 - Use REAL data from the research, don't invent
-- Call ALL 5 functions in order`
+- Call enrich_influencer FIRST for each Google-found username, THEN search_influencers for additional ones`
 
   const history: Array<{ role: string; parts: Array<Record<string, unknown>> }> = [
     { role: 'user', parts: [{ text: draftPrompt }] },
@@ -460,6 +483,32 @@ IMPORTANT:
             influencers.push(...mapped.map(i => ({ ...i, rationale: '' })))
             result = mapped
             console.log(`[ResearchAgent][${requestId}]     → ${mapped.length} influencers`)
+            break
+          }
+
+          case 'enrich_influencer': {
+            const handle = (args.username as string).replace('@', '').trim()
+            onProgress?.({ stage: 'influencers', message: `📊 מעשיר נתונים: @${handle}...`, progress: 55 })
+            console.log(`[ResearchAgent][${requestId}]     → Enriching @${handle} via IMAI`)
+            try {
+              const info = await getInstagramUserInfo(handle)
+              const enriched = {
+                username: info.username,
+                fullname: info.fullname,
+                followers: info.followers,
+                is_verified: info.is_verified,
+                bio: info.biography,
+              }
+              // Add to influencers list if not already there
+              if (!influencers.find(i => i.username === info.username)) {
+                influencers.push({ username: info.username, fullname: info.fullname, followers: info.followers, engagement_rate: 0, rationale: '' })
+              }
+              result = enriched
+              console.log(`[ResearchAgent][${requestId}]     → @${handle}: ${info.followers.toLocaleString()} followers, verified=${info.is_verified}`)
+            } catch (enrichErr) {
+              console.warn(`[ResearchAgent][${requestId}]     → @${handle} not found in IMAI: ${enrichErr instanceof Error ? enrichErr.message : enrichErr}`)
+              result = { error: `@${handle} not found in IMAI`, username: handle }
+            }
             break
           }
 
