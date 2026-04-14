@@ -77,8 +77,13 @@ export interface CreativeStepData {
   activityDescription: string
   activityApproach: { title: string; description: string }[]
   activityDifferentiator?: string
+  // Rich creative context carried from the brief / research
+  brandStory?: string
+  toneOfManner?: string
+  visualDirection?: string
+  keyMessages?: string[]
   referenceImages: { url: string; caption?: string }[]
-  suggestedReferences?: { type: string; description: string; rationale: string }[]
+  suggestedReferences?: { type?: string; campaign?: string; year?: string; description?: string; why?: string; rationale?: string }[]
 }
 
 export interface DeliverablesStepData {

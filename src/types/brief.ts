@@ -41,6 +41,17 @@ export interface ExtractedBriefData {
   strategyDirection?: string
   creativeDirection?: string
 
+  // Rich creative context extracted from the brief (not just one-liners)
+  brandStory?: string                  // סיפור המותג / נרטיב
+  toneOfManner?: string                // טון ומניירה
+  visualDirection?: string             // כיווני נראות / מילות מפתח ויזואליות
+  mandatories?: string[]               // must-haves (לוגו, CTA, משפטים חובה)
+  prohibitions?: string[]              // אסור (נושאים/מילים/משפיענים)
+  referencedCampaigns?: string[]       // קמפיינים שהלקוח הזכיר כרפרנס
+  previousCampaigns?: string[]         // קמפיינים קודמים של המותג
+  keyMessages?: string[]               // מסרים מרכזיים
+  contentPillars?: string[]            // עמודי תוכן
+
   deliverables?: {
     type: string
     quantity?: number

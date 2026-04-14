@@ -53,11 +53,21 @@ export interface ResearchAgentOutput {
   /** Draft content for wizard steps 4-6 */
   strategyContent: {
     keyInsight?: string
+    insightSource?: string
     insightData?: string
     strategyHeadline?: string
+    strategyDescription?: string
     strategyPillars?: Array<{ title: string; description: string }>
     activityTitle?: string
+    activityConcept?: string
     activityDescription?: string
+    activityApproach?: Array<{ title: string; description: string }>
+    activityDifferentiator?: string
+    brandStory?: string
+    toneOfManner?: string
+    visualDirection?: string
+    keyMessages?: string[]
+    suggestedReferences?: Array<{ campaign: string; year?: string; why: string }>
   } | null
   /** Draft content for wizard steps 7-9 */
   executionContent: {
@@ -224,8 +234,25 @@ const FUNCTION_DECLARATIONS = [
           description: '2-3 גישות/שלבים בביצוע הקריאייטיב',
         },
         activityDifferentiator: { type: 'string', description: 'מה מבדיל את הקריאייטיב הזה — משפט אחד' },
+        brandStory: { type: 'string', description: 'סיפור המותג / נרטיב — אם הבריף כלל סעיף כזה, קח ישירות' },
+        toneOfManner: { type: 'string', description: 'טון ומניירה — כפי שנכתב בבריף אם קיים, אחרת על בסיס המחקר' },
+        visualDirection: { type: 'string', description: 'כיווני נראות — מילות מפתח ויזואליות' },
+        keyMessages: { type: 'array', items: { type: 'string' }, description: 'מסרים מרכזיים (2-4)' },
+        suggestedReferences: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              campaign: { type: 'string', description: 'שם הקמפיין/מותג' },
+              year: { type: 'string' },
+              why: { type: 'string', description: 'למה רלוונטי לאסטרטגיה — משפט אחד' },
+            },
+            required: ['campaign', 'why'],
+          },
+          description: '2-3 קמפיינים מהעולם שמחזקים את הכיוון (Dove Real Beauty, Spotify Wrapped, וכו\')',
+        },
       },
-      required: ['keyInsight', 'insightSource', 'strategyHeadline', 'strategyDescription', 'strategyPillars', 'activityTitle', 'activityConcept', 'activityDescription', 'activityApproach'],
+      required: ['keyInsight', 'insightSource', 'strategyHeadline', 'strategyDescription', 'strategyPillars', 'activityTitle', 'activityConcept', 'activityDescription', 'activityApproach', 'suggestedReferences'],
     },
   },
   {
@@ -338,8 +365,8 @@ export async function runResearchAgent(
 - מצא 5-10 שמות עם ה-Instagram username שלהם
 - ציין את ה-usernames בשדה "suggestedInfluencerHandles"
 
-מהבריף:
-${input.briefText.slice(0, 5000)}
+## הבריף המלא (מקור אמת — הסתמך עליו, אל תסתור אותו):
+${input.briefText.slice(0, 30000)}
 
 החזר את הממצאים כ-JSON מובנה בפורמט הבא (ללא markdown fences):
 {
@@ -469,18 +496,26 @@ STEP 4 — Call draft_strategy_content — draft insight, strategy, creative (He
 STEP 5 — Call draft_execution_content — draft deliverables, influencers, KPIs (Hebrew). Include ALL influencers found (from enrich + search).
 STEP 6 — Call suggest_image_prompts — suggest 3-4 images for the presentation
 
-RESEARCH RESULTS:
-${researchText.slice(0, 12000)}
+⚠️ SOURCE HIERARCHY (VERY IMPORTANT):
+1. The BRIEF (below) is the primary source of truth. Anything written there — creative direction, brand story, tone, mandatories, referenced campaigns — MUST be preserved verbatim or tightly paraphrased. Do not contradict the brief.
+2. RESEARCH enriches what is missing. Use it to fill gaps, add statistics, add market context.
+3. Your own inference is the last resort — only when both brief and research are silent.
 
-BRIEF:
-${input.briefText.slice(0, 5000)}
+## הבריף המלא (source of truth — read every section):
+${input.briefText.slice(0, 40000)}
+
+## RESEARCH RESULTS (enrichment):
+${researchText.slice(0, 20000)}
 
 ⚠️ CRITICAL — FILL EVERY FIELD:
 - You MUST fill EVERY field in EVERY draft function. No empty fields. No missing fields.
-- If a field is not in the brief, derive it from the research. If not in research, use logical inference based on brand/industry.
-- NEVER return a function call with missing required fields — all fields listed in "required" must be present.
-- Every Hebrew text field must have meaningful content (not placeholder like "N/A" or empty string).
-- Arrays must have at least the minimum items specified (e.g. "3-5 פריטים" means minimum 3).
+- For CREATIVE fields — if the brief has a "קריאייטיב" / "creative" / "brand story" / "tone" section, USE IT directly. Do not invent a new direction that contradicts the brief.
+- activityConcept / activityApproach / activityDifferentiator — if brief describes a creative direction, build on it. Otherwise propose one grounded in the research.
+- suggestedReferences — cite REAL campaigns from the world (Dove Real Beauty 2004, Spotify Wrapped, Nike Dream Crazy, etc.) that match the strategy.
+- If insight: must have source (Nielsen / eMarketer / Ipsos / MOA / local research — real names).
+- If a field is not in the brief, derive it from the research. If not in research, use logical inference.
+- Every Hebrew text field must have meaningful content (not "N/A" or empty).
+- Arrays must have at least the minimum items specified.
 
 IMPORTANT:
 - All text content must be in Hebrew
@@ -492,7 +527,7 @@ IMPORTANT:
 
 FIELDS TO FILL (EVERY ONE MUST HAVE CONTENT):
 draft_brand_content: brandBrief, brandObjective, brandPainPoints[], successMetrics[], clientSpecificRequests[], goals[], goalsDetailed[], targetGender, targetAgeRange, targetDescription, targetBehavior, targetInsights[]
-draft_strategy_content: keyInsight, insightSource, insightData, strategyHeadline, strategyDescription, strategyPillars[3], activityTitle, activityConcept, activityDescription, activityApproach[], activityDifferentiator
+draft_strategy_content: keyInsight, insightSource, insightData, strategyHeadline, strategyDescription, strategyPillars[3], activityTitle, activityConcept, activityDescription, activityApproach[], activityDifferentiator, brandStory, toneOfManner, visualDirection, keyMessages[], suggestedReferences[2-3]
 draft_execution_content: deliverables[] (with type+quantity+description+purpose each), deliverablesSummary, influencerStrategy, influencerCriteria[], budget, currency, potentialReach, potentialEngagement, estimatedImpressions, cpe, cpm, metricsExplanation, successMetrics[]`
 
   const history: Array<{ role: string; parts: Array<Record<string, unknown>> }> = [

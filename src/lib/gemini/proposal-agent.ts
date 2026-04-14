@@ -65,9 +65,10 @@ export async function extractFromBrief(
   // This preserves PDF layout/tables and skips lossy text extraction.
   if (briefFile?.uri) {
     console.log(`[${agentId}] 🚀 Using Gemini Files API path (fileUri=${briefFile.uri})`)
-    const filePrompt = `חלץ מידע עסקי בסיסי מהבריף המצורף (PDF). אל תייצר אסטרטגיה או קריאייטיב — רק חלץ עובדות.
-נאמנות לבריף: כל מטרה, מדד הצלחה, דרישה ספציפית ואזכור מתחרים שהלקוח הזכיר חייבים להופיע — ציטוט מדויק מהבריף.
-שים לב גם למה שהלקוח *לא* אומר: אם אין אזכור של מדדים כמותיים, אם התקציב לא ברור, אם אין קהל מוגדר — ציין זאת ב-gaps.
+    const filePrompt = `חלץ את **כל** המידע מהבריף המצורף (PDF) — לא רק עובדות בסיסיות, אלא גם כיוונים אסטרטגיים, קריאייטיב, טון, רפרנסים ודגשים.
+המסמך המצורף הוא מקור האמת — העתק/תמצת טקסט ישירות ממנו, אל תמציא.
+
+**חובה לעבור על כל סעיף במסמך** — אם יש פרק "קריאייטיב" / "טון" / "רפרנסים" / "חובות" / "איסורים" / "מסרים" / "עמודי תוכן" → חלץ אותם בשלמותם.
 
 ${kickoffText ? `## מסמך התנעה (טקסט נוסף):\n${kickoffText}\n` : ''}
 
@@ -79,6 +80,17 @@ ${kickoffText ? `## מסמך התנעה (טקסט נוסף):\n${kickoffText}\n` 
   "targetAudience": { "primary": { "gender": "", "ageRange": "", "interests": [], "painPoints": [], "lifestyle": "", "socioeconomic": null }, "secondary": null, "behavior": "" },
   "keyInsight": null,
   "insightSource": null,
+  "strategyDirection": "כיוון אסטרטגי אם מצוין בבריף — 1-3 משפטים",
+  "creativeDirection": "כיוון קריאייטיב אם מצוין — 2-4 משפטים",
+  "brandStory": "סיפור המותג / נרטיב מרכזי כפי שעולה מהבריף",
+  "toneOfManner": "טון דיבור המותג (רשמי/משחקי/חם/מקצועי/דרמטי וכו')",
+  "visualDirection": "כיווני נראות: מילות מפתח ויזואליות, מצבי רוח, פלטה",
+  "keyMessages": ["מסר מרכזי 1", "מסר מרכזי 2"],
+  "contentPillars": ["עמוד תוכן 1", "עמוד תוכן 2"],
+  "referencedCampaigns": ["קמפיין שהלקוח הזכיר כרפרנס (שם + שנה/מותג אם זמין)"],
+  "previousCampaigns": ["קמפיין קודם של המותג שמוזכר בבריף"],
+  "mandatories": ["חובה: לוגו / CTA / משפט מחייב / חוק"],
+  "prohibitions": ["אסור: נושא / מילה / משפיען / מתחרה"],
   "deliverables": [{ "type": "", "quantity": null, "description": "" }],
   "influencerPreferences": { "types": [], "specificNames": [], "criteria": [], "verticals": [] },
   "timeline": { "startDate": null, "endDate": null, "duration": null, "milestones": [] },
@@ -87,9 +99,15 @@ ${kickoffText ? `## מסמך התנעה (טקסט נוסף):\n${kickoffText}\n` 
   "clientSpecificRequests": [],
   "competitorMentions": [],
   "brandTone": "",
-  "gaps": [],
+  "gaps": ["מה חסר/לא ברור בבריף"],
   "_meta": { "confidence": "high", "warnings": [], "hasKickoff": ${!!kickoffText} }
-}`
+}
+
+כללים חובה:
+- אם פרק קריאייטיב מופיע בבריף — brandStory + creativeDirection + toneOfManner + visualDirection + keyMessages חייבים להיות מלאים.
+- אם הלקוח מזכיר קמפיין/מותג כרפרנס — referencedCampaigns.
+- אם מצוין חובה/איסור — mandatories / prohibitions.
+- ציטוט מדויק עדיף על פראפרזה.`
 
     try {
       const t0 = Date.now()
@@ -122,9 +140,9 @@ ${kickoffText ? `## מסמך התנעה (טקסט נוסף):\n${kickoffText}\n` 
     }
   }
 
-  const prompt = `חלץ מידע עסקי בסיסי מהמסמכים הבאים. אל תייצר אסטרטגיה או קריאייטיב — רק חלץ עובדות.
-נאמנות לבריף: כל מטרה, מדד הצלחה, דרישה ספציפית ואזכור מתחרים שהלקוח הזכיר חייבים להופיע — ציטוט מדויק מהבריף.
-- שים לב גם למה שהלקוח *לא* אומר: אם אין אזכור של מדדים כמותיים, אם התקציב לא ברור, אם אין קהל מוגדר — ציין זאת ב-gaps.
+  const prompt = `חלץ את **כל** המידע מהמסמכים — לא רק עובדות בסיסיות, אלא גם קריאייטיב, טון, רפרנסים, מסרים ודגשים.
+המסמכים הם מקור האמת — העתק/תמצת ישירות מהם, אל תמציא.
+עבור על כל פרק: אם יש "קריאייטיב" / "טון" / "רפרנסים" / "חובות" / "איסורים" / "מסרים" / "עמודי תוכן" → חלץ בשלמות.
 
 ## בריף לקוח:
 ${clientBriefText}
@@ -143,6 +161,17 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
   },
   "keyInsight": null,
   "insightSource": null,
+  "strategyDirection": "כיוון אסטרטגי מהבריף",
+  "creativeDirection": "כיוון קריאייטיב מהבריף",
+  "brandStory": "סיפור/נרטיב המותג",
+  "toneOfManner": "טון דיבור",
+  "visualDirection": "כיווני נראות",
+  "keyMessages": ["מסר 1", "מסר 2"],
+  "contentPillars": ["עמוד 1", "עמוד 2"],
+  "referencedCampaigns": ["קמפיין רפרנס שהוזכר"],
+  "previousCampaigns": ["קמפיין קודם של המותג שמוזכר"],
+  "mandatories": ["חובה: לוגו / CTA / משפט מחייב"],
+  "prohibitions": ["אסור: נושא / מילה"],
   "deliverables": [{ "type": "סוג", "quantity": null, "description": "כפי שנכתב" }],
   "influencerPreferences": { "types": [], "specificNames": [], "criteria": [], "verticals": [] },
   "timeline": { "startDate": null, "endDate": null, "duration": null, "milestones": [] },
@@ -153,7 +182,11 @@ ${kickoffText ? `## מסמך התנעה:\n${kickoffText}` : '(לא סופק מס
   "brandTone": "תאר בשני משפטים את הטון שעולה מהבריף — רשמי? צעיר? מקצועי? חם?",
   "gaps": ["מה חסר בבריף — תקציב לא ברור / קהל לא מוגדר / מדדים חסרים"],
   "_meta": { "confidence": "high", "warnings": [], "hasKickoff": ${!!kickoffText} }
-}`
+}
+
+כללים חובה:
+- brandStory + creativeDirection + toneOfManner + visualDirection + keyMessages חייבים להיות מלאים אם יש פרק קריאייטיב בבריף.
+- ציטוט מדויק עדיף על פראפרזה.`
 
   const models = await getProposalModels()
   let lastError = ''

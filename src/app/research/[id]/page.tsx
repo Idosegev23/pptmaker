@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { enrichStepData } from '@/components/wizard/wizard-utils'
+import type { WizardStepDataMap } from '@/types/wizard'
 import FlowStepper from '@/components/flow-stepper'
 
 type ResearchStage =
@@ -250,88 +251,135 @@ export default function ResearchPage() {
           }))
         : []
 
-      // Save draft wizard data to document immediately
-      const draftStepData: Record<string, unknown> = {}
+      // Build nested stepData matching WizardStepDataMap so the wizard reads it via initialData._stepData
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const bc = agentResult.brandContent as any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sc = agentResult.strategyContent as any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ec = agentResult.executionContent as any
 
-      if (bc) {
-        // Step 1: Brief
-        if (bc.brandBrief) draftStepData.brandBrief = bc.brandBrief
-        if (bc.brandObjective) draftStepData.brandObjective = bc.brandObjective
-        if (bc.brandPainPoints) draftStepData.brandPainPoints = bc.brandPainPoints
-        if (bc.successMetrics) draftStepData.successMetrics = bc.successMetrics
-        if (bc.clientSpecificRequests) draftStepData.clientSpecificRequests = bc.clientSpecificRequests
-        // Step 2: Goals
-        if (bc.goals) draftStepData.goals = bc.goals
-        if (bc.goalsDetailed) draftStepData.goalsDetailed = bc.goalsDetailed
-        // Step 3: Target Audience
-        if (bc.targetGender) draftStepData.targetGender = bc.targetGender
-        if (bc.targetAgeRange) draftStepData.targetAgeRange = bc.targetAgeRange
-        if (bc.targetDescription) draftStepData.targetDescription = bc.targetDescription
-        if (bc.targetBehavior) draftStepData.targetBehavior = bc.targetBehavior
-        if (bc.targetInsights) draftStepData.targetInsights = bc.targetInsights
-      }
-      if (sc) {
-        // Step 4: Key Insight
-        if (sc.keyInsight) draftStepData.keyInsight = sc.keyInsight
-        if (sc.insightSource) draftStepData.insightSource = sc.insightSource
-        if (sc.insightData) draftStepData.insightData = sc.insightData
-        // Step 5: Strategy
-        if (sc.strategyHeadline) draftStepData.strategyHeadline = sc.strategyHeadline
-        if (sc.strategyDescription) draftStepData.strategyDescription = sc.strategyDescription
-        if (sc.strategyPillars) draftStepData.strategyPillars = sc.strategyPillars
-        // Step 6: Creative
-        if (sc.activityTitle) draftStepData.activityTitle = sc.activityTitle
-        if (sc.activityConcept) draftStepData.activityConcept = sc.activityConcept
-        if (sc.activityDescription) draftStepData.activityDescription = sc.activityDescription
-        if (sc.activityApproach) draftStepData.activityApproach = sc.activityApproach
-        if (sc.activityDifferentiator) draftStepData.activityDifferentiator = sc.activityDifferentiator
-      }
-      if (ec) {
-        // Step 7: Deliverables
-        if (ec.deliverables) draftStepData.deliverables = ec.deliverables
-        if (ec.deliverablesSummary) draftStepData.deliverablesSummary = ec.deliverablesSummary
-        // Step 8: Influencers
-        if (ec.influencerStrategy) draftStepData.influencerStrategy = ec.influencerStrategy
-        if (ec.influencerCriteria) draftStepData.influencerCriteria = ec.influencerCriteria
-        // Step 9: KPI
-        if (ec.budget !== undefined) draftStepData.budget = ec.budget
-        if (ec.currency) draftStepData.currency = ec.currency
-        if (ec.potentialReach !== undefined) draftStepData.potentialReach = ec.potentialReach
-        if (ec.potentialEngagement !== undefined) draftStepData.potentialEngagement = ec.potentialEngagement
-        if (ec.estimatedImpressions !== undefined) draftStepData.estimatedImpressions = ec.estimatedImpressions
-        if (ec.cpe !== undefined) draftStepData.cpe = ec.cpe
-        if (ec.cpm !== undefined) draftStepData.cpm = ec.cpm
-        if (ec.metricsExplanation) draftStepData.metricsExplanation = ec.metricsExplanation
-        if (ec.successMetrics && !draftStepData.successMetrics) draftStepData.successMetrics = ec.successMetrics
+      const stepData: Partial<WizardStepDataMap> = {}
+
+      // Brief
+      stepData.brief = {
+        brandName: name,
+        brandBrief: bc?.brandBrief || extracted.brand?.background || '',
+        brandPainPoints: bc?.brandPainPoints || extracted.targetAudience?.primary?.painPoints || [],
+        brandObjective: bc?.brandObjective || extracted.campaignGoals?.[0] || '',
+        successMetrics: bc?.successMetrics || ec?.successMetrics || extracted.successMetrics || [],
+        clientSpecificRequests: bc?.clientSpecificRequests || extracted.clientSpecificRequests || [],
       }
 
-      // Save image prompts for background generation
-      if (agentResult.imagePrompts?.length > 0) {
-        draftStepData._imagePrompts = agentResult.imagePrompts
+      // Goals — accept goalsDetailed (nested), or string[] goals, or extracted campaignGoals
+      const detailedGoals: { title: string; description: string }[] =
+        Array.isArray(bc?.goalsDetailed) && bc.goalsDetailed.length
+          ? bc.goalsDetailed.map((g: { title?: string; description?: string } | string) =>
+              typeof g === 'string' ? { title: g, description: '' } : { title: g.title || '', description: g.description || '' }
+            )
+          : Array.isArray(bc?.goals) && bc.goals.length
+            ? bc.goals.map((g: { title?: string; description?: string } | string) =>
+                typeof g === 'string' ? { title: g, description: '' } : { title: g.title || '', description: g.description || '' }
+              )
+            : (extracted.campaignGoals || []).map((g: string) => ({ title: g, description: '' }))
+      stepData.goals = { goals: detailedGoals, customGoals: [] }
+
+      // Target audience
+      stepData.target_audience = {
+        targetGender: bc?.targetGender || extracted.targetAudience?.primary?.gender || '',
+        targetAgeRange: bc?.targetAgeRange || extracted.targetAudience?.primary?.ageRange || '',
+        targetDescription: bc?.targetDescription || extracted.targetAudience?.primary?.lifestyle || '',
+        targetBehavior: bc?.targetBehavior || extracted.targetAudience?.behavior || '',
+        targetInsights: bc?.targetInsights || extracted.targetAudience?.primary?.interests || [],
+        targetSecondary: extracted.targetAudience?.secondary,
       }
 
-      // Save structured research + influencer strategy for slide-designer to use
-      if (brandResearch) draftStepData._brandResearch = brandResearch
-      if (influencerStrategy) draftStepData._influencerStrategy = influencerStrategy
-      if (colors) draftStepData._brandColors = colors
-
-      // Save full influencer profiles for the wizard's influencers step
-      if (influencerProfiles.length > 0) {
-        draftStepData.influencers = influencerProfiles
+      // Key insight
+      stepData.key_insight = {
+        keyInsight: sc?.keyInsight || extracted.keyInsight || '',
+        insightSource: sc?.insightSource || extracted.insightSource || '',
+        insightData: sc?.insightData,
       }
 
-      // Patch document with draft data (will be pre-populated in wizard)
-      if (Object.keys(draftStepData).length > 0) {
-        await fetch(`/api/documents/${documentId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(draftStepData),
-        })
-        console.log('[Research] Draft wizard data + research saved to document')
+      // Strategy
+      stepData.strategy = {
+        strategyHeadline: sc?.strategyHeadline || '',
+        strategyDescription: sc?.strategyDescription,
+        strategyPillars: Array.isArray(sc?.strategyPillars) ? sc.strategyPillars : [],
       }
+
+      // Creative — pull rich context from brief first, enrich with agent
+      const extCreative = extracted as Record<string, unknown>
+      stepData.creative = {
+        activityTitle: sc?.activityTitle || '',
+        activityConcept: sc?.activityConcept || (extCreative.creativeDirection as string) || '',
+        activityDescription: sc?.activityDescription || '',
+        activityApproach: Array.isArray(sc?.activityApproach) ? sc.activityApproach : [],
+        activityDifferentiator: sc?.activityDifferentiator,
+        brandStory: sc?.brandStory || (extCreative.brandStory as string) || '',
+        toneOfManner: sc?.toneOfManner || (extCreative.toneOfManner as string) || (extCreative.brandTone as string) || '',
+        visualDirection: sc?.visualDirection || (extCreative.visualDirection as string) || '',
+        keyMessages: sc?.keyMessages || (extCreative.keyMessages as string[]) || [],
+        referenceImages: [],
+        suggestedReferences: (sc?.suggestedReferences || []).map((r: { campaign: string; year?: string; why: string }) => ({
+          campaign: r.campaign, year: r.year, why: r.why,
+          description: r.campaign, rationale: r.why,
+        })),
+      }
+
+      // Deliverables
+      const deliverableList =
+        Array.isArray(ec?.deliverables) && ec.deliverables.length
+          ? ec.deliverables.map((d: { type?: string; quantity?: number; description?: string; purpose?: string }) => ({
+              type: d.type || '',
+              quantity: d.quantity || 1,
+              description: d.description || '',
+              purpose: d.purpose || '',
+            }))
+          : (extracted.deliverables || []).map((d: { type?: string; quantity?: number; description?: string }) => ({
+              type: d.type || '',
+              quantity: d.quantity || 1,
+              description: d.description || '',
+              purpose: '',
+            }))
+      stepData.deliverables = {
+        deliverables: deliverableList,
+        deliverablesSummary: ec?.deliverablesSummary,
+        referenceImages: [],
+      }
+
+      // Media targets
+      stepData.media_targets = {
+        budget: ec?.budget ?? extracted.budget?.amount ?? 0,
+        currency: ec?.currency || extracted.budget?.currency || '₪',
+        potentialReach: ec?.potentialReach ?? 0,
+        potentialEngagement: ec?.potentialEngagement ?? 0,
+        cpe: ec?.cpe ?? 0,
+        cpm: ec?.cpm,
+        estimatedImpressions: ec?.estimatedImpressions,
+        metricsExplanation: ec?.metricsExplanation,
+      }
+
+      // Influencers — use the profiles built above
+      stepData.influencers = {
+        influencers: influencerProfiles,
+        influencerStrategy: ec?.influencerStrategy,
+        influencerCriteria: ec?.influencerCriteria,
+      }
+
+      // Patch document with nested _stepData + research artifacts
+      const patchPayload: Record<string, unknown> = { _stepData: stepData }
+      if (brandResearch) patchPayload._brandResearch = brandResearch
+      if (influencerStrategy) patchPayload._influencerStrategy = influencerStrategy
+      if (colors) patchPayload._brandColors = colors
+      if (agentResult.imagePrompts?.length > 0) patchPayload._imagePrompts = agentResult.imagePrompts
+
+      await fetch(`/api/documents/${documentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchPayload),
+      })
+      console.log('[Research] ✅ Nested _stepData + research saved to document')
 
       // Set status for display
       setBrandStatus(brandResearch ? 'success' : 'failed')
