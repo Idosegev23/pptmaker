@@ -465,10 +465,50 @@ export async function generateSmartImages(
 ): Promise<SmartImageSet> {
   console.log(`[Smart Image] Starting smart generation for ${brandResearch.brandName}`)
 
-  // ─── Logo fetch + Strategy in PARALLEL (independent tasks) ───
+  // ─── Logo fetch: direct URL → scrape brand website → Clearbit (last resort) ───
   const fetchLogoBuffer = async (): Promise<Buffer | null> => {
     if (!clientLogoUrl) return null
     const logoFetchUrls = [clientLogoUrl]
+
+    // Try to scrape the brand's own website for the logo first (most accurate)
+    const brandWebsite = brandResearch.website || (brandResearch as unknown as Record<string, unknown>).websiteDomain
+    if (brandWebsite && typeof brandWebsite === 'string') {
+      try {
+        const websiteUrl = brandWebsite.startsWith('http') ? brandWebsite : `https://${brandWebsite}`
+        console.log(`[Smart Image] Scraping brand website for logo: ${websiteUrl}`)
+        const pageRes = await fetch(websiteUrl, { signal: AbortSignal.timeout(8000) })
+        if (pageRes.ok) {
+          const html = await pageRes.text()
+          // Extract logo from HTML: <img alt="logo">, <link rel="icon">, og:image
+          const candidates: string[] = []
+          const imgLogo = html.match(/<img[^>]+(?:alt|class|id)=["'][^"']*logo[^"']*["'][^>]+src=["']([^"']+)["']/i)
+            || html.match(/<img[^>]+src=["']([^"']+)["'][^>]*(?:alt|class|id)=["'][^"']*logo/i)
+          if (imgLogo) candidates.push(imgLogo[1])
+          const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+          if (ogImage) candidates.push(ogImage[1])
+          const appleIcon = html.match(/<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']+)["']/i)
+          if (appleIcon) candidates.push(appleIcon[1])
+
+          for (const candidate of candidates) {
+            const absoluteUrl = candidate.startsWith('http') ? candidate : new URL(candidate, websiteUrl).toString()
+            try {
+              const logoRes = await fetch(absoluteUrl, { signal: AbortSignal.timeout(5000) })
+              if (logoRes.ok) {
+                const buf = Buffer.from(await logoRes.arrayBuffer())
+                if (buf.length > 500) {
+                  console.log(`[Smart Image] ✅ Logo from brand website: ${absoluteUrl} (${buf.length} bytes)`)
+                  return buf
+                }
+              }
+            } catch { /* try next candidate */ }
+          }
+        }
+      } catch (err) {
+        console.log(`[Smart Image] Website scrape failed:`, err instanceof Error ? err.message : err)
+      }
+    }
+
+    // Fallback: try direct clientLogoUrl + Clearbit
     try {
       const domain = new URL(clientLogoUrl.startsWith('http') ? clientLogoUrl : `https://${clientLogoUrl}`).hostname
       logoFetchUrls.push(`https://logo.clearbit.com/${domain}`)
@@ -512,8 +552,12 @@ export async function generateSmartImages(
     return priorityOrder[a.priority] - priorityOrder[b.priority]
   })
 
-  // Generate all images in parallel — pass logo buffer so Gemini integrates it naturally
-  const imagePromises = sortedPrompts.map(prompt => generateFromSmartPrompt(prompt, logoBuffer))
+  // Generate all images in parallel — pass logo buffer ONLY to prompts marked includeLogo
+  // This way: essential brand shots get the logo organically (on packaging, signage, etc),
+  // while lifestyle/audience shots stay clean without logo intrusion.
+  const imagePromises = sortedPrompts.map(prompt =>
+    generateFromSmartPrompt(prompt, prompt.includeLogo ? logoBuffer : null)
+  )
   const results = await Promise.all(imagePromises)
   
   // Filter out nulls

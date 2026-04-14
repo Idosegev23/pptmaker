@@ -142,32 +142,56 @@ const FUNCTION_DECLARATIONS = [
   {
     name: 'draft_brand_content',
     description:
-      'Draft wizard steps 1-3: brand brief, campaign goals, target audience. ' +
-      'Call this AFTER researching the brand. All text in Hebrew.',
+      'Draft wizard steps 1-3: brief, goals, target audience. ' +
+      'Fill ALL fields — do not skip any. All text in Hebrew.',
     parameters: {
       type: 'object',
       properties: {
+        // Step 1: Brief
         brandBrief: { type: 'string', description: 'מה האתגר של המותג? למה פנו אלינו? 2-3 משפטים.' },
-        brandObjective: { type: 'string', description: 'למה הבריף הזה? משפט אחד.' },
-        goals: { type: 'array', items: { type: 'string' }, description: '2-4 יעדי קמפיין ממוקדים' },
-        targetDescription: { type: 'string', description: 'תיאור קהל היעד — 2-3 משפטים' },
-        targetAgeRange: { type: 'string', description: 'טווח גילאים (25-45)' },
+        brandObjective: { type: 'string', description: 'למה הבריף הזה? משפט אחד על הסיבה העסקית.' },
+        brandPainPoints: { type: 'array', items: { type: 'string' }, description: 'כאבים/אתגרים עסקיים של המותג (2-4 פריטים)' },
+        successMetrics: { type: 'array', items: { type: 'string' }, description: 'מדדי הצלחה שהלקוח הזכיר בבריף (2-4 פריטים)' },
+        clientSpecificRequests: { type: 'array', items: { type: 'string' }, description: 'דרישות מיוחדות מהלקוח (אם יש, אחרת [])' },
+        // Step 2: Goals
+        goals: { type: 'array', items: { type: 'string' }, description: '2-4 יעדי קמפיין ממוקדים — ככותרות קצרות' },
+        goalsDetailed: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'כותרת היעד' },
+              description: { type: 'string', description: 'תיאור היעד — איך משיגים אותו, 1-2 משפטים' },
+            },
+            required: ['title', 'description'],
+          },
+          description: 'כל יעד עם תיאור מפורט',
+        },
+        // Step 3: Target Audience
         targetGender: { type: 'string', description: 'נשים/גברים/שניהם' },
+        targetAgeRange: { type: 'string', description: 'טווח גילאים (לדוגמה: 25-45)' },
+        targetDescription: { type: 'string', description: 'תיאור קהל היעד — 2-3 משפטים' },
+        targetBehavior: { type: 'string', description: 'איך הקהל מתנהג — הרגלי צריכה, דיגיטל, קניות' },
+        targetInsights: { type: 'array', items: { type: 'string' }, description: 'תובנות על הקהל (2-4 פריטים)' },
       },
-      required: ['brandBrief', 'goals', 'targetDescription'],
+      required: ['brandBrief', 'brandObjective', 'goals', 'goalsDetailed', 'targetDescription', 'targetBehavior', 'targetGender', 'targetAgeRange'],
     },
   },
   {
     name: 'draft_strategy_content',
     description:
-      'Draft wizard steps 4-6: insight, strategy, creative idea. ' +
-      'Call this AFTER drafting brand content. All text in Hebrew.',
+      'Draft wizard steps 4-6: insight, strategy, creative. ' +
+      'Fill ALL fields. All text in Hebrew.',
     parameters: {
       type: 'object',
       properties: {
+        // Step 4: Key Insight
         keyInsight: { type: 'string', description: 'תובנה חדה ומפתיעה — משפט אחד עם נתון' },
-        insightData: { type: 'string', description: 'הנתון שתומך בתובנה' },
-        strategyHeadline: { type: 'string', description: 'כותרת האסטרטגיה — 5-8 מילים' },
+        insightSource: { type: 'string', description: 'מאיפה התובנה הגיעה (מחקר/אינטואיציה/נתון)' },
+        insightData: { type: 'string', description: 'הנתון/הסטטיסטיקה שתומכים בתובנה' },
+        // Step 5: Strategy
+        strategyHeadline: { type: 'string', description: 'כותרת האסטרטגיה — 5-8 מילים חדות' },
+        strategyDescription: { type: 'string', description: 'תיאור האסטרטגיה — 2-3 משפטים' },
         strategyPillars: {
           type: 'array',
           items: {
@@ -178,30 +202,68 @@ const FUNCTION_DECLARATIONS = [
             },
             required: ['title', 'description'],
           },
-          description: '3 pillars אסטרטגיים',
+          description: '3 pillars אסטרטגיים (כל אחד עם תיאור)',
         },
+        // Step 6: Creative
         activityTitle: { type: 'string', description: 'שם הקמפיין / הרעיון הגדול' },
-        activityDescription: { type: 'string', description: 'תיאור הקונספט — 2-3 משפטים' },
+        activityConcept: { type: 'string', description: 'הקונספט הקריאייטיבי — משפט אחד חד' },
+        activityDescription: { type: 'string', description: 'תיאור הקונספט המלא — 2-3 משפטים' },
+        activityApproach: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              description: { type: 'string' },
+            },
+            required: ['title', 'description'],
+          },
+          description: '2-3 גישות/שלבים בביצוע הקריאייטיב',
+        },
+        activityDifferentiator: { type: 'string', description: 'מה מבדיל את הקריאייטיב הזה — משפט אחד' },
       },
-      required: ['keyInsight', 'strategyHeadline', 'strategyPillars', 'activityTitle'],
+      required: ['keyInsight', 'insightSource', 'strategyHeadline', 'strategyDescription', 'strategyPillars', 'activityTitle', 'activityConcept', 'activityDescription', 'activityApproach'],
     },
   },
   {
     name: 'draft_execution_content',
     description:
-      'Draft wizard steps 7-9: deliverables, influencer strategy, KPIs. ' +
-      'Call this AFTER drafting strategy and searching influencers. All text in Hebrew.',
+      'Draft wizard steps 7-9: deliverables, influencers, KPI. ' +
+      'Fill ALL fields. All text in Hebrew.',
     parameters: {
       type: 'object',
       properties: {
-        deliverables: { type: 'array', items: { type: 'string' }, description: 'רשימת תוצרים (3-6 פריטים)' },
+        // Step 7: Deliverables
+        deliverables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', description: 'סוג התוצר (Reel, Story, Post, TikTok)' },
+              quantity: { type: 'number', description: 'כמה מתוצר זה' },
+              description: { type: 'string', description: 'תיאור התוצר' },
+              purpose: { type: 'string', description: 'מה המטרה של התוצר הזה' },
+            },
+            required: ['type', 'quantity', 'description', 'purpose'],
+          },
+          description: '3-6 תוצרים (Reel/Story/Post) עם כמות ותיאור',
+        },
+        deliverablesSummary: { type: 'string', description: 'סיכום התוצרים — משפט אחד' },
+        // Step 8: Influencers
         influencerStrategy: { type: 'string', description: 'אסטרטגיית משפיענים — 2-3 משפטים' },
-        influencerCriteria: { type: 'array', items: { type: 'string' }, description: 'קריטריונים לבחירת משפיענים' },
+        influencerCriteria: { type: 'array', items: { type: 'string' }, description: 'קריטריונים לבחירת משפיענים (3-5 פריטים)' },
+        // Step 9: KPI / Media Targets
         budget: { type: 'number', description: 'תקציב מומלץ (שקלים). 0 אם לא ידוע.' },
-        potentialReach: { type: 'number', description: 'Reach צפוי' },
+        currency: { type: 'string', description: 'מטבע (₪/$/€). ברירת מחדל ₪.' },
+        potentialReach: { type: 'number', description: 'Reach צפוי (מספר אנשים)' },
+        potentialEngagement: { type: 'number', description: 'Engagement צפוי (לייקים+תגובות+שיתופים)' },
+        estimatedImpressions: { type: 'number', description: 'Impressions צפויים' },
+        cpe: { type: 'number', description: 'CPE = תקציב/engagement (אם ידוע, אחרת 0)' },
+        cpm: { type: 'number', description: 'CPM = תקציב/impressions*1000 (אם ידוע)' },
+        metricsExplanation: { type: 'string', description: 'הסבר איך חושבו ה-KPIs — משפט אחד' },
         successMetrics: { type: 'array', items: { type: 'string' }, description: 'מדדי הצלחה (3-5)' },
       },
-      required: ['deliverables', 'influencerStrategy', 'successMetrics'],
+      required: ['deliverables', 'deliverablesSummary', 'influencerStrategy', 'influencerCriteria', 'budget', 'currency', 'potentialReach', 'potentialEngagement', 'successMetrics'],
     },
   },
   {
@@ -387,9 +449,6 @@ ${input.briefText.slice(0, 5000)}
 
   // Extract influencer handles found by Google in Phase 1
   const suggestedHandles = (structuredResearch as any)?.suggestedInfluencerHandles || []
-  const handlesList = suggestedHandles.length > 0
-    ? `\n\nInfluencer usernames found by Google research: ${suggestedHandles.join(', ')}\nUse these as search keywords in IMAI (search by single-word keywords from their niche, NOT by username directly).`
-    : ''
 
   const draftPrompt = `Based on the research below, do the following IN ORDER:
 
@@ -413,13 +472,25 @@ ${researchText.slice(0, 12000)}
 BRIEF:
 ${input.briefText.slice(0, 5000)}
 
+⚠️ CRITICAL — FILL EVERY FIELD:
+- You MUST fill EVERY field in EVERY draft function. No empty fields. No missing fields.
+- If a field is not in the brief, derive it from the research. If not in research, use logical inference based on brand/industry.
+- NEVER return a function call with missing required fields — all fields listed in "required" must be present.
+- Every Hebrew text field must have meaningful content (not placeholder like "N/A" or empty string).
+- Arrays must have at least the minimum items specified (e.g. "3-5 פריטים" means minimum 3).
+
 IMPORTANT:
 - All text content must be in Hebrew
 - search_influencers keywords must be SINGLE ENGLISH WORDS (not phrases!)
 - The insight must be sharp and data-backed — not generic
 - The strategy must be concrete with 3 specific pillars
-- Use REAL data from the research, don't invent
-- Call enrich_influencer FIRST for each Google-found username, THEN search_influencers for additional ones`
+- Use REAL data from the research, don't invent statistics
+- Call enrich_influencer FIRST for each Google-found username, THEN search_influencers for additional ones
+
+FIELDS TO FILL (EVERY ONE MUST HAVE CONTENT):
+draft_brand_content: brandBrief, brandObjective, brandPainPoints[], successMetrics[], clientSpecificRequests[], goals[], goalsDetailed[], targetGender, targetAgeRange, targetDescription, targetBehavior, targetInsights[]
+draft_strategy_content: keyInsight, insightSource, insightData, strategyHeadline, strategyDescription, strategyPillars[3], activityTitle, activityConcept, activityDescription, activityApproach[], activityDifferentiator
+draft_execution_content: deliverables[] (with type+quantity+description+purpose each), deliverablesSummary, influencerStrategy, influencerCriteria[], budget, currency, potentialReach, potentialEngagement, estimatedImpressions, cpe, cpm, metricsExplanation, successMetrics[]`
 
   const history: Array<{ role: string; parts: Array<Record<string, unknown>> }> = [
     { role: 'user', parts: [{ text: draftPrompt }] },

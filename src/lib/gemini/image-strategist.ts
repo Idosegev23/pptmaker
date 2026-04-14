@@ -18,6 +18,8 @@ export interface ImagePlan {
   placement: 'cover' | 'brand' | 'audience' | 'activity' | 'product' | 'lifestyle' | 'closing' | 'custom'
   rationale: string
   priority: 'essential' | 'recommended' | 'optional'
+  /** If true, the brand logo should be organically embedded in this image (on packaging, signage, etc.) */
+  includeLogo?: boolean
 }
 
 export interface ImageStrategy {
@@ -83,7 +85,7 @@ ${slideDesignHints ? `
 החזר JSON בלבד (ללא טקסט נוסף) בפורמט:
 
 {
-  "totalImages": 4-6,
+  "totalImages": 6-10,
   "conceptSummary": "משפט אחד שמתאר את הכיוון הויזואלי הכללי",
   "visualDirection": "2-3 משפטים על הסגנון, התחושה והאווירה",
   "images": [
@@ -92,15 +94,19 @@ ${slideDesignHints ? `
       "purpose": "מה התמונה אמורה להשיג - משפט אחד",
       "placement": "cover/brand/audience/activity/product/lifestyle/closing/custom",
       "rationale": "תיאור מדויק ויצירתי של התמונה - 2-3 משפטים עם פרטים ספציפיים",
-      "priority": "essential/recommended/optional"
+      "priority": "essential/recommended/optional",
+      "includeLogo": true
     }
   ]
 }
 
 חשוב:
-- בין 4-6 תמונות (לא יותר)
-- לפחות 2 תמונות essential
-- התיאור ב-rationale חייב להיות ספציפי וישראלי
+- בין 6-10 תמונות (לא פחות מ-6!)
+- כסה את כל סוגי השקפים שצריכים תמונה: cover, brand, audience, activity/bigIdea, product, lifestyle, closing
+- לפחות 3 תמונות essential
+- שלוש תמונות לפחות חייבות להיות עם includeLogo: true — אלה תמונות שבהן הלוגו של המותג צריך להופיע **באופן אורגני ומציאותי**
+- דוגמאות ל-includeLogo: תמונת מוצר עם הלוגו על האריזה, שלט חוצות עם הלוגו, יד שאוחזת במוצר ממותג, חלון ראווה של חנות עם הלוגו, משפיענית משתמשת במוצר וה-logo נראה על הבקבוק
+- התיאור ב-rationale חייב להיות ספציפי וישראלי — כולל איפה בדיוק הלוגו נכנס
 - אל תכתוב תיאורים גנריים - תהיה יצירתי ומדויק`
 
   // Pro first (quality), Flash fallback

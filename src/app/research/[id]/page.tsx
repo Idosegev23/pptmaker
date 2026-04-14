@@ -232,29 +232,60 @@ export default function ResearchPage() {
 
       // Save draft wizard data to document immediately
       const draftStepData: Record<string, unknown> = {}
-      if (agentResult.brandContent) {
-        draftStepData.brandBrief = agentResult.brandContent.brandBrief
-        draftStepData.brandObjective = agentResult.brandContent.brandObjective
-        draftStepData.goals = agentResult.brandContent.goals
-        draftStepData.targetDescription = agentResult.brandContent.targetDescription
-        draftStepData.targetAgeRange = agentResult.brandContent.targetAgeRange
-        draftStepData.targetGender = agentResult.brandContent.targetGender
+      const bc = agentResult.brandContent as any
+      const sc = agentResult.strategyContent as any
+      const ec = agentResult.executionContent as any
+
+      if (bc) {
+        // Step 1: Brief
+        if (bc.brandBrief) draftStepData.brandBrief = bc.brandBrief
+        if (bc.brandObjective) draftStepData.brandObjective = bc.brandObjective
+        if (bc.brandPainPoints) draftStepData.brandPainPoints = bc.brandPainPoints
+        if (bc.successMetrics) draftStepData.successMetrics = bc.successMetrics
+        if (bc.clientSpecificRequests) draftStepData.clientSpecificRequests = bc.clientSpecificRequests
+        // Step 2: Goals
+        if (bc.goals) draftStepData.goals = bc.goals
+        if (bc.goalsDetailed) draftStepData.goalsDetailed = bc.goalsDetailed
+        // Step 3: Target Audience
+        if (bc.targetGender) draftStepData.targetGender = bc.targetGender
+        if (bc.targetAgeRange) draftStepData.targetAgeRange = bc.targetAgeRange
+        if (bc.targetDescription) draftStepData.targetDescription = bc.targetDescription
+        if (bc.targetBehavior) draftStepData.targetBehavior = bc.targetBehavior
+        if (bc.targetInsights) draftStepData.targetInsights = bc.targetInsights
       }
-      if (agentResult.strategyContent) {
-        draftStepData.keyInsight = agentResult.strategyContent.keyInsight
-        draftStepData.insightData = agentResult.strategyContent.insightData
-        draftStepData.strategyHeadline = agentResult.strategyContent.strategyHeadline
-        draftStepData.strategyPillars = agentResult.strategyContent.strategyPillars
-        draftStepData.activityTitle = agentResult.strategyContent.activityTitle
-        draftStepData.activityDescription = agentResult.strategyContent.activityDescription
+      if (sc) {
+        // Step 4: Key Insight
+        if (sc.keyInsight) draftStepData.keyInsight = sc.keyInsight
+        if (sc.insightSource) draftStepData.insightSource = sc.insightSource
+        if (sc.insightData) draftStepData.insightData = sc.insightData
+        // Step 5: Strategy
+        if (sc.strategyHeadline) draftStepData.strategyHeadline = sc.strategyHeadline
+        if (sc.strategyDescription) draftStepData.strategyDescription = sc.strategyDescription
+        if (sc.strategyPillars) draftStepData.strategyPillars = sc.strategyPillars
+        // Step 6: Creative
+        if (sc.activityTitle) draftStepData.activityTitle = sc.activityTitle
+        if (sc.activityConcept) draftStepData.activityConcept = sc.activityConcept
+        if (sc.activityDescription) draftStepData.activityDescription = sc.activityDescription
+        if (sc.activityApproach) draftStepData.activityApproach = sc.activityApproach
+        if (sc.activityDifferentiator) draftStepData.activityDifferentiator = sc.activityDifferentiator
       }
-      if (agentResult.executionContent) {
-        draftStepData.deliverables = agentResult.executionContent.deliverables
-        draftStepData.influencerStrategy = agentResult.executionContent.influencerStrategy
-        draftStepData.influencerCriteria = agentResult.executionContent.influencerCriteria
-        draftStepData.budget = agentResult.executionContent.budget
-        draftStepData.potentialReach = agentResult.executionContent.potentialReach
-        draftStepData.successMetrics = agentResult.executionContent.successMetrics
+      if (ec) {
+        // Step 7: Deliverables
+        if (ec.deliverables) draftStepData.deliverables = ec.deliverables
+        if (ec.deliverablesSummary) draftStepData.deliverablesSummary = ec.deliverablesSummary
+        // Step 8: Influencers
+        if (ec.influencerStrategy) draftStepData.influencerStrategy = ec.influencerStrategy
+        if (ec.influencerCriteria) draftStepData.influencerCriteria = ec.influencerCriteria
+        // Step 9: KPI
+        if (ec.budget !== undefined) draftStepData.budget = ec.budget
+        if (ec.currency) draftStepData.currency = ec.currency
+        if (ec.potentialReach !== undefined) draftStepData.potentialReach = ec.potentialReach
+        if (ec.potentialEngagement !== undefined) draftStepData.potentialEngagement = ec.potentialEngagement
+        if (ec.estimatedImpressions !== undefined) draftStepData.estimatedImpressions = ec.estimatedImpressions
+        if (ec.cpe !== undefined) draftStepData.cpe = ec.cpe
+        if (ec.cpm !== undefined) draftStepData.cpm = ec.cpm
+        if (ec.metricsExplanation) draftStepData.metricsExplanation = ec.metricsExplanation
+        if (ec.successMetrics && !draftStepData.successMetrics) draftStepData.successMetrics = ec.successMetrics
       }
 
       // Save image prompts for background generation

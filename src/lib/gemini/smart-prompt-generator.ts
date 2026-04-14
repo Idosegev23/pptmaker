@@ -28,6 +28,8 @@ export interface SmartImagePrompt {
   }
   aspectRatio: '16:9' | '1:1' | '4:5'
   priority: 'essential' | 'recommended' | 'optional'
+  /** Embed brand logo organically in this image (on packaging, signage, etc.) */
+  includeLogo?: boolean
 }
 
 export interface GeneratedPrompts {
@@ -200,6 +202,7 @@ function getDefaultPrompts(
     },
     aspectRatio: '16:9',
     priority: img.priority,
+    includeLogo: img.includeLogo || false,
   }))
 
   return {
