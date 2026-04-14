@@ -421,7 +421,7 @@ export default function GammaProtoPage() {
             <IconBtn onClick={() => setPresenting(true)} title="הצג במסך מלא"><Play size={16} /></IconBtn>
             <IconBtn onClick={exportPdf} title="הורד PDF"><Download size={16} /></IconBtn>
             <button onClick={() => setShareOpen(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0ea5e9', color: '#fff', border: 0, borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+              style={{ display: 'flex', flexDirection: 'row-reverse', alignItems: 'center', gap: 6, background: '#0ea5e9', color: '#fff', border: 0, borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
               <Share2 size={14} /> שיתוף
             </button>
           </ToolbarGroup>
@@ -441,7 +441,7 @@ export default function GammaProtoPage() {
             <button onClick={() => addSlide('hero-cover')}
               style={{ width: '100%', padding: '10px 6px', marginTop: 8, background: '#1f1f22',
                 color: '#888', border: '1px dashed #333', borderRadius: 6, cursor: 'pointer',
-                fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                fontSize: 11, display: 'flex', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
               <Plus size={14} /> שקף
             </button>
           </aside>
@@ -893,7 +893,7 @@ function ColorRow({ value, palette, onChange }: { label: string; value: string; 
 
 function ghostBtn(): React.CSSProperties {
   return {
-    display: 'inline-flex', alignItems: 'center', gap: 6,
+    display: 'inline-flex', flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
     padding: '6px 10px', background: '#1f1f22', color: '#bbb',
     border: '1px solid #2a2a2f', borderRadius: 5, cursor: 'pointer',
     fontSize: 11, fontFamily: 'inherit',
