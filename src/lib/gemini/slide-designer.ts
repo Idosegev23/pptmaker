@@ -1555,6 +1555,19 @@ CARDS:
 - 3D tilt on hover area: transform: perspective(1200px) rotateX(2deg) rotateY(-1deg)
 - Number badges inside cards: large number (48-96px) at low opacity (0.08-0.15)
 
+⚠️ CRITICAL FOR PDF EXPORT COMPATIBILITY:
+When you create visual CARDS (grid items, stat cards, feature boxes, metric cards) that use
+glassmorphism/backdrop-filter — you MUST add class="pdf-glass-card" to the card element,
+in addition to your inline styling.
+
+When you use backdrop-filter ONLY as a text-readability surface behind a heading/paragraph
+on a busy background (image, heavy gradient) — DO NOT add this class. Keep backdrop-filter
+inline only.
+
+Rule of thumb: if the element is a visible "surface" with clear boundaries that the user
+should perceive as a card — pdf-glass-card. If it's just a subtle blur to make text readable
+and should be nearly invisible — no class.
+
 IMAGE TREATMENT:
 - Full-bleed: position:absolute; inset:0; object-fit:cover; filter: brightness(0.5) contrast(1.15)
 - Overlay gradient: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 65%)

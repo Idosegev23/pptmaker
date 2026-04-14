@@ -62,18 +62,37 @@ const PRINT_FIX_CSS = `
   [style*="box-shadow"], [style*="text-shadow"] {
     -webkit-filter: blur(0) !important;
   }
-  /* ── PDF layered mode: replace backdrop-filter with solid fallback ──
-     Chrome print engine skips GPU compositor effects (backdrop-filter, filter on overlays).
-     We replace them with visually equivalent solid RGBA backgrounds.
-     Result: text stays selectable, file size drops from ~42MB to ~4MB. */
+  /* ── PDF layered mode: neutralize backdrop-filter globally ──
+     Chrome print engine skips GPU compositor effects. Disabling them prevents
+     unrendered blur from leaving visual artifacts. Text-readability surfaces
+     (thin backdrop-filter behind text) become invisible — which is correct.
+     Glass cards get dedicated treatment below via .pdf-glass-card class. */
   * {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-  /* Glassmorphism cards → dark semi-transparent solid (visually ~95% match) */
-  [style*="backdrop-filter"], [style*="blur("] {
-    background-color: rgba(15, 15, 25, 0.6) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  /* Dedicated class for glassmorphism cards (grid items, stat cards, feature boxes).
+     Author HTML must add this class to elements that should look like "surfaces". */
+  .pdf-glass-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(20, 28, 45, 0.92) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35) !important;
+  }
+  /* Legacy glass cards — detect by common patterns in HTML generated before
+     the pdf-glass-card class was introduced. Backwards compat for existing
+     decks in the DB. */
+  .slide div[style*="backdrop-filter"][style*="border-radius"],
+  .slide div[class*="card"][style*="backdrop-filter"],
+  .slide div[class*="Card"][style*="backdrop-filter"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(20, 28, 45, 0.92) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35) !important;
   }
   /* Image filter fallback: add dark overlay via box-shadow inset instead of filter */
   img[style*="brightness"], img[style*="filter"] {
