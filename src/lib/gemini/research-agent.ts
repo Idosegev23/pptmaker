@@ -491,23 +491,30 @@ IMPORTANT:
             onProgress?.({ stage: 'influencers', message: `📊 מעשיר נתונים: @${handle}...`, progress: 55 })
             console.log(`[ResearchAgent][${requestId}]     → Enriching @${handle} via IMAI`)
             try {
-              const info = await getInstagramUserInfo(handle)
-              const enriched = {
-                username: info.username,
-                fullname: info.fullname,
-                followers: info.followers,
-                is_verified: info.is_verified,
-                bio: info.biography,
+              const rawResponse = await getInstagramUserInfo(handle) as any
+              // IMAI response may be nested — try multiple shapes
+              const info = rawResponse?.user_profile || rawResponse?.data?.user_profile || rawResponse?.data || rawResponse
+              const username = info?.username || handle
+              const fullname = info?.fullname || info?.full_name || ''
+              const followers = info?.followers || info?.follower_count || 0
+              const isVerified = info?.is_verified || info?.verified || false
+              const bio = info?.biography || info?.bio || ''
+
+              // Log what we actually got
+              if (followers === 0) {
+                console.warn(`[ResearchAgent][${requestId}]     → @${handle}: IMAI returned data but no followers field. Response keys: ${Object.keys(rawResponse || {}).join(', ')}`)
+                result = { error: `@${handle} — IMAI response incomplete`, username: handle, rawKeys: Object.keys(rawResponse || {}) }
+              } else {
+                const enriched = { username, fullname, followers, is_verified: isVerified, bio }
+                if (!influencers.find(i => i.username === username)) {
+                  influencers.push({ username, fullname, followers, engagement_rate: 0, rationale: '' })
+                }
+                result = enriched
+                console.log(`[ResearchAgent][${requestId}]     → @${handle}: ${followers.toLocaleString()} followers, verified=${isVerified}`)
               }
-              // Add to influencers list if not already there
-              if (!influencers.find(i => i.username === info.username)) {
-                influencers.push({ username: info.username, fullname: info.fullname, followers: info.followers, engagement_rate: 0, rationale: '' })
-              }
-              result = enriched
-              console.log(`[ResearchAgent][${requestId}]     → @${handle}: ${info.followers.toLocaleString()} followers, verified=${info.is_verified}`)
             } catch (enrichErr) {
-              console.warn(`[ResearchAgent][${requestId}]     → @${handle} not found in IMAI: ${enrichErr instanceof Error ? enrichErr.message : enrichErr}`)
-              result = { error: `@${handle} not found in IMAI`, username: handle }
+              console.warn(`[ResearchAgent][${requestId}]     → @${handle} enrich failed: ${enrichErr instanceof Error ? enrichErr.message : enrichErr}`)
+              result = { error: `@${handle} — ${enrichErr instanceof Error ? enrichErr.message : 'unknown'}`, username: handle }
             }
             break
           }

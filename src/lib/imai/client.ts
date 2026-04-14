@@ -140,16 +140,25 @@ export async function searchInfluencers(
   if (filters.language?.length) filter.language = filters.language.map(code => ({ code }))
   if (filters.gender) filter.gender = filters.gender
   if (filters.relevance?.length) {
-    // IMAI v1 relevance expects array of objects with tag property.
-    // Single words only — multi-word phrases return 400.
+    // IMAI v1 relevance format: array of strings with '@' prefix for handles OR hashtags.
+    // For topic tags (food, beauty) — use 'keywords' field instead.
     const tags = filters.relevance.flatMap(r => r.split(/\s+/)).filter(Boolean).map(t => t.toLowerCase())
-    if (tags.length) filter.relevance = tags.map(tag => ({ tag }))
+    if (tags.length) {
+      // Put plain topic words in 'relevance' as strings
+      filter.relevance = tags
+    }
   }
   if (filters.keywords?.length) {
-    // Keywords are plain strings (search in bio/posts)
     filter.keywords = filters.keywords.filter(Boolean)
   }
   if (filters.has_contact_details) filter.with_contact = [{ type: 'email' }]
+
+  const requestBody = {
+    filter,
+    sort: { field: 'followers', direction: 'desc' },
+    paging: { skip: offset, limit },
+  }
+  console.log(`[IMAI][${requestId}] POST /search/newv1/ body: ${JSON.stringify(requestBody).slice(0, 300)}`)
 
   const rawResult = await imaiRequest<{
     total: number
@@ -157,11 +166,7 @@ export async function searchInfluencers(
       account: { user_profile: ImaiInfluencer }
       match?: Record<string, unknown>
     }>
-  }>('POST', '/search/newv1/', {
-    filter,
-    sort: { field: 'followers', direction: 'desc' },
-    paging: { skip: offset, limit },
-  }, { platform })
+  }>('POST', '/search/newv1/', requestBody, { platform })
 
   // Normalize to our ImaiSearchResult format
   const data = (rawResult.accounts || []).map(a => ({
@@ -202,32 +207,13 @@ export async function getAudienceReport(
  * Cost: 0.02 tokens. Rate limit: 1 req/sec.
  * IMAI endpoint expects `url` param with the username (not `username`).
  */
-export async function getInstagramUserInfo(username: string): Promise<{
-  user_id: string
-  username: string
-  fullname: string
-  followers: number
-  picture: string
-  is_verified: boolean
-  biography: string
-}> {
+export async function getInstagramUserInfo(username: string): Promise<Record<string, unknown>> {
   const clean = username.replace('@', '').trim()
-  // Try multiple param names — IMAI API has inconsistent docs
-  try {
-    return await imaiRequest('GET', '/raw/ig/user/info/', undefined, { url: clean })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    // If 400 with 'url', try 'username' fallback
-    if (msg.includes('400')) {
-      try {
-        return await imaiRequest('GET', '/raw/ig/user/info/', undefined, { username: clean })
-      } catch {
-        // Try POST variant as last resort
-        return imaiRequest('POST', '/raw/ig/user/info/', { url: clean })
-      }
-    }
-    throw err
-  }
+  // IMAI /raw/ig/user/info/ expects GET with 'url' param
+  const response = await imaiRequest<Record<string, unknown>>('GET', '/raw/ig/user/info/', undefined, { url: clean })
+  // Log the response shape once so we know what IMAI returns
+  console.log(`[IMAI] getInstagramUserInfo(${clean}) response keys: [${Object.keys(response || {}).join(', ')}]`)
+  return response
 }
 
 /**
