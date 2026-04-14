@@ -51,31 +51,39 @@ export async function POST(request: NextRequest) {
     // ─── HTML-Native Presentation path (v6) ─────────────────
     const htmlPres = documentData._htmlPresentation as { htmlSlides?: string[]; brandName?: string; title?: string } | undefined
     if (htmlPres?.htmlSlides?.length) {
-      console.log(`[PDF] 🎨 Using HTML-Native presentation: ${htmlPres.htmlSlides.length} slides (layered PDF — selectable text, ~4MB)`)
+      console.log(`[PDF] 🎨 Using HTML-Native presentation: ${htmlPres.htmlSlides.length} slides (screenshot PDF for full visual fidelity)`)
       const brandNameStr = (htmlPres.brandName || documentData.brandName as string) || ''
-      // page.pdf() → layered PDF: text is selectable, vectors stay sharp at any zoom, ~4MB vs 42MB screenshot
-      // backdrop-filter replaced with solid RGBA fallback via PRINT_FIX_CSS
-      const pdfBuffer = await generateMultiPagePdf(htmlPres.htmlSlides, {
+
+      // Screenshot PDF — pixel-perfect fidelity (blur, gradients, glassmorphism all preserved)
+      // File is ~10-40MB — uploaded to Supabase Storage, client downloads directly from CDN
+      // (avoids Vercel's 4.5MB response body limit)
+      const pdfBuffer = await generateScreenshotPdf(htmlPres.htmlSlides, {
         format: '16:9',
         title: htmlPres.title || brandNameStr || 'Presentation',
         brandName: brandNameStr,
       })
-      console.log(`[PDF] Generated layered PDF, size: ${(pdfBuffer.length / 1024 / 1024).toFixed(1)} MB (${pdfBuffer.length} bytes)`)
+      console.log(`[PDF] Generated screenshot PDF, size: ${(pdfBuffer.length / 1024 / 1024).toFixed(1)} MB (${pdfBuffer.length} bytes)`)
 
       const fileName = `proposal_${document.id}_${Date.now()}.pdf`
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(fileName, pdfBuffer, { contentType: 'application/pdf', upsert: true })
-      if (uploadError) console.error('Upload error:', uploadError)
+      if (uploadError) {
+        console.error('[PDF] Upload to Storage failed:', uploadError)
+        return NextResponse.json({ error: 'Failed to save PDF to storage', details: uploadError.message }, { status: 500 })
+      }
       const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName)
       await supabase.from('documents').update({ pdf_url: urlData.publicUrl, status: 'generated' }).eq('id', documentId)
+      console.log(`[PDF] ✅ PDF saved to Storage: ${urlData.publicUrl}`)
 
-      if (action === 'download') {
-        return new NextResponse(new Uint8Array(pdfBuffer), {
-          headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${fileName}"` },
-        })
-      }
-      return NextResponse.json({ success: true, pdfUrl: urlData.publicUrl })
+      // Always return URL — client fetches from Supabase CDN (no Vercel 4.5MB response limit)
+      // If action=download, client triggers the download from the URL client-side
+      return NextResponse.json({
+        success: true,
+        pdfUrl: urlData.publicUrl,
+        fileName,
+        sizeBytes: pdfBuffer.length,
+      })
     }
 
     // ─── AST Presentation path (fallback) ─────────────────

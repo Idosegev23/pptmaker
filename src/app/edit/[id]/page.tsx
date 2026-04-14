@@ -313,15 +313,25 @@ export default function PresentationEditorPage() {
     setIsGeneratingPdf(true)
 
     try {
+      // Server returns { pdfUrl } from Supabase Storage (avoids Vercel 4.5MB response limit)
       const response = await fetch('/api/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documentId, action: 'download' }),
       })
 
-      if (!response.ok) throw new Error('PDF generation failed')
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || 'PDF generation failed')
+      }
 
-      const blob = await response.blob()
+      const { pdfUrl } = await response.json()
+      if (!pdfUrl) throw new Error('No PDF URL returned')
+
+      // Client fetches PDF from Supabase CDN (any size) and triggers download
+      const pdfRes = await fetch(pdfUrl)
+      if (!pdfRes.ok) throw new Error('Failed to fetch PDF from storage')
+      const blob = await pdfRes.blob()
       const url = window.URL.createObjectURL(blob)
       const a = window.document.createElement('a')
       a.href = url
@@ -330,13 +340,13 @@ export default function PresentationEditorPage() {
       window.URL.revokeObjectURL(url)
     } catch (err) {
       console.error('PDF error:', err)
-      alert('שגיאה ביצירת ה-PDF')
+      alert(`שגיאה ביצירת ה-PDF: ${err instanceof Error ? err.message : 'unknown'}`)
     } finally {
       setIsGeneratingPdf(false)
     }
   }, [documentId, brandName, editor])
 
-  // ─── Get PDF blob for Drive save ────────────────────
+  // ─── Get PDF blob for Drive save (fetches from Supabase CDN) ────
   const getProposalPdf = useCallback(async () => {
     await editor.saveNow(documentId)
     const response = await fetch('/api/pdf', {
@@ -345,7 +355,11 @@ export default function PresentationEditorPage() {
       body: JSON.stringify({ documentId, action: 'download' }),
     })
     if (!response.ok) throw new Error('PDF generation failed')
-    const blob = await response.blob()
+    const { pdfUrl } = await response.json()
+    if (!pdfUrl) throw new Error('No PDF URL returned')
+    const pdfRes = await fetch(pdfUrl)
+    if (!pdfRes.ok) throw new Error('Failed to fetch PDF from storage')
+    const blob = await pdfRes.blob()
     return {
       blob,
       fileName: `${brandName || 'proposal'}.pdf`,
@@ -833,14 +847,20 @@ export default function PresentationEditorPage() {
                     })
                     clearTimeout(timeoutId)
                     if (res.ok) {
-                      const blob = await res.blob()
+                      const { pdfUrl } = await res.json()
+                      if (!pdfUrl) throw new Error('PDF URL חסר')
+                      // Fetch from Supabase CDN (no Vercel 4.5MB response limit)
+                      const pdfRes = await fetch(pdfUrl)
+                      if (!pdfRes.ok) throw new Error('הורדת PDF מ-Storage נכשלה')
+                      const blob = await pdfRes.blob()
                       if (blob.size === 0) throw new Error('PDF ריק')
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a'); a.href = url; a.download = `${brandName}.pdf`; a.click()
                       URL.revokeObjectURL(url)
                       toast.success('PDF הורד בהצלחה')
                     } else {
-                      toast.error('שגיאה ביצירת PDF')
+                      const err = await res.json().catch(() => ({}))
+                      toast.error(err.error || 'שגיאה ביצירת PDF')
                     }
                   } catch (err) {
                     toast.error(err instanceof Error && err.name === 'AbortError' ? 'יצירת PDF לקחה יותר מדי זמן' : 'שגיאה ביצירת PDF')
