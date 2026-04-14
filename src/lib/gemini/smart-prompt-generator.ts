@@ -154,28 +154,40 @@ ${imagePlans}
 }
 
 /**
- * Convert SmartImagePrompt to a narrative-style English text prompt for Nano Banana Pro
+ * Convert SmartImagePrompt to a narrative-style English text prompt for Nano Banana.
  *
- * Uses narrative descriptions and injects high-end photography modifiers
- * to ensure breathtaking 4K results.
+ * Follows Google's Nano Banana prompting guide:
+ * - ONE flowing narrative sentence describing the scene
+ * - Specific visual details (lens, lighting, angle)
+ * - Style modifiers at the end
+ * - No bullet lists, no fields — just a natural description
+ *
+ * Examples from Google docs:
+ * - "A photo of an everyday scene at a busy cafe serving breakfast. In the
+ *   foreground is an anime man with blue hair..."
+ * - "A cinematic close-up of a bright, confident smile with striking white
+ *   teeth, vibrant lighting, shot on 35mm lens, editorial Vogue style."
  */
 export function smartPromptToText(smartPrompt: SmartImagePrompt): string {
   const p = smartPrompt.prompt
 
-  // Build a cohesive narrative prompt
-  const colorMention = p.colors.slice(0, 3).join(', ')
-  
-  // Photography and rendering boosters for Nano Banana Pro
-  const premiumBoosters = "8k resolution, highly detailed masterpiece, award-winning photography, photorealistic, Vogue editorial style, shot on 35mm lens, beautiful depth of field, sharp focus on subject, soft bokeh background"
+  // Strategy: The `scene` field contains the narrative rationale from the
+  // strategist (already a flowing sentence). Use it as the core, then add
+  // only the technical modifiers that Google's Nano Banana docs recommend.
 
-  return `A breathtaking, high-end commercial photograph of ${p.subject}. 
-Set in ${p.scene}. The atmosphere is ${p.mood}, evoking a premium lifestyle feel. 
-The visual color palette is dominated by ${colorMention}, incorporating ${p.israeliElements}. 
-Lighting setup: ${p.lighting}. Composition details: ${p.composition}, ensuring negative space where needed.
-Overall styling: ${p.style}. 
+  const narrative = p.scene || p.subject || 'a premium brand moment'
 
-Technical details: ${premiumBoosters}. 
-CRITICAL RULES: The image is purely visual. ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO WATERMARKS, NO LOGOS, NO GRAPHICS. Zero text. Avoid generic stock photo look; make it authentic and spectacular.`
+  // Technical modifiers (Google Nano Banana docs style — keep concise)
+  const modifiers = [
+    'cinematic editorial photography',
+    'shot on 35mm lens',
+    'shallow depth of field',
+    'natural lighting',
+    '4K resolution',
+    'Vogue magazine aesthetic',
+  ].join(', ')
+
+  return `${narrative}. ${modifiers}. No text, no watermarks.`
 }
 
 /**

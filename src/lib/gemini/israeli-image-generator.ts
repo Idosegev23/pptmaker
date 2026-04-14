@@ -60,9 +60,11 @@ async function generateWithRetry(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const contents: any[] = []
       if (logoBuffer) {
-        // Pass logo as reference image — Gemini will integrate it naturally
+        // Following Google's Nano Banana Pro prompting pattern:
+        // "Put this logo on a high-end ad... The logo is perfectly integrated into the bottle."
+        // Keep it short and natural — the model handles the rest.
         contents.push({
-          text: `${prompt}\n\nIMPORTANT: Naturally integrate the provided brand logo into the image. Place it prominently but elegantly — on a product, sign, screen, or surface that fits the scene. The logo must be clearly visible and pixel-perfect, not distorted or cropped.`,
+          text: `${prompt}\n\nIntegrate the provided brand logo naturally into the scene — perfectly placed on a product, bottle, package, sign, or surface that fits the composition. The logo must be legible, undistorted, and at the correct scale for the object it's on.`,
         })
         contents.push({
           inlineData: {
