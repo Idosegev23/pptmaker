@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { renderStructuredSlide } from '@/lib/gemini/layout-prototypes/renderer'
+import ShareDialog from '@/components/share/ShareDialog'
 import type { StructuredPresentation, StructuredSlide, LayoutId, FreeElement } from '@/lib/gemini/layout-prototypes/types'
 
 const LAYOUTS: LayoutId[] = [
@@ -40,6 +41,7 @@ export default function GammaProtoPage() {
   const [selectedRole, setSelectedRole] = useState<string | null>(null)
   const clipboardRef = useRef<FreeElement | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
   // Undo/redo: debounced snapshots of the *previous* state
   const historyRef = useRef<StructuredPresentation[]>([])
@@ -376,6 +378,7 @@ export default function GammaProtoPage() {
           <button onClick={undo} disabled={historyRef.current.length === 0} style={btn('#222')} title="בטל (⌘Z)">↶</button>
           <button onClick={redo} disabled={futureRef.current.length === 0} style={btn('#222')} title="חזור (⇧⌘Z)">↷</button>
           <button onClick={() => setChatOpen(c => !c)} style={btn(chatOpen ? '#E94560' : '#6a1b9a')} title="צ'אט AI">💬 AI</button>
+          <button onClick={() => setShareOpen(true)} style={btn('#0ea5e9')} title="שיתוף">🔗 שיתוף</button>
           <button onClick={() => setGrid(g => !g)} style={btn(grid ? '#4CAF50' : '#222')} title="רשת">▦</button>
           <button onClick={() => setSnap(s => !s)} style={btn(snap ? '#4CAF50' : '#222')} title="הצמד לרשת">⌘</button>
           <button onClick={duplicateSlide} style={btn('#222')} title="שכפל שקף (⌘D)">⎘</button>
@@ -501,6 +504,12 @@ export default function GammaProtoPage() {
       )}
 
       {loading && !pres && <div style={{ padding: 20, opacity: 0.7 }}>טוען / מייצר…</div>}
+
+      <ShareDialog
+        isOpen={shareOpen}
+        onClose={() => setShareOpen(false)}
+        documentId={params.id as string}
+      />
 
       {chatOpen && pres && (
         <AIChatPanel

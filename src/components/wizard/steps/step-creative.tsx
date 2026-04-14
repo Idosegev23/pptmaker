@@ -25,6 +25,11 @@ export default function StepCreative({ data, extractedData, onChange, errors, ra
   const activityDifferentiator = data.activityDifferentiator ?? ''
   const referenceImages = data.referenceImages ?? []
   const suggestedReferences = data.suggestedReferences ?? []
+  const brandStory = data.brandStory ?? ''
+  const toneOfManner = data.toneOfManner ?? ''
+  const visualDirection = data.visualDirection ?? ''
+  const keyMessages = data.keyMessages ?? []
+  const [newMessage, setNewMessage] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -132,27 +137,101 @@ export default function StepCreative({ data, extractedData, onChange, errors, ra
       {suggestedReferences.length > 0 && (
         <div className="space-y-3">
           <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
-            הצעות רפרנס מהמחקר
+            רפרנסים מהעולם (מה-AI)
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {suggestedReferences.map((ref, i) => (
-              <div key={i} className="rounded-2xl border border-wizard-border bg-brand-pearl/50 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="rounded-md bg-brand-gold/10 px-2 py-0.5 text-[10px] font-rubik font-medium text-brand-primary">
-                    {ref.type}
-                  </span>
+            {suggestedReferences.map((ref, i) => {
+              const title = ref.campaign || ref.type || `רפרנס ${i + 1}`
+              const subtitle = ref.year ? `${title} · ${ref.year}` : title
+              const body = ref.why || ref.description || ''
+              const tail = ref.rationale && ref.rationale !== body ? ref.rationale : ''
+              return (
+                <div key={i} className="rounded-2xl border border-wizard-border bg-brand-pearl/50 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="rounded-md bg-brand-gold/10 px-2 py-0.5 text-[10px] font-rubik font-medium text-brand-primary">
+                      {subtitle}
+                    </span>
+                  </div>
+                  <p className="text-[13px] text-wizard-text-primary font-heebo leading-relaxed">{body}</p>
+                  {tail && <p className="text-[11px] text-wizard-text-tertiary mt-1.5">{tail}</p>}
                 </div>
-                <p className="text-[13px] text-wizard-text-primary font-heebo leading-relaxed">
-                  {ref.description}
-                </p>
-                <p className="text-[11px] text-wizard-text-tertiary mt-1.5">
-                  {ref.rationale}
-                </p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
+
+      {/* Brand story */}
+      <Textarea
+        label="סיפור המותג / נרטיב"
+        placeholder="הנרטיב המרכזי של המותג — כפי שעולה מהבריף"
+        value={brandStory}
+        onChange={(e) => onChange({ ...data, brandStory: e.target.value })}
+        className="min-h-[100px]"
+      />
+
+      {/* Tone of manner */}
+      <Input
+        label="טון ומניירה"
+        placeholder="רשמי / משחקי / חם / מקצועי / דרמטי / אירוני..."
+        value={toneOfManner}
+        onChange={(e) => onChange({ ...data, toneOfManner: e.target.value })}
+      />
+
+      {/* Visual direction */}
+      <Textarea
+        label="כיוון ויזואלי"
+        placeholder="מילות מפתח ויזואליות: פלטה, מצב רוח, סגנון צילום, טיפוגרפיה..."
+        value={visualDirection}
+        onChange={(e) => onChange({ ...data, visualDirection: e.target.value })}
+        className="min-h-[80px]"
+      />
+
+      {/* Key messages */}
+      <div className="space-y-2">
+        <label className="block text-[13px] font-heebo font-semibold text-wizard-text-secondary tracking-[0.01em]">
+          מסרים מרכזיים
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {keyMessages.map((m, i) => (
+            <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-brand-gold/10 border border-brand-gold/30 px-3 py-1 text-[12px] font-heebo text-brand-primary">
+              {m}
+              <button
+                type="button"
+                onClick={() => onChange({ ...data, keyMessages: keyMessages.filter((_, j) => j !== i) })}
+                className="text-brand-primary/60 hover:text-destructive"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Input
+            placeholder="מסר מרכזי חדש…"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newMessage.trim()) {
+                e.preventDefault()
+                onChange({ ...data, keyMessages: [...keyMessages, newMessage.trim()] })
+                setNewMessage('')
+              }
+            }}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (!newMessage.trim()) return
+              onChange({ ...data, keyMessages: [...keyMessages, newMessage.trim()] })
+              setNewMessage('')
+            }}
+          >
+            +
+          </Button>
+        </div>
+      </div>
 
       {/* Activity Title */}
       <Input

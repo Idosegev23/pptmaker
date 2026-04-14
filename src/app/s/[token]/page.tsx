@@ -35,11 +35,13 @@ export default async function SharePage({ params }: SharePageProps) {
   const docData = doc.data as Record<string, unknown>
   const htmlPres = docData._htmlPresentation as { htmlSlides?: string[]; title?: string; brandName?: string } | undefined
   const presentation = docData._presentation as Presentation | undefined
+  const structuredPres = docData._structuredPresentation as
+    | import('@/lib/gemini/layout-prototypes/types').StructuredPresentation | undefined
 
-  // HTML-native takes priority
   const isHtmlNative = !!(htmlPres?.htmlSlides?.length)
+  const isStructured = !!(structuredPres?.slides?.length)
 
-  if (!isHtmlNative && (!presentation || !presentation.slides?.length)) notFound()
+  if (!isHtmlNative && !isStructured && (!presentation || !presentation.slides?.length)) notFound()
 
   // Increment view count
   supabase
@@ -51,8 +53,18 @@ export default async function SharePage({ params }: SharePageProps) {
     .eq('id', share.id)
     .then(() => {})
 
-  const brandName = (docData.brandName as string) || doc.title || (isHtmlNative ? htmlPres?.brandName : presentation?.title) || ''
+  const brandName = (docData.brandName as string) || doc.title
+    || (isHtmlNative ? htmlPres?.brandName : (isStructured ? structuredPres?.brandName : presentation?.title))
+    || ''
   const viewerConfig = share.viewer_config as unknown as ViewerConfig
+
+  // Structured (gamma) — render each slide via the structured renderer, then reuse HtmlSlideshow
+  if (isStructured && structuredPres) {
+    const { renderStructuredSlide } = await import('@/lib/gemini/layout-prototypes/renderer')
+    const htmlSlides = structuredPres.slides.map(s => renderStructuredSlide(s, structuredPres.designSystem))
+    const HtmlSlideshow = (await import('@/components/presentation/HtmlSlideshow')).default
+    return <HtmlSlideshow htmlSlides={htmlSlides} brandName={brandName} viewerConfig={viewerConfig} />
+  }
 
   // HTML-native share — render iframes directly
   if (isHtmlNative && htmlPres?.htmlSlides) {
