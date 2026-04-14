@@ -111,16 +111,19 @@ const FUNCTION_DECLARATIONS = [
   {
     name: 'search_influencers',
     description:
-      'Search for Israeli influencers on IMAI. Returns real data. ' +
+      'Search for Israeli influencers on IMAI. Returns real, quality-filtered data. ' +
+      'Keywords must be 2-4 BRAND-SPECIFIC single English words describing the NICHE ' +
+      '(e.g. brand is a baby cream → ["parenting","baby","skincare"]; brand is a car → ["automotive","driving"]). ' +
+      'DO NOT use generic words like "lifestyle", "content", "hebrew", "israel" — they return junk. ' +
       'You MUST call this to find influencers for the campaign.',
     parameters: {
       type: 'object',
       properties: {
-        keywords: { type: 'array', items: { type: 'string' }, description: 'Topic keywords in English' },
+        keywords: { type: 'array', items: { type: 'string' }, description: 'Brand-niche English keywords (2-4 words)' },
         platform: { type: 'string', enum: ['instagram', 'tiktok'] },
-        minFollowers: { type: 'integer' },
+        minFollowers: { type: 'integer', description: 'Min followers. Default 15000. Raise to 30000+ for premium brands.' },
+        minEngagement: { type: 'number', description: 'Min engagement % (e.g. 1.5). Default 1.5.' },
         maxFollowers: { type: 'integer' },
-        limit: { type: 'integer' },
       },
       required: ['keywords'],
     },
@@ -489,7 +492,7 @@ Call enrich_influencer for EACH of these usernames to get real IMAI data (follow
 This is the most important step — we need real numbers, not guesses.`
     : `No influencer usernames found by Google. Call search_influencers with 2-3 SINGLE-WORD keywords related to "${input.brandName}"'s niche (e.g. "food", "beauty", "parenting").`}
 
-STEP 2 — Also call search_influencers with 1-2 niche keywords to find additional influencers beyond the Google list.
+STEP 2 — Also call search_influencers with 2-4 BRAND-NICHE single English keywords (specific to the brand's category, NOT generic words like "lifestyle" or "content"). Examples: baby cream → ["parenting","baby","skincare"]; luxury car → ["automotive","cars","luxury"]; restaurant → ["food","culinary","dining"]. For premium brands set minFollowers 30000+. Set minEngagement 2.0 for quality. Results are auto-filtered by engagement × follower-quality.
 
 STEP 3 — Call draft_brand_content — draft brief, goals, audience (Hebrew)
 STEP 4 — Call draft_strategy_content — draft insight, strategy, creative (Hebrew)
@@ -579,13 +582,35 @@ draft_execution_content: deliverables[] (with type+quantity+description+purpose 
           case 'search_influencers': {
             onProgress?.({ stage: 'influencers', message: '🔍 מחפש משפיענים ב-IMAI...', progress: 50 })
             const keywords = (args.keywords as string[]) || []
+            const minFollowers = (args.minFollowers as number) || 15000  // raised from 5K — real influencers only
+            const minEngagement = (args.minEngagement as number) || 1.5
             const found = await searchIsraeliInfluencers(keywords, {
               platform: (args.platform as 'instagram' | 'tiktok') || 'instagram',
-              minFollowers: (args.minFollowers as number) || 5000,
-              maxFollowers: (args.maxFollowers as number) || 500000,
-              limit: (args.limit as number) || 10,
+              minFollowers,
+              maxFollowers: (args.maxFollowers as number) || 2_000_000,
+              limit: 30, // fetch more, then quality-filter
             })
-            const mapped = found.slice(0, 10).map(i => ({
+            console.log(`[ResearchAgent][${requestId}]     → IMAI returned ${found.length} raw results (min ${minFollowers} followers, min ${minEngagement}% ER)`)
+
+            // Quality filter: engagement rate + size threshold
+            const qualityFiltered = found.filter(i => {
+              const followers = i.followers || 0
+              const er = i.engagement_rate || 0
+              if (followers < minFollowers) return false
+              if (er < minEngagement) return false
+              // drop obvious non-influencer business accounts (very low ER / mega-follower ratio)
+              if (followers > 100_000 && er < 0.5) return false
+              return true
+            })
+
+            // Re-rank: weighted by engagement × log10(followers) — favor quality over vanity size
+            const ranked = qualityFiltered.sort((a, b) => {
+              const scoreA = (a.engagement_rate || 0) * Math.log10(Math.max(a.followers || 1, 10))
+              const scoreB = (b.engagement_rate || 0) * Math.log10(Math.max(b.followers || 1, 10))
+              return scoreB - scoreA
+            })
+
+            const mapped = ranked.slice(0, 8).map(i => ({
               username: i.username,
               fullname: i.fullname,
               followers: i.followers,
@@ -599,7 +624,10 @@ draft_execution_content: deliverables[] (with type+quantity+description+purpose 
               }
             }
             result = mapped
-            console.log(`[ResearchAgent][${requestId}]     → ${mapped.length} influencers (${mapped.filter(m => m.picture).length} with pics)`)
+            console.log(`[ResearchAgent][${requestId}]     → ${mapped.length} quality influencers after filter (${mapped.filter(m => m.picture).length} with pics)`)
+            if (mapped.length === 0 && found.length > 0) {
+              console.warn(`[ResearchAgent][${requestId}]     ⚠️ All ${found.length} raw results filtered out — thresholds may be too strict or keywords too broad`)
+            }
             break
           }
 
