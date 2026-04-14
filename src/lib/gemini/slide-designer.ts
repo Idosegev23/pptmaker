@@ -1479,6 +1479,19 @@ export async function pipelineBatchHtml(
   const c = ds.colors
   const cd = ds.creativeDirection
 
+  // Pull influencer list from the document for the influencers slide
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wizardData = foundation.proposalData as any
+  const influencerProfiles = (wizardData?.influencers || []) as Array<{
+    name?: string
+    username?: string
+    followers?: number
+    engagementRate?: number
+    profilePicUrl?: string
+    isVerified?: boolean
+    bio?: string
+  }>
+
   // Build slide descriptions for the prompt
   const slidesBlock = batchPlans.map((plan, i) => {
     const globalIndex = slideOffset + i + 1
@@ -1491,6 +1504,17 @@ export async function pipelineBatchHtml(
     if (plan.keyNumber) contentParts.push(`KEY STAT: ${plan.keyNumber} (${plan.keyNumberLabel || ''})`)
     if (plan.tagline) contentParts.push(`Tagline: ${plan.tagline}`)
     if (imageUrl) contentParts.push(`IMAGE URL: ${imageUrl}`)
+
+    // For the influencers slide — inject the full profile list with PICTURE URLs
+    if (plan.slideType === 'influencers' && influencerProfiles.length > 0) {
+      const profileList = influencerProfiles.slice(0, 6).map(p => {
+        const picPart = p.profilePicUrl ? `PIC: ${p.profilePicUrl}` : 'PIC: none'
+        const verified = p.isVerified ? ' ✓' : ''
+        return `  - @${p.username}${verified} (${p.name}) | ${p.followers?.toLocaleString() || '?'} followers | ER ${p.engagementRate?.toFixed(1) || '?'}% | ${picPart}`
+      }).join('\n')
+      contentParts.push(`INFLUENCERS (use PIC URLs as circular profile images):\n${profileList}`)
+      contentParts.push(`CRITICAL: Render each influencer as a card with: circular profile pic (use PIC URL with object-fit:cover, border-radius:50%, border:3px solid accent), @username, follower count, ER %. Layout as grid of cards. If PIC is "none" — show first letter of username in a colored circle instead.`)
+    }
 
     return `<slide index="${globalIndex}" type="${plan.slideType}" tone="${plan.emotionalTone || 'professional'}">
 ${contentParts.join('\n')}

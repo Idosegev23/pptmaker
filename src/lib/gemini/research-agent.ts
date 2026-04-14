@@ -30,12 +30,15 @@ export interface ResearchAgentOutput {
   researchText: string
   /** Structured brand research (matches BrandResearch type for UI display) */
   structuredResearch: Record<string, unknown> | null
-  /** IMAI influencer results */
+  /** IMAI influencer results — full profile data */
   influencers: Array<{
     username: string
     fullname: string
     followers: number
     engagement_rate: number
+    is_verified?: boolean
+    picture?: string
+    bio?: string
     rationale?: string
   }>
   /** Draft content for wizard steps 1-3 */
@@ -548,12 +551,20 @@ draft_execution_content: deliverables[] (with type+quantity+description+purpose 
               limit: (args.limit as number) || 10,
             })
             const mapped = found.slice(0, 10).map(i => ({
-              username: i.username, fullname: i.fullname,
-              followers: i.followers, engagement_rate: i.engagement_rate,
+              username: i.username,
+              fullname: i.fullname,
+              followers: i.followers,
+              engagement_rate: i.engagement_rate,
+              is_verified: i.is_verified,
+              picture: i.picture,
             }))
-            influencers.push(...mapped.map(i => ({ ...i, rationale: '' })))
+            for (const m of mapped) {
+              if (!influencers.find(x => x.username === m.username)) {
+                influencers.push({ ...m, rationale: '' })
+              }
+            }
             result = mapped
-            console.log(`[ResearchAgent][${requestId}]     → ${mapped.length} influencers`)
+            console.log(`[ResearchAgent][${requestId}]     → ${mapped.length} influencers (${mapped.filter(m => m.picture).length} with pics)`)
             break
           }
 
@@ -580,10 +591,10 @@ draft_execution_content: deliverables[] (with type+quantity+description+purpose 
               } else {
                 const enriched = { username, fullname, followers, engagement_rate: engagementRate, is_verified: isVerified, bio, picture }
                 if (!influencers.find(i => i.username === username)) {
-                  influencers.push({ username, fullname, followers, engagement_rate: engagementRate, rationale: bio || '' })
+                  influencers.push({ username, fullname, followers, engagement_rate: engagementRate, is_verified: isVerified, picture, bio, rationale: bio || '' })
                 }
                 result = enriched
-                console.log(`[ResearchAgent][${requestId}]     → @${handle}: ${followers.toLocaleString()} followers, ER ${engagementRate}%, verified=${isVerified}`)
+                console.log(`[ResearchAgent][${requestId}]     → @${handle}: ${followers.toLocaleString()} followers, ER ${engagementRate}%, verified=${isVerified}, pic=${picture ? 'YES' : 'no'}`)
               }
             } catch (enrichErr) {
               console.warn(`[ResearchAgent][${requestId}]     → @${handle} enrich failed: ${enrichErr instanceof Error ? enrichErr.message : enrichErr}`)

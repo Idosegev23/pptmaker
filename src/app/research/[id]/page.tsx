@@ -227,10 +227,28 @@ export default function ResearchPage() {
         recommendations: agentResult.influencers.map((i: any) => ({
           name: i.fullname || i.username,
           handle: i.username,
-          followers: `${(i.followers / 1000).toFixed(1)}K`,
-          engagement: `${(i.engagement_rate || 0).toFixed(1)}%`,
+          followers: i.followers ? `${(i.followers / 1000).toFixed(1)}K` : '?',
+          engagement: i.engagement_rate ? `${i.engagement_rate.toFixed(1)}%` : '?',
+          profilePicUrl: i.picture || '',
+          whyRelevant: i.rationale || i.bio || '',
+          isVerified: i.is_verified || false,
         })),
       } : null
+
+      // Build full InfluencerProfile[] for the wizard's influencers step
+      const influencerProfiles = agentResult.influencers?.length > 0
+        ? agentResult.influencers.map((i: any) => ({
+            name: i.fullname || i.username,
+            username: i.username,
+            profileUrl: `https://instagram.com/${i.username}`,
+            profilePicUrl: i.picture || '',
+            categories: [],
+            followers: i.followers || 0,
+            engagementRate: i.engagement_rate || 0,
+            bio: i.bio || '',
+            isVerified: i.is_verified || false,
+          }))
+        : []
 
       // Save draft wizard data to document immediately
       const draftStepData: Record<string, unknown> = {}
@@ -299,6 +317,11 @@ export default function ResearchPage() {
       if (brandResearch) draftStepData._brandResearch = brandResearch
       if (influencerStrategy) draftStepData._influencerStrategy = influencerStrategy
       if (colors) draftStepData._brandColors = colors
+
+      // Save full influencer profiles for the wizard's influencers step
+      if (influencerProfiles.length > 0) {
+        draftStepData.influencers = influencerProfiles
+      }
 
       // Patch document with draft data (will be pre-populated in wizard)
       if (Object.keys(draftStepData).length > 0) {
