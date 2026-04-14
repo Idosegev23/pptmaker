@@ -128,7 +128,8 @@ export async function searchInfluencers(
 
   console.log(`[IMAI][${requestId}] Searching ${platform} influencers...`)
 
-  // Build IMAI v1 filter format (tested with real API)
+  // Build IMAI v1 filter format — minimal working subset
+  // Verified working: followers range, audience_geo. Other fields cause 400s.
   const filter: Record<string, unknown> = {}
   if (filters.followers_from || filters.followers_to) {
     filter.followers = {
@@ -137,19 +138,18 @@ export async function searchInfluencers(
     }
   }
   if (filters.geo?.length) filter.audience_geo = filters.geo.map(id => ({ id }))
-  if (filters.language?.length) filter.language = filters.language.map(code => ({ code }))
   if (filters.gender) filter.gender = filters.gender
+  // Merge relevance + keywords into single 'keywords' array of single words (IMAI-safe)
+  const allTerms: string[] = []
   if (filters.relevance?.length) {
-    // IMAI v1 relevance format: array of strings with '@' prefix for handles OR hashtags.
-    // For topic tags (food, beauty) — use 'keywords' field instead.
-    const tags = filters.relevance.flatMap(r => r.split(/\s+/)).filter(Boolean).map(t => t.toLowerCase())
-    if (tags.length) {
-      // Put plain topic words in 'relevance' as strings
-      filter.relevance = tags
-    }
+    allTerms.push(...filters.relevance.flatMap(r => r.split(/\s+/)))
   }
   if (filters.keywords?.length) {
-    filter.keywords = filters.keywords.filter(Boolean)
+    allTerms.push(...filters.keywords.flatMap(k => k.split(/\s+/)))
+  }
+  const cleanTerms = allTerms.filter(Boolean).map(t => t.toLowerCase())
+  if (cleanTerms.length) {
+    filter.keywords = Array.from(new Set(cleanTerms)).slice(0, 5)
   }
   if (filters.has_contact_details) filter.with_contact = [{ type: 'email' }]
 

@@ -563,25 +563,27 @@ draft_execution_content: deliverables[] (with type+quantity+description+purpose 
             console.log(`[ResearchAgent][${requestId}]     → Enriching @${handle} via IMAI`)
             try {
               const rawResponse = await getInstagramUserInfo(handle) as any
-              // IMAI response may be nested — try multiple shapes
-              const info = rawResponse?.user_profile || rawResponse?.data?.user_profile || rawResponse?.data || rawResponse
-              const username = info?.username || handle
-              const fullname = info?.fullname || info?.full_name || ''
-              const followers = info?.followers || info?.follower_count || 0
+              // IMAI returns { status: 'success', user: {...} } — the data is under `user`
+              const info = rawResponse?.user || rawResponse?.user_profile || rawResponse?.data?.user_profile || rawResponse?.data || rawResponse
+              const username = info?.username || info?.handle || handle
+              const fullname = info?.fullname || info?.full_name || info?.name || ''
+              const followers = info?.followers || info?.follower_count || info?.followers_count || info?.edge_followed_by?.count || 0
               const isVerified = info?.is_verified || info?.verified || false
               const bio = info?.biography || info?.bio || ''
+              const picture = info?.picture || info?.profile_pic_url || ''
+              const engagementRate = info?.engagement_rate || info?.er || 0
 
               // Log what we actually got
               if (followers === 0) {
-                console.warn(`[ResearchAgent][${requestId}]     → @${handle}: IMAI returned data but no followers field. Response keys: ${Object.keys(rawResponse || {}).join(', ')}`)
-                result = { error: `@${handle} — IMAI response incomplete`, username: handle, rawKeys: Object.keys(rawResponse || {}) }
+                console.warn(`[ResearchAgent][${requestId}]     → @${handle}: IMAI returned data but no followers found. Info keys: ${Object.keys(info || {}).slice(0, 20).join(', ')}`)
+                result = { error: `@${handle} — no follower data`, username: handle, infoKeys: Object.keys(info || {}) }
               } else {
-                const enriched = { username, fullname, followers, is_verified: isVerified, bio }
+                const enriched = { username, fullname, followers, engagement_rate: engagementRate, is_verified: isVerified, bio, picture }
                 if (!influencers.find(i => i.username === username)) {
-                  influencers.push({ username, fullname, followers, engagement_rate: 0, rationale: '' })
+                  influencers.push({ username, fullname, followers, engagement_rate: engagementRate, rationale: bio || '' })
                 }
                 result = enriched
-                console.log(`[ResearchAgent][${requestId}]     → @${handle}: ${followers.toLocaleString()} followers, verified=${isVerified}`)
+                console.log(`[ResearchAgent][${requestId}]     → @${handle}: ${followers.toLocaleString()} followers, ER ${engagementRate}%, verified=${isVerified}`)
               }
             } catch (enrichErr) {
               console.warn(`[ResearchAgent][${requestId}]     → @${handle} enrich failed: ${enrichErr instanceof Error ? enrichErr.message : enrichErr}`)
