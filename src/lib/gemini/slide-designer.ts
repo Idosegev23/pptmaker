@@ -1594,9 +1594,23 @@ and should be nearly invisible — no class.
 
 IMAGE TREATMENT:
 - Full-bleed: position:absolute; inset:0; object-fit:cover; filter: brightness(0.5) contrast(1.15)
-- Overlay gradient: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 65%)
-- Split with fade: linear-gradient(to right, transparent 60%, ${c.background} 100%) over the image edge
+- Overlay gradient (PDF-safe): linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.2) 100%) — use SMOOTH transitions spanning the full 0%→100%, NOT sharp mid-point stops
+- Split with fade (PDF-safe): linear-gradient(to right, transparent 0%, rgba(20,28,45,0.7) 50%, ${c.background}EE 100%) — gradual 3-stop transition, NEVER sharp cuts like "transparent 60%, bg 100%"
 - Image bleeds: negative margins (-40px) on image edges for editorial tension
+
+⚠️ PDF EXPORT — SMOOTH GRADIENTS ONLY:
+Chrome's PDF print engine renders alpha gradients in BANDS if the transition is too sharp.
+A gradient like "linear-gradient(to right, transparent 60%, bg 100%)" will render as a hard
+edge rectangle in PDF instead of a soft fade.
+
+ALWAYS use gradients that start at 0% and end at 100% with at least 3 color stops for any
+overlay that should look "soft". Examples:
+  GOOD: linear-gradient(to right, transparent 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.8) 100%)
+  BAD:  linear-gradient(to right, transparent 60%, bg 100%)   ← sharp cut
+  BAD:  linear-gradient(to right, transparent 70%, bg 70.1%)  ← hard line
+
+If the overlay needs to cover half the slide (split layout), use a SOLID color with alpha
+(e.g. rgba(20,28,45,0.7)) on a full-width div — don't rely on gradient cuts.
 </css_arsenal>
 
 <rules>
