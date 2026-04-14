@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { renderStructuredSlide } from '@/lib/gemini/layout-prototypes/renderer'
 import ShareDialog from '@/components/share/ShareDialog'
+import {
+  Undo2, Redo2, Grid3x3, Magnet, Copy, Sparkles, Play, Download, Share2, MessageSquare,
+  Image as ImageIcon, Video, Type, Square, Circle, Minus, Palette, RefreshCw, Eye, EyeOff,
+  ArrowLeft, ArrowRight, Trash2, RotateCcw, Plus, ChevronLeft, Layers, Settings,
+} from 'lucide-react'
 import type { StructuredPresentation, StructuredSlide, LayoutId, FreeElement } from '@/lib/gemini/layout-prototypes/types'
 
 const LAYOUTS: LayoutId[] = [
@@ -365,145 +370,200 @@ export default function GammaProtoPage() {
     } finally { setAiBusy(null) }
   }
 
+  const [zoom, setZoom] = useState(0.6667)
+
+  const selectedFreeEl = selectedRole?.startsWith('free-')
+    ? slide?.freeElements?.find(f => f.id === selectedRole)
+    : undefined
+
+  function updateFreeElement(id: string, patch: Partial<FreeElement>) {
+    if (!pres || !slide) return
+    const next = { ...pres, slides: [...pres.slides] }
+    next.slides[idx] = {
+      ...slide,
+      freeElements: (slide.freeElements || []).map(f => f.id === id ? { ...f, ...patch } : f),
+    }
+    setPres(next)
+  }
+
   return (
-    <div style={{ background: '#0a0a0a', color: '#eee', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'system-ui' }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderBottom: '1px solid #222' }}>
-        <h1 style={{ margin: 0, fontSize: 16 }}>Gamma Editor</h1>
-        <span style={{ opacity: 0.5, fontSize: 12 }}>{params.id?.slice(0, 8)}</span>
-        <span style={{ opacity: 0.6, fontSize: 12, marginInlineStart: 16 }}>
-          {saving === 'saving' && '💾 שומר…'}
-          {saving === 'saved' && '✓ נשמר'}
+    <div style={{ background: '#0f0f10', color: '#eee', height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'Heebo, system-ui, sans-serif', overflow: 'hidden' }} dir="rtl">
+      {/* ─── Header ──────────────────────────── */}
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '1px solid #1f1f22', background: '#15151a', height: 56, flexShrink: 0 }}>
+        <button onClick={() => history.back()} style={{ ...iconBtn(), padding: 6 }} title="חזרה">
+          <ChevronLeft size={18} />
+        </button>
+        <h1 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{pres?.brandName || 'עורך מצגת'}</h1>
+        <span style={{ fontSize: 11, color: saving === 'saving' ? '#fbbf24' : saving === 'saved' ? '#4ade80' : '#666' }}>
+          {saving === 'saving' ? '• שומר…' : saving === 'saved' ? '✓ נשמר' : ''}
         </span>
-        <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 6 }}>
-          <button onClick={undo} disabled={historyRef.current.length === 0} style={btn('#222')} title="בטל (⌘Z)">↶</button>
-          <button onClick={redo} disabled={futureRef.current.length === 0} style={btn('#222')} title="חזור (⇧⌘Z)">↷</button>
-          <button onClick={() => setChatOpen(c => !c)} style={btn(chatOpen ? '#E94560' : '#6a1b9a')} title="צ'אט AI">💬 AI</button>
-          <button onClick={() => setShareOpen(true)} style={btn('#0ea5e9')} title="שיתוף">🔗 שיתוף</button>
-          <button onClick={() => setGrid(g => !g)} style={btn(grid ? '#4CAF50' : '#222')} title="רשת">▦</button>
-          <button onClick={() => setSnap(s => !s)} style={btn(snap ? '#4CAF50' : '#222')} title="הצמד לרשת">⌘</button>
-          <button onClick={duplicateSlide} style={btn('#222')} title="שכפל שקף (⌘D)">⎘</button>
-          <button onClick={generate} disabled={loading}
-            style={btn('#444')}>{loading ? '...' : 'Regenerate all'}</button>
+
+        <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
+          <ToolbarGroup>
+            <IconBtn onClick={undo} disabled={historyRef.current.length === 0} title="בטל (⌘Z)"><Undo2 size={16} /></IconBtn>
+            <IconBtn onClick={redo} disabled={futureRef.current.length === 0} title="חזור (⇧⌘Z)"><Redo2 size={16} /></IconBtn>
+          </ToolbarGroup>
+          <ToolbarGroup>
+            <IconBtn onClick={() => setGrid(g => !g)} active={grid} title="רשת"><Grid3x3 size={16} /></IconBtn>
+            <IconBtn onClick={() => setSnap(s => !s)} active={snap} title="הצמד לרשת"><Magnet size={16} /></IconBtn>
+            <IconBtn onClick={duplicateSlide} title="שכפל שקף (⌘D)"><Copy size={16} /></IconBtn>
+          </ToolbarGroup>
+          <ToolbarGroup>
+            <IconBtn onClick={() => setChatOpen(c => !c)} active={chatOpen} title="צ'אט AI"><MessageSquare size={16} /></IconBtn>
+            <IconBtn onClick={regenerateSlide} disabled={regenBusy} title="עצב מחדש את השקף (AI)">
+              <Sparkles size={16} />
+            </IconBtn>
+            <IconBtn onClick={generate} disabled={loading} title="ייצר מצגת מחדש (הכל)">
+              <RefreshCw size={16} />
+            </IconBtn>
+          </ToolbarGroup>
+          <ToolbarGroup>
+            <IconBtn onClick={() => setPresenting(true)} title="הצג במסך מלא"><Play size={16} /></IconBtn>
+            <IconBtn onClick={exportPdf} title="הורד PDF"><Download size={16} /></IconBtn>
+            <button onClick={() => setShareOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0ea5e9', color: '#fff', border: 0, borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+              <Share2 size={14} /> שיתוף
+            </button>
+          </ToolbarGroup>
         </div>
       </header>
 
-      {err && <div style={{ background: '#40141a', padding: 12, margin: 12, borderRadius: 6 }}>Error: {err}</div>}
+      {err && <div style={{ background: '#40141a', padding: 10, margin: 10, borderRadius: 6, fontSize: 13 }}>⚠ {err}</div>}
 
       {pres && slide && (
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-          {/* Left: slides list with thumbnails */}
-          <aside style={{ width: 220, borderInlineEnd: '1px solid #222', overflow: 'auto', padding: 10 }}>
+          {/* ─── Far left: slide thumbnails strip ─────── */}
+          <aside style={{ width: 140, borderInlineEnd: '1px solid #1f1f22', overflow: 'auto', padding: 8, background: '#141416' }}>
             {pres.slides.map((s, i) => (
-              <SlideThumb
-                key={i}
-                slide={s}
-                ds={pres.designSystem}
-                index={i}
-                active={i === idx}
-                onClick={() => setIdx(i)}
-              />
+              <SlideThumb key={i} slide={s} ds={pres.designSystem} index={i}
+                active={i === idx} onClick={() => setIdx(i)} />
             ))}
-            <div style={{ marginTop: 12, borderTop: '1px solid #222', paddingTop: 8 }}>
-              <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>הוסף שקף:</div>
-              {LAYOUTS.map(l => (
-                <button key={l} onClick={() => addSlide(l)} style={{
-                  display: 'block', width: '100%', textAlign: 'right',
-                  padding: '4px 8px', marginBottom: 2, background: '#1a1a1a',
-                  color: '#aaa', border: 0, borderRadius: 3, cursor: 'pointer', fontSize: 11,
-                }}>+ {l}</button>
-              ))}
-            </div>
+            <button onClick={() => addSlide('hero-cover')}
+              style={{ width: '100%', padding: '10px 6px', marginTop: 8, background: '#1f1f22',
+                color: '#888', border: '1px dashed #333', borderRadius: 6, cursor: 'pointer',
+                fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              <Plus size={14} /> שקף
+            </button>
           </aside>
 
-          {/* Center: preview */}
-          <main style={{ flex: 1, padding: 16, overflow: 'auto' }}>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <button onClick={() => moveSlide(idx, idx - 1)} disabled={idx === 0} style={btn('#222')}>← הזז קודם</button>
-              <button onClick={() => moveSlide(idx, idx + 1)} disabled={idx === pres.slides.length - 1} style={btn('#222')}>הזז אחרי →</button>
-              <button onClick={deleteSlide} disabled={pres.slides.length <= 1} style={btn('#5a1a1a')}>מחק שקף</button>
-              <button onClick={() => {
+          {/* ─── Left: Elements panel ─────────────────── */}
+          <aside style={{ width: 240, borderInlineEnd: '1px solid #1f1f22', overflow: 'auto', background: '#18181b' }}>
+            <ElementsPanel
+              onAddText={() => addFreeMedia('text', 'טקסט חדש — לחץ פעמיים לעריכה')}
+              onAddImage={() => setMediaPicker('image')}
+              onAddVideo={() => setMediaPicker('video')}
+              onAddShape={addShape}
+              layouts={LAYOUTS}
+              onChangeLayout={(layout) => {
+                if (!pres || !slide) return
+                const next = { ...pres, slides: [...pres.slides] }
+                next.slides[idx] = { ...slide, layout, elementStyles: {}, freeElements: [], hiddenRoles: [] } as StructuredSlide
+                setPres(next)
+              }}
+              currentLayout={slide.layout}
+            />
+          </aside>
+
+          {/* ─── Center: canvas ──────────────────────── */}
+          <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#0f0f10' }}>
+            {/* Slide ops bar */}
+            <div style={{ display: 'flex', gap: 4, padding: '8px 16px', borderBottom: '1px solid #1f1f22', alignItems: 'center' }}>
+              <IconBtn onClick={() => moveSlide(idx, idx - 1)} disabled={idx === 0} title="הזז קודם"><ArrowRight size={16} /></IconBtn>
+              <IconBtn onClick={() => moveSlide(idx, idx + 1)} disabled={idx === pres.slides.length - 1} title="הזז אחרי"><ArrowLeft size={16} /></IconBtn>
+              <IconBtn onClick={deleteSlide} disabled={pres.slides.length <= 1} title="מחק שקף" danger><Trash2 size={16} /></IconBtn>
+              <span style={{ fontSize: 12, color: '#888', marginInlineStart: 12 }}>
+                שקף {idx + 1} / {pres.slides.length} · <span style={{ color: '#aaa' }}>{slide.layout}</span>
+              </span>
+              <div style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <IconBtn onClick={() => setZoom(z => Math.max(0.25, z - 0.1))} title="הקטן"><Minus size={14} /></IconBtn>
+                <span style={{ fontSize: 11, color: '#888', width: 40, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+                <IconBtn onClick={() => setZoom(z => Math.min(2, z + 0.1))} title="הגדל"><Plus size={14} /></IconBtn>
+                <button onClick={() => setZoom(0.6667)} style={{ fontSize: 11, color: '#888', background: 'transparent', border: '1px solid #333', borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>Fit</button>
+              </div>
+            </div>
+
+            {/* Floating text format toolbar */}
+            {selectedFreeEl?.kind === 'text' && (
+              <div style={{ padding: '8px 16px', borderBottom: '1px solid #1f1f22' }}>
+                <TextFormatToolbar element={selectedFreeEl} ds={pres.designSystem}
+                  onChange={(fmt) => updateFreeElement(selectedFreeEl.id, { format: { ...selectedFreeEl.format, ...fmt } })} />
+              </div>
+            )}
+
+            {/* Canvas */}
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+              <div style={{
+                width: 1920 * zoom, height: 1080 * zoom, position: 'relative',
+                background: '#000', borderRadius: 8, overflow: 'hidden', boxShadow: '0 12px 48px rgba(0,0,0,0.6)',
+              }}>
+                <iframe srcDoc={html} style={{
+                  width: 1920, height: 1080, border: 0,
+                  transform: `scale(${zoom})`, transformOrigin: 'top left',
+                  position: 'absolute', top: 0, left: 0,
+                }} />
+              </div>
+            </div>
+          </main>
+
+          {/* ─── Right: contextual properties + layers ─ */}
+          <aside style={{ width: 340, borderInlineStart: '1px solid #1f1f22', overflow: 'auto', background: '#18181b', display: 'flex', flexDirection: 'column' }}>
+            <PropertiesPanel
+              slide={slide}
+              pres={pres}
+              selectedRole={selectedRole}
+              selectedFreeEl={selectedFreeEl}
+              onUpdateFreeElement={updateFreeElement}
+              onUpdateSlot={updateSlot}
+              onAiRewrite={aiRewrite}
+              aiBusy={aiBusy}
+              onSetBg={setSlideBg}
+              onResetOverrides={() => {
                 if (!pres) return
                 const next = { ...pres, slides: [...pres.slides] }
                 next.slides[idx] = { ...next.slides[idx], elementStyles: {} }
                 setPres(next)
-              }} style={btn('#333')}>אפס מיקומים</button>
-              <button onClick={() => setMediaPicker('image')} style={btn('#1f3a4d')}>+ תמונה</button>
-              <button onClick={() => setMediaPicker('video')} style={btn('#1f3a4d')}>+ וידאו</button>
-              <button onClick={() => addFreeMedia('text', 'טקסט חדש — לחץ פעמיים לעריכה')} style={btn('#1f3a4d')}>+ טקסט</button>
-              <button onClick={() => addShape('rect')} style={btn('#333')} title="מלבן">▭</button>
-              <button onClick={() => addShape('circle')} style={btn('#333')} title="עיגול">◯</button>
-              <button onClick={() => addShape('line')} style={btn('#333')} title="קו">▬</button>
-              <BgPickerButton slide={slide} ds={pres.designSystem} onChange={setSlideBg} />
-              <button onClick={regenerateSlide} disabled={regenBusy} style={btn('#6a1b9a')}>
-                {regenBusy ? '✨ מעצב…' : '✨ עצב מחדש (AI)'}
-              </button>
-              <button onClick={() => setPresenting(true)} style={btn('#222')}>▶ הצג</button>
-              <button onClick={exportPdf} style={btn('#1a3a1a')}>הורד PDF</button>
-            </div>
-            {selectedRole?.startsWith('free-') && (() => {
-              const el = slide.freeElements?.find(f => f.id === selectedRole)
-              if (!el || el.kind !== 'text') return null
-              return <TextFormatToolbar element={el} ds={pres.designSystem} onChange={(fmt) => {
-                const next = { ...pres, slides: [...pres.slides] }
-                const freeElements = (slide.freeElements || []).map(f => f.id === el.id ? { ...f, format: { ...f.format, ...fmt } } : f)
-                next.slides[idx] = { ...slide, freeElements }
-                setPres(next)
-              }} />
-            })()}
-            <div style={{
-              width: 1280, height: 720, position: 'relative',
-              background: '#000', border: '1px solid #222', borderRadius: 8, overflow: 'hidden',
-            }}>
-              <iframe srcDoc={html} style={{
-                width: 1920, height: 1080, border: 0,
-                transform: 'scale(0.6667)', transformOrigin: 'top left',
-                position: 'absolute', top: 0, left: 0,
-              }} />
-            </div>
-          </main>
-
-          {/* Right: slot editor */}
-          <aside style={{ width: 380, borderInlineStart: '1px solid #222', overflow: 'auto', padding: 16 }}>
-            <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 8 }}>
-              שקף {idx + 1} — <strong>{slide.layout}</strong>
-            </div>
-
-            <LayersPanel
-              html={html}
-              slide={slide}
-              onSelect={(role) => selectLayerInIframe(role)}
-              onToggleHide={(role) => {
-                if (!pres) return
-                const hidden = new Set(slide.hiddenRoles || [])
-                if (hidden.has(role)) hidden.delete(role); else hidden.add(role)
-                const next = { ...pres, slides: [...pres.slides] }
-                next.slides[idx] = { ...slide, hiddenRoles: Array.from(hidden) }
-                setPres(next)
               }}
-              onResetElement={(role) => {
-                if (!pres) return
-                const styles = { ...(slide.elementStyles || {}) }
-                delete styles[role]
+              onDeleteFreeElement={(id) => {
+                if (!pres || !slide) return
                 const next = { ...pres, slides: [...pres.slides] }
-                next.slides[idx] = { ...slide, elementStyles: styles }
+                next.slides[idx] = { ...slide, freeElements: (slide.freeElements || []).filter(f => f.id !== id) }
                 setPres(next)
+                setSelectedRole(null)
               }}
             />
 
-            <div style={{ marginTop: 20, borderTop: '1px solid #222', paddingTop: 12 }}>
-              <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 8 }}>שדות תוכן</div>
-              <SlotEditor
-                slots={slide.slots as unknown as Record<string, unknown>}
-                onChange={updateSlot}
-                onAiRewrite={aiRewrite}
-                aiBusy={aiBusy}
+            <div style={{ borderTop: '1px solid #1f1f22', padding: 12, flexShrink: 0 }}>
+              <LayersPanel
+                html={html}
+                slide={slide}
+                onSelect={(role) => selectLayerInIframe(role)}
+                onToggleHide={(role) => {
+                  if (!pres) return
+                  const hidden = new Set(slide.hiddenRoles || [])
+                  if (hidden.has(role)) hidden.delete(role); else hidden.add(role)
+                  const next = { ...pres, slides: [...pres.slides] }
+                  next.slides[idx] = { ...slide, hiddenRoles: Array.from(hidden) }
+                  setPres(next)
+                }}
+                onResetElement={(role) => {
+                  if (!pres) return
+                  const styles = { ...(slide.elementStyles || {}) }
+                  delete styles[role]
+                  const next = { ...pres, slides: [...pres.slides] }
+                  next.slides[idx] = { ...slide, elementStyles: styles }
+                  setPres(next)
+                }}
               />
             </div>
           </aside>
         </div>
       )}
 
-      {loading && !pres && <div style={{ padding: 20, opacity: 0.7 }}>טוען / מייצר…</div>}
+      {loading && !pres && (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+          <Sparkles size={20} style={{ marginInlineEnd: 10 }} /> טוען / מייצר…
+        </div>
+      )}
 
       <ShareDialog
         isOpen={shareOpen}
@@ -541,6 +601,317 @@ export default function GammaProtoPage() {
 
 function btn(bg: string): React.CSSProperties {
   return { padding: '6px 12px', background: bg, color: '#fff', border: 0, borderRadius: 4, cursor: 'pointer', fontSize: 12 }
+}
+
+function iconBtn(): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    width: 30, height: 30, background: 'transparent', color: '#bbb',
+    border: 0, borderRadius: 6, cursor: 'pointer',
+  }
+}
+
+function IconBtn({ children, onClick, disabled, title, active, danger }: {
+  children: React.ReactNode
+  onClick?: () => void
+  disabled?: boolean
+  title?: string
+  active?: boolean
+  danger?: boolean
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled} title={title}
+      style={{
+        ...iconBtn(),
+        background: active ? '#E94560' : 'transparent',
+        color: disabled ? '#444' : danger ? '#f87171' : active ? '#fff' : '#bbb',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+      onMouseEnter={(e) => { if (!disabled && !active) (e.currentTarget.style.background = '#27272a') }}
+      onMouseLeave={(e) => { if (!active) (e.currentTarget.style.background = 'transparent') }}>
+      {children}
+    </button>
+  )
+}
+
+function ToolbarGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', gap: 2, paddingInline: 6, borderInlineEnd: '1px solid #27272a' }}>
+      {children}
+    </div>
+  )
+}
+
+// ─── Elements panel (left sidebar) ──────────────────────
+
+function ElementsPanel({
+  onAddText, onAddImage, onAddVideo, onAddShape, layouts, onChangeLayout, currentLayout,
+}: {
+  onAddText: () => void
+  onAddImage: () => void
+  onAddVideo: () => void
+  onAddShape: (s: 'rect' | 'circle' | 'line') => void
+  layouts: readonly LayoutId[]
+  onChangeLayout: (l: LayoutId) => void
+  currentLayout: LayoutId
+}) {
+  const [tab, setTab] = useState<'elements' | 'layouts'>('elements')
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid #27272a' }}>
+        {(['elements', 'layouts'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{
+              flex: 1, padding: 10, background: tab === t ? '#27272a' : 'transparent',
+              color: tab === t ? '#fff' : '#888', border: 0, fontSize: 12, cursor: 'pointer',
+              borderBottom: tab === t ? '2px solid #E94560' : '2px solid transparent',
+              fontWeight: tab === t ? 600 : 400, fontFamily: 'inherit',
+            }}>
+            {t === 'elements' ? 'רכיבים' : 'פריסות'}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+        {tab === 'elements' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <ElementCard icon={<Type size={22} />} label="טקסט" onClick={onAddText} />
+            <ElementCard icon={<ImageIcon size={22} />} label="תמונה" onClick={onAddImage} />
+            <ElementCard icon={<Video size={22} />} label="וידאו" onClick={onAddVideo} />
+            <ElementCard icon={<Square size={22} />} label="מלבן" onClick={() => onAddShape('rect')} />
+            <ElementCard icon={<Circle size={22} />} label="עיגול" onClick={() => onAddShape('circle')} />
+            <ElementCard icon={<Minus size={22} />} label="קו" onClick={() => onAddShape('line')} />
+          </div>
+        )}
+
+        {tab === 'layouts' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 10, opacity: 0.5, marginBottom: 4 }}>לחץ לבחירת פריסה לשקף הנוכחי</div>
+            {layouts.map(l => (
+              <button key={l} onClick={() => onChangeLayout(l)}
+                style={{
+                  padding: '8px 10px', background: l === currentLayout ? '#E94560' : '#1f1f22',
+                  color: l === currentLayout ? '#fff' : '#bbb',
+                  border: 0, borderRadius: 5, cursor: 'pointer', fontSize: 11,
+                  textAlign: 'right', fontFamily: 'inherit', fontWeight: l === currentLayout ? 600 : 400,
+                }}>{layoutLabel(l)}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ElementCard({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        gap: 6, padding: '16px 8px', background: '#1f1f22', color: '#bbb',
+        border: '1px solid #27272a', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+        fontFamily: 'inherit', transition: 'all 0.15s',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a2f'; e.currentTarget.style.color = '#fff' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = '#1f1f22'; e.currentTarget.style.color = '#bbb' }}>
+      {icon}
+      <span>{label}</span>
+    </button>
+  )
+}
+
+function layoutLabel(l: LayoutId): string {
+  const map: Record<LayoutId, string> = {
+    'hero-cover': 'שער',
+    'full-bleed-image-text': 'תמונה מלאה + טקסט',
+    'split-image-text': 'פיצול תמונה/טקסט',
+    'centered-insight': 'תובנה מרכזית',
+    'three-pillars-grid': '3 עמודים',
+    'numbered-stats': 'נתונים ממוספרים',
+    'influencer-grid': 'גריד משפיענים',
+    'closing-cta': 'סיום + CTA',
+  }
+  return map[l] || l
+}
+
+// ─── Properties panel (contextual right sidebar) ────────
+
+function PropertiesPanel({
+  slide, pres, selectedRole, selectedFreeEl,
+  onUpdateFreeElement, onUpdateSlot, onAiRewrite, aiBusy,
+  onSetBg, onResetOverrides, onDeleteFreeElement,
+}: {
+  slide: StructuredSlide
+  pres: StructuredPresentation
+  selectedRole: string | null
+  selectedFreeEl?: FreeElement
+  onUpdateFreeElement: (id: string, patch: Partial<FreeElement>) => void
+  onUpdateSlot: (k: string, v: unknown) => void
+  onAiRewrite: (k: string, mode: 'shorter' | 'dramatic' | 'formal') => void
+  aiBusy: string | null
+  onSetBg: (bg: { color?: string; image?: string } | undefined) => void
+  onResetOverrides: () => void
+  onDeleteFreeElement: (id: string) => void
+}) {
+  const ds = pres.designSystem
+
+  // Nothing selected → slide settings
+  if (!selectedRole) {
+    return (
+      <div style={{ padding: 16, flex: 1, overflow: 'auto' }}>
+        <PanelHeader icon={<Settings size={14} />} title="הגדרות שקף" />
+
+        <Section label="רקע השקף">
+          <ColorRow label="צבע" value={slide.bg?.color || ds.colors.background}
+            palette={[ds.colors.background, ds.colors.primary, ds.colors.secondary, ds.colors.accent, '#0a0a0a', '#ffffff']}
+            onChange={(c) => onSetBg({ ...(slide.bg || {}), color: c })} />
+          {slide.bg && (
+            <button onClick={() => onSetBg(undefined)} style={ghostBtn()}>
+              <RotateCcw size={12} /> אפס רקע
+            </button>
+          )}
+        </Section>
+
+        <Section label="מיקומים">
+          <button onClick={onResetOverrides} style={ghostBtn()}>
+            <RotateCcw size={12} /> אפס כל המיקומים בשקף
+          </button>
+        </Section>
+
+        <Section label="שדות תוכן">
+          <SlotEditor
+            slots={slide.slots as unknown as Record<string, unknown>}
+            onChange={onUpdateSlot}
+            onAiRewrite={onAiRewrite}
+            aiBusy={aiBusy}
+          />
+        </Section>
+      </div>
+    )
+  }
+
+  // Free element selected
+  if (selectedFreeEl) {
+    return (
+      <div style={{ padding: 16, flex: 1, overflow: 'auto' }}>
+        <PanelHeader icon={iconForFreeKind(selectedFreeEl.kind)} title={labelForFreeKind(selectedFreeEl.kind)} />
+
+        {selectedFreeEl.kind === 'text' && (
+          <Section label="תוכן">
+            <textarea
+              value={selectedFreeEl.text || ''}
+              onChange={(e) => onUpdateFreeElement(selectedFreeEl.id, { text: e.target.value })}
+              rows={4}
+              style={inputStyle()} />
+          </Section>
+        )}
+
+        {(selectedFreeEl.kind === 'image' || selectedFreeEl.kind === 'video') && (
+          <Section label="מקור">
+            <input value={selectedFreeEl.src || ''}
+              onChange={(e) => onUpdateFreeElement(selectedFreeEl.id, { src: e.target.value })}
+              style={inputStyle()} />
+            {selectedFreeEl.src && selectedFreeEl.kind === 'image' && (
+              <img src={selectedFreeEl.src} alt="" style={{ marginTop: 8, maxWidth: '100%', borderRadius: 4 }} />
+            )}
+          </Section>
+        )}
+
+        {selectedFreeEl.kind === 'shape' && (
+          <>
+            <Section label="מילוי">
+              <ColorRow label="צבע" value={selectedFreeEl.fill || ds.colors.primary}
+                palette={[ds.colors.primary + '40', ds.colors.primary, ds.colors.accent + '40', ds.colors.accent, '#ffffff40', '#00000040']}
+                onChange={(c) => onUpdateFreeElement(selectedFreeEl.id, { fill: c })} />
+            </Section>
+            <Section label="מסגרת">
+              <ColorRow label="צבע" value={selectedFreeEl.stroke || ''}
+                palette={[ds.colors.primary, ds.colors.accent, ds.colors.secondary, '#ffffff', 'transparent']}
+                onChange={(c) => onUpdateFreeElement(selectedFreeEl.id, { stroke: c })} />
+            </Section>
+          </>
+        )}
+
+        <div style={{ marginTop: 20, paddingTop: 12, borderTop: '1px solid #27272a' }}>
+          <button onClick={() => onDeleteFreeElement(selectedFreeEl.id)}
+            style={{ ...ghostBtn(), color: '#f87171' }}>
+            <Trash2 size={12} /> מחק אלמנט
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Slot/decor role selected — just show layer info + reset
+  return (
+    <div style={{ padding: 16, flex: 1, overflow: 'auto' }}>
+      <PanelHeader icon={<Eye size={14} />} title={`נבחר: ${selectedRole}`} />
+      <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
+        גרור בתצוגה להזיז. לחץ פעמיים לערוך טקסט.
+      </div>
+      <div style={{ fontSize: 12, opacity: 0.6 }}>
+        משנה שדות תוכן? בטל את הבחירה וגלול לתחתית.
+      </div>
+    </div>
+  )
+}
+
+function PanelHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid #27272a' }}>
+      <span style={{ color: '#888' }}>{icon}</span>
+      <span style={{ fontSize: 13, fontWeight: 600 }}>{title}</span>
+    </div>
+  )
+}
+
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, color: '#888', marginBottom: 6, fontWeight: 500 }}>{label}</div>
+      {children}
+    </div>
+  )
+}
+
+function ColorRow({ value, palette, onChange }: { label: string; value: string; palette: string[]; onChange: (c: string) => void }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+      {palette.map(c => (
+        <button key={c} onClick={() => onChange(c)} title={c}
+          style={{
+            width: 26, height: 26, background: c, borderRadius: 4, cursor: 'pointer',
+            border: value === c ? '2px solid #fff' : '1px solid #333',
+          }} />
+      ))}
+      <input type="color" value={value.startsWith('#') && value.length === 7 ? value : '#ffffff'}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ width: 32, height: 26, background: 'transparent', border: '1px solid #333', borderRadius: 4, cursor: 'pointer' }} />
+    </div>
+  )
+}
+
+function ghostBtn(): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    padding: '6px 10px', background: '#1f1f22', color: '#bbb',
+    border: '1px solid #2a2a2f', borderRadius: 5, cursor: 'pointer',
+    fontSize: 11, fontFamily: 'inherit',
+  }
+}
+
+function iconForFreeKind(k: FreeElement['kind']): React.ReactNode {
+  if (k === 'text') return <Type size={14} />
+  if (k === 'image') return <ImageIcon size={14} />
+  if (k === 'video') return <Video size={14} />
+  return <Square size={14} />
+}
+
+function labelForFreeKind(k: FreeElement['kind']): string {
+  if (k === 'text') return 'טקסט'
+  if (k === 'image') return 'תמונה'
+  if (k === 'video') return 'וידאו'
+  return 'צורה'
 }
 
 // ─── Slot editor ──────────────────────────────────────────
