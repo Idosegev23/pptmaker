@@ -42,7 +42,8 @@ async function imaiRequest<T>(
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({ error: 'unknown' }))
-    throw new Error(`IMAI ${res.status}: ${errBody.error || errBody.error_message || 'Unknown error'}`)
+    const errMsg = errBody.error || errBody.error_message || errBody.detail || errBody.message || JSON.stringify(errBody).slice(0, 200)
+    throw new Error(`IMAI ${res.status} (${endpoint}): ${errMsg}`)
   }
 
   return res.json() as Promise<T>
@@ -139,8 +140,14 @@ export async function searchInfluencers(
   if (filters.language?.length) filter.language = filters.language.map(code => ({ code }))
   if (filters.gender) filter.gender = filters.gender
   if (filters.relevance?.length) {
-    // IMAI relevance expects single-word tags. Split multi-word phrases.
-    filter.relevance = filters.relevance.flatMap(r => r.split(/\s+/)).filter(Boolean)
+    // IMAI v1 relevance expects array of objects with tag property.
+    // Single words only — multi-word phrases return 400.
+    const tags = filters.relevance.flatMap(r => r.split(/\s+/)).filter(Boolean).map(t => t.toLowerCase())
+    if (tags.length) filter.relevance = tags.map(tag => ({ tag }))
+  }
+  if (filters.keywords?.length) {
+    // Keywords are plain strings (search in bio/posts)
+    filter.keywords = filters.keywords.filter(Boolean)
   }
   if (filters.has_contact_details) filter.with_contact = [{ type: 'email' }]
 
@@ -193,6 +200,7 @@ export async function getAudienceReport(
 /**
  * Get basic user info from Instagram Raw API.
  * Cost: 0.02 tokens. Rate limit: 1 req/sec.
+ * IMAI endpoint expects `url` param with the username (not `username`).
  */
 export async function getInstagramUserInfo(username: string): Promise<{
   user_id: string
@@ -203,7 +211,23 @@ export async function getInstagramUserInfo(username: string): Promise<{
   is_verified: boolean
   biography: string
 }> {
-  return imaiRequest('GET', '/raw/ig/user/info/', undefined, { username })
+  const clean = username.replace('@', '').trim()
+  // Try multiple param names — IMAI API has inconsistent docs
+  try {
+    return await imaiRequest('GET', '/raw/ig/user/info/', undefined, { url: clean })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    // If 400 with 'url', try 'username' fallback
+    if (msg.includes('400')) {
+      try {
+        return await imaiRequest('GET', '/raw/ig/user/info/', undefined, { username: clean })
+      } catch {
+        // Try POST variant as last resort
+        return imaiRequest('POST', '/raw/ig/user/info/', { url: clean })
+      }
+    }
+    throw err
+  }
 }
 
 /**
