@@ -1,1425 +1,1542 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { toast } from 'sonner'
-import type { Presentation, Slide, SlideElement, TextElement, ShapeElement, ImageElement, VideoElement, MockupElement, CompareElement, LogoStripElement, MapElement, ShapeType, VideoProvider } from '@/types/presentation'
-import { isTextElement, detectVideoProvider, extractYouTubeId } from '@/types/presentation'
-import type { AdvancedElementType } from '@/components/presentation/EditorToolbar'
-import { usePresentationEditor } from '@/hooks/usePresentationEditor'
-import { buildSlideContext, getSlidePurpose } from '@/lib/editor/slide-context-builder'
-import FlowStepper from '@/components/flow-stepper'
-import SlideEditor from '@/components/presentation/SlideEditor'
-import SlideViewer from '@/components/presentation/SlideViewer'
-import PropertiesPanel from '@/components/presentation/PropertiesPanel'
-import ImageSourceModal from '@/components/presentation/ImageSourceModal'
-import EditorToolbar from '@/components/presentation/EditorToolbar'
-import AlignmentToolbar from '@/components/presentation/AlignmentToolbar'
-import LayerPanel from '@/components/presentation/LayerPanel'
-import TextFormatBar from '@/components/presentation/TextFormatBar'
-import GoogleDriveSaveButton from '@/components/google-drive-save-button'
-import HtmlSlideViewer from '@/components/presentation/HtmlSlideViewer'
-import HtmlSlideEditor from '@/components/presentation/HtmlSlideEditor'
-import FeedbackDialog from '@/components/feedback-dialog'
-import PresentationMode from '@/components/presentation/PresentationMode'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useParams } from 'next/navigation'
+import { renderStructuredSlide } from '@/lib/gemini/layout-prototypes/renderer'
 import ShareDialog from '@/components/share/ShareDialog'
-import HtmlSlideshow from '@/components/presentation/HtmlSlideshow'
-import VideoSourceModal from '@/components/presentation/VideoSourceModal'
+import {
+  Undo2, Redo2, Grid3x3, Magnet, Copy, Sparkles, Play, Download, Share2, MessageSquare,
+  Image as ImageIcon, Video, Type, Square, Circle, Minus, Palette, RefreshCw, Eye, EyeOff,
+  ArrowLeft, ArrowRight, Trash2, RotateCcw, Plus, ChevronLeft, Layers, Settings,
+} from 'lucide-react'
+import type { StructuredPresentation, StructuredSlide, LayoutId, FreeElement } from '@/lib/gemini/layout-prototypes/types'
 
-// ─── Empty presentation (placeholder while loading) ────────
-const EMPTY_PRESENTATION: Presentation = {
-  id: '',
-  title: '',
-  designSystem: {
-    colors: { primary: '#E94560', secondary: '#0F3460', accent: '#16213E', background: '#1a1a2e', text: '#FFFFFF', cardBg: '#16213E', cardBorder: '#0F3460' },
-    fonts: { heading: 'Heebo', body: 'Heebo' },
-    direction: 'rtl',
-  },
-  slides: [],
+const LAYOUTS: LayoutId[] = [
+  'hero-cover', 'full-bleed-image-text', 'split-image-text', 'centered-insight',
+  'three-pillars-grid', 'numbered-stats', 'influencer-grid', 'closing-cta',
+]
+
+// Inline-edit roles → slot key mapping (renderer's data-role → slots key)
+const ROLE_TO_SLOT_KEY: Record<string, string> = {
+  eyebrow: 'eyebrowLabel',
+  title: 'title',
+  subtitle: 'subtitle',
+  tagline: 'tagline',
+  body: 'body',
+  bodyText: 'bodyText',
+  brandName: 'brandName',
+  'data-point': 'dataPoint',
+  'data-label': 'dataLabel',
+  source: 'source',
 }
 
-type PageState = 'loading' | 'generating' | 'ready' | 'error'
+export default function GammaProtoPage() {
+  const params = useParams<{ id: string }>()
+  const [pres, setPres] = useState<StructuredPresentation | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [idx, setIdx] = useState(0)
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [aiBusy, setAiBusy] = useState<string | null>(null)
+  const [mediaPicker, setMediaPicker] = useState<'image' | 'video' | null>(null)
+  const [snap, setSnap] = useState(false)
+  const [grid, setGrid] = useState(false)
+  const [regenBusy, setRegenBusy] = useState(false)
+  const [presenting, setPresenting] = useState(false)
+  const [selectedRole, setSelectedRole] = useState<string | null>(null)
+  const clipboardRef = useRef<FreeElement | null>(null)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
-function generateId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
+  // Undo/redo: debounced snapshots of the *previous* state
+  const historyRef = useRef<StructuredPresentation[]>([])
+  const futureRef = useRef<StructuredPresentation[]>([])
+  const lastSnapshot = useRef<StructuredPresentation | null>(null)
+  const snapshotTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [histVersion, setHistVersion] = useState(0) // force re-render for button enable state
 
-export default function PresentationEditorPage() {
-  const params = useParams()
-  const router = useRouter()
-  const documentId = params.id as string
-
-  const [pageState, setPageState] = useState<PageState>('loading')
-  const [error, setError] = useState<string | null>(null)
-  const [brandName, setBrandName] = useState('')
-  const [htmlSlides, setHtmlSlides] = useState<string[] | null>(null)
-  const [activeHtmlSlide, setActiveHtmlSlide] = useState(0)
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
-  const [showProperties, setShowProperties] = useState(true)
-  const [showFeedback, setShowFeedback] = useState(false)
-  const [showShareDialog, setShowShareDialog] = useState(false)
-  const [showPresentation, setShowPresentation] = useState(false)
-  const [imageModalElementId, setImageModalElementId] = useState<string | null>(null)
-  const [imageModalTab, setImageModalTab] = useState<'upload' | 'url' | 'ai'>('upload')
-  const [imageModalMode, setImageModalMode] = useState<'replace' | 'add' | 'mockup-content'>('replace')
-  const [aiRewriteState, setAiRewriteState] = useState<{ elementId: string; loading: boolean } | null>(null)
-  const [aiDesignInstruction, setAiDesignInstruction] = useState('')
-  const [isRegenerating, setIsRegenerating] = useState(false)
-  const [gridVisible, setGridVisible] = useState(false)
-  const [snapToGrid, setSnapToGrid] = useState(false)
-  const [isPresentationMode, setIsPresentationMode] = useState(false)
-  const [showVideoModal, setShowVideoModal] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
-  const [clipboardElement, setClipboardElement] = useState<SlideElement | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
-  const dragSrcIndex = useRef<number | null>(null)
-  const [layerPanelOpen, setLayerPanelOpen] = useState(false)
-  const [formatBrush, setFormatBrush] = useState<Partial<TextElement> | null>(null)
-
-  const editor = usePresentationEditor(EMPTY_PRESENTATION)
-  const slideContainerRef = useRef<HTMLDivElement>(null)
-  const thumbnailsRef = useRef<HTMLDivElement>(null)
-  const [slideScale, setSlideScale] = useState(0.5)
-  const [documentData, setDocumentData] = useState<Record<string, unknown> | null>(null)
-
-  // Memoized slide context — feeds all AI operations
-  const slideContext = useMemo(() => {
-    if (!editor.selectedSlide) return undefined
-    return buildSlideContext(
-      editor.presentation,
-      editor.selectedSlideIndex,
-      documentData || undefined,
-    )
-  }, [editor.presentation, editor.selectedSlideIndex, editor.selectedSlide, documentData])
-
-  // ─── Keyboard navigation for HTML-native mode ────────
   useEffect(() => {
-    if (!htmlSlides) return
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'ArrowRight') setActiveHtmlSlide(prev => Math.max(0, prev - 1))
-      if (e.key === 'ArrowLeft') setActiveHtmlSlide(prev => Math.min(htmlSlides.length - 1, prev + 1))
+    if (!pres) return
+    if (!lastSnapshot.current) { lastSnapshot.current = pres; return }
+    if (lastSnapshot.current === pres) return
+    const prev = lastSnapshot.current
+    if (snapshotTimer.current) clearTimeout(snapshotTimer.current)
+    snapshotTimer.current = setTimeout(() => {
+      historyRef.current = [...historyRef.current.slice(-49), prev]
+      futureRef.current = []
+      lastSnapshot.current = pres
+      setHistVersion(v => v + 1)
+    }, 400)
+  }, [pres])
+
+  function undo() {
+    if (historyRef.current.length === 0 || !pres) return
+    const prev = historyRef.current[historyRef.current.length - 1]
+    historyRef.current = historyRef.current.slice(0, -1)
+    futureRef.current = [pres, ...futureRef.current].slice(0, 50)
+    if (snapshotTimer.current) clearTimeout(snapshotTimer.current)
+    lastSnapshot.current = prev
+    setPres(prev)
+    setHistVersion(v => v + 1)
+  }
+  function redo() {
+    if (futureRef.current.length === 0 || !pres) return
+    const next = futureRef.current[0]
+    futureRef.current = futureRef.current.slice(1)
+    historyRef.current = [...historyRef.current, pres].slice(-50)
+    if (snapshotTimer.current) clearTimeout(snapshotTimer.current)
+    lastSnapshot.current = next
+    setPres(next)
+    setHistVersion(v => v + 1)
+  }
+
+  // Global shortcuts: Cmd/Ctrl+Z, Shift+Cmd+Z, Cmd+D (duplicate slide)
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const meta = e.metaKey || e.ctrlKey
+      const target = e.target as HTMLElement
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      if (!meta && !isTyping) return
+      if (meta && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) redo(); else undo()
+        return
+      }
+      if (meta && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return }
+      if (meta && e.key.toLowerCase() === 'd' && !isTyping) {
+        e.preventDefault()
+        duplicateSlide()
+      }
+      if (meta && e.key.toLowerCase() === 'c' && selectedRole?.startsWith('free-') && !isTyping) {
+        const cur = pres?.slides[idx]
+        const el = cur?.freeElements?.find(f => f.id === selectedRole)
+        if (el) clipboardRef.current = el
+      }
+      if (meta && e.key.toLowerCase() === 'v' && clipboardRef.current && !isTyping) {
+        e.preventDefault()
+        const src = clipboardRef.current
+        appendFreeElement({ ...src, id: `free-${src.kind}-${Date.now()}` })
+      }
     }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [htmlSlides])
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
-  // ─── Load document ───────────────────────────────────
-  useEffect(() => {
-    loadDocument()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId])
+  function duplicateSlide() {
+    if (!pres) return
+    const copy = JSON.parse(JSON.stringify(pres.slides[idx])) as StructuredSlide
+    const slides = [...pres.slides]
+    slides.splice(idx + 1, 0, copy)
+    setPres({ ...pres, slides })
+    setIdx(idx + 1)
+  }
 
-  const loadDocument = async () => {
+  // Generate (first time)
+  const generate = useCallback(async () => {
+    setLoading(true); setErr(null)
     try {
-      setPageState('loading')
-
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000)
-      const res = await fetch(`/api/documents/${documentId}`, { signal: controller.signal })
-      clearTimeout(timeoutId)
-      if (res.status === 404) throw new Error('המצגת לא נמצאה — אולי נמחקה')
-      if (!res.ok) throw new Error('שגיאה בטעינת המסמך')
-
-      const data = await res.json()
-      const doc = data.document
-      const docData = doc.data as Record<string, unknown>
-      setBrandName((docData.brandName as string) || doc.title || 'הצעת מחיר')
-      setDocumentData(docData)
-
-      // Check for Structured (Gamma) presentation first — redirect to new editor
-      const structured = docData._structuredPresentation as { slides?: unknown[] } | undefined
-      if (structured?.slides?.length) {
-        console.log(`[Editor] Structured presentation found — redirecting to gamma editor`)
-        router.replace(`/gamma-proto/${documentId}`)
-        return
-      }
-
-      // Check for HTML-Native presentation first (v6)
-      const htmlPres = docData._htmlPresentation as { htmlSlides?: string[]; slideTypes?: string[]; designSystem?: unknown } | undefined
-      if (htmlPres?.htmlSlides?.length) {
-        console.log(`[Editor] Loaded HTML-Native presentation with ${htmlPres.htmlSlides.length} slides`)
-        setHtmlSlides(htmlPres.htmlSlides)
-        setPageState('ready')
-        return
-      }
-
-      const existing = docData._presentation as Presentation | undefined
-      if (existing && existing.slides?.length > 0) {
-        console.log(`[Editor] Loaded AST presentation with ${existing.slides.length} slides`)
-        editor.setPresentation(existing)
-        setPageState('ready')
-        return
-      }
-
-      console.log('[Editor] No AST found, generating presentation...')
-      setPageState('generating')
-
-      const genRes = await fetch('/api/preview-slides', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId, generateAST: true }),
+      const res = await fetch('/api/gamma-prototype', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId: params.id }),
       })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Request failed')
+      setPres(json.presentation)
+      setIdx(0)
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Unknown error') }
+    finally { setLoading(false) }
+  }, [params.id])
 
-      if (!genRes.ok) throw new Error('Could not generate slides')
+  // Load existing structured presentation, or generate fresh
+  useEffect(() => {
+    (async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/documents/${params.id}`)
+        const json = await res.json()
+        const stored = json?.document?.data?._structuredPresentation as StructuredPresentation | undefined
+        if (stored && stored.slides?.length) {
+          setPres(stored); setIdx(0); setLoading(false); return
+        }
+      } catch {}
+      // No stored — generate
+      generate()
+    })()
+  }, [params.id, generate])
 
-      const genData = await genRes.json()
-
-      if (genData.presentation) {
-        editor.setPresentation(genData.presentation)
-        await fetch(`/api/documents/${documentId}`, {
+  // Auto-save (debounced 1.5s)
+  useEffect(() => {
+    if (!pres) return
+    setSaving('saving')
+    const t = setTimeout(async () => {
+      try {
+        await fetch(`/api/documents/${params.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ _presentation: genData.presentation }),
+          body: JSON.stringify({ _structuredPresentation: pres }),
         })
-        setPageState('ready')
+        setSaving('saved')
+      } catch { setSaving('idle') }
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [pres, params.id])
+
+  const slide = pres?.slides[idx]
+  const html = useMemo(
+    () => (slide && pres ? renderStructuredSlide(slide, pres.designSystem, { editor: true, grid, snap }) : ''),
+    [slide, pres, grid, snap],
+  )
+
+  // Receive edits from in-iframe editor
+  useEffect(() => {
+    function onMsg(ev: MessageEvent) {
+      if (!pres || !ev.data?.type) return
+      const cur = pres.slides[idx]
+
+      if (ev.data.type === 'gamma-edit') {
+        const { role, styleString } = ev.data as { role: string; styleString: string }
+        const next = { ...pres, slides: [...pres.slides] }
+        next.slides[idx] = { ...cur, elementStyles: { ...(cur.elementStyles || {}), [role]: styleString } }
+        setPres(next)
         return
       }
 
-      setError('המצגת עדיין בפורמט ישן. יש ליצור אותה מחדש מתוך ה-Wizard.')
-      setPageState('error')
-    } catch (err) {
-      console.error('[Editor] Load error:', err)
-      setError(err instanceof Error ? err.message : 'שגיאה בטעינת המצגת')
-      setPageState('error')
+      if (ev.data.type === 'gamma-text') {
+        const { role, text } = ev.data as { role: string; text: string }
+        const next = { ...pres, slides: [...pres.slides] }
+        if (role.startsWith('free-')) {
+          const free = (cur.freeElements || []).map(f => f.id === role ? { ...f, text } : f)
+          next.slides[idx] = { ...cur, freeElements: free }
+        } else {
+          const slotKey = ROLE_TO_SLOT_KEY[role] || role
+          next.slides[idx] = { ...cur, slots: { ...cur.slots, [slotKey]: text } as never }
+        }
+        setPres(next)
+        return
+      }
+
+      if (ev.data.type === 'gamma-delete-free') {
+        const { role } = ev.data as { role: string }
+        const next = { ...pres, slides: [...pres.slides] }
+        next.slides[idx] = { ...cur, freeElements: (cur.freeElements || []).filter(f => f.id !== role) }
+        setPres(next)
+        return
+      }
+
+      if (ev.data.type === 'gamma-selected') {
+        setSelectedRole(ev.data.role || null)
+        return
+      }
     }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [pres, idx])
+
+  // Upload media to Supabase Storage and add as free element
+  async function uploadFile(file: File, kind: 'image' | 'video') {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('kind', kind)
+    const res = await fetch('/api/gamma-prototype/upload', { method: 'POST', body: fd })
+    const json = await res.json()
+    if (!json.url) { alert('Upload failed: ' + (json.error || 'unknown')); return }
+    addFreeMedia(kind, json.url)
   }
 
-  // ─── Mobile detection ───────────────────────────────
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 1024)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
+  // Slot mutations
+  function updateSlot(key: string, value: unknown) {
+    if (!pres) return
+    const next = { ...pres, slides: [...pres.slides] }
+    next.slides[idx] = { ...next.slides[idx], slots: { ...next.slides[idx].slots, [key]: value } as never }
+    setPres(next)
+  }
 
-  // ─── F5 for presentation mode ──────────────────────
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'F5') {
-        e.preventDefault()
-        setIsPresentationMode(true)
-      }
+  function moveSlide(from: number, to: number) {
+    if (!pres) return
+    if (to < 0 || to >= pres.slides.length) return
+    const slides = [...pres.slides]
+    const [m] = slides.splice(from, 1)
+    slides.splice(to, 0, m)
+    setPres({ ...pres, slides })
+    setIdx(to)
+  }
+
+  function deleteSlide() {
+    if (!pres || pres.slides.length <= 1) return
+    if (!confirm('למחוק את השקף?')) return
+    const slides = pres.slides.filter((_, i) => i !== idx)
+    setPres({ ...pres, slides })
+    setIdx(Math.min(idx, slides.length - 1))
+  }
+
+  function addSlide(layout: LayoutId) {
+    if (!pres) return
+    const fresh: StructuredSlide = {
+      slideType: layout,
+      layout,
+      slots: defaultSlotsFor(layout) as never,
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
+    const slides = [...pres.slides]
+    slides.splice(idx + 1, 0, fresh)
+    setPres({ ...pres, slides })
+    setIdx(idx + 1)
+  }
 
-  // ─── Auto-save on changes ────────────────────────────
-  useEffect(() => {
-    if (editor.isDirty && pageState === 'ready') {
-      editor.save(documentId)
-    }
-  }, [editor, editor.isDirty, documentId, pageState])
+  function addFreeMedia(kind: FreeElement['kind'], value: string) {
+    if (!pres) return
+    const id = `free-${kind}-${Date.now()}`
+    const el: FreeElement = kind === 'text'
+      ? { id, kind, text: value }
+      : { id, kind, src: value }
+    appendFreeElement(el)
+  }
 
-  // ─── Calculate slide scale ───────────────────────────
-  useEffect(() => {
-    const container = slideContainerRef.current
-    if (!container || pageState !== 'ready') return
+  function appendFreeElement(el: FreeElement) {
+    if (!pres) return
+    const next = { ...pres, slides: [...pres.slides] }
+    const cur = next.slides[idx]
+    next.slides[idx] = { ...cur, freeElements: [...(cur.freeElements || []), el] }
+    setPres(next)
+  }
 
-    const updateScale = () => {
-      const rect = container.getBoundingClientRect()
-      const availW = rect.width - 40
-      const availH = rect.height - 40
-      if (availW <= 0 || availH <= 0) return
-      const scaleX = availW / 1920
-      const scaleY = availH / 1080
-      setSlideScale(Math.min(scaleX, scaleY, 1))
-    }
-
-    updateScale()
-    const observer = new ResizeObserver(updateScale)
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [pageState, showProperties])
-
-  // ─── Scroll thumbnail into view ──────────────────────
-  useEffect(() => {
-    if (thumbnailsRef.current) {
-      const thumb = thumbnailsRef.current.children[editor.selectedSlideIndex] as HTMLElement
-      if (thumb) thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }
-  }, [editor.selectedSlideIndex])
-
-  // ─── Keyboard shortcuts ─────────────────────────────
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName
-      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable
-
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-        e.preventDefault()
-        if (e.shiftKey) { editor.redo() } else { editor.undo() }
-      }
-      // Ctrl+C — copy element
-      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && !isTyping && editor.selectedElement) {
-        e.preventDefault()
-        setClipboardElement(structuredClone(editor.selectedElement))
-      }
-      // Ctrl+V — paste element
-      if ((e.metaKey || e.ctrlKey) && e.key === 'v' && !isTyping && clipboardElement) {
-        e.preventDefault()
-        const pasted = structuredClone(clipboardElement)
-        pasted.id = `el-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        pasted.x += 30
-        pasted.y += 30
-        editor.addElement(pasted)
-      }
-      // Ctrl+D — duplicate element
-      if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !isTyping && editor.selectedElementId) {
-        e.preventDefault()
-        editor.duplicateElement(editor.selectedElementId)
-      }
-      // Ctrl+= / Ctrl+- — zoom
-      if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+') && !isTyping) {
-        e.preventDefault()
-        setSlideScale(prev => Math.min(prev + 0.1, 1.5))
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === '-' && !isTyping) {
-        e.preventDefault()
-        setSlideScale(prev => Math.max(prev - 0.1, 0.2))
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === '0' && !isTyping) {
-        e.preventDefault()
-        // Reset zoom to auto-fit
-        const container = slideContainerRef.current
-        if (container) {
-          const rect = container.getBoundingClientRect()
-          const scaleX = (rect.width - 40) / 1920
-          const scaleY = (rect.height - 40) / 1080
-          setSlideScale(Math.min(scaleX, scaleY, 1))
-        }
-      }
-      // G — toggle grid
-      if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping) {
-        e.preventDefault()
-        setGridVisible(prev => !prev)
-      }
-      // Delete / Backspace — delete selected element(s)
-      if ((e.key === 'Delete' || e.key === 'Backspace') && !isTyping) {
-        if (editor.selectedElementIds.length > 1) {
-          e.preventDefault()
-          editor.deleteElements(editor.selectedElementIds)
-        } else if (editor.selectedElementId) {
-          e.preventDefault()
-          editor.deleteElement(editor.selectedElementId)
-        }
-      }
-      // Ctrl+A — select all elements
-      if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !isTyping) {
-        e.preventDefault()
-        editor.selectAllElements()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editor, clipboardElement])
-
-  // ─── Download PDF ────────────────────────────────────
-  const downloadPdf = useCallback(async () => {
-    await editor.saveNow(documentId)
-    setIsGeneratingPdf(true)
-
-    try {
-      // Server returns { pdfUrl } from Supabase Storage (avoids Vercel 4.5MB response limit)
-      const response = await fetch('/api/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId, action: 'download' }),
-      })
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}))
-        throw new Error(err.error || 'PDF generation failed')
-      }
-
-      const { pdfUrl } = await response.json()
-      if (!pdfUrl) throw new Error('No PDF URL returned')
-
-      // Client fetches PDF from Supabase CDN (any size) and triggers download
-      const pdfRes = await fetch(pdfUrl)
-      if (!pdfRes.ok) throw new Error('Failed to fetch PDF from storage')
-      const blob = await pdfRes.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = window.document.createElement('a')
-      a.href = url
-      a.download = `${brandName || 'proposal'}.pdf`
-      a.click()
-      window.URL.revokeObjectURL(url)
-    } catch (err) {
-      console.error('PDF error:', err)
-      alert(`שגיאה ביצירת ה-PDF: ${err instanceof Error ? err.message : 'unknown'}`)
-    } finally {
-      setIsGeneratingPdf(false)
-    }
-  }, [documentId, brandName, editor])
-
-  // ─── Get PDF blob for Drive save (fetches from Supabase CDN) ────
-  const getProposalPdf = useCallback(async () => {
-    await editor.saveNow(documentId)
-    const response = await fetch('/api/pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ documentId, action: 'download' }),
+  function addShape(shape: 'rect' | 'circle' | 'line') {
+    if (!pres) return
+    const id = `free-shape-${Date.now()}`
+    const primary = pres.designSystem.colors.primary
+    const baseStyle = shape === 'line'
+      ? 'position:absolute; left:660px; top:520px; width:600px; height:4px; z-index:50;'
+      : 'position:absolute; left:760px; top:440px; width:400px; height:400px; z-index:50;'
+    appendFreeElement({
+      id, kind: 'shape', shape,
+      fill: shape === 'line' ? primary : primary + '40',
+      stroke: shape === 'line' ? primary : primary,
+      style: baseStyle,
     })
-    if (!response.ok) throw new Error('PDF generation failed')
-    const { pdfUrl } = await response.json()
-    if (!pdfUrl) throw new Error('No PDF URL returned')
-    const pdfRes = await fetch(pdfUrl)
-    if (!pdfRes.ok) throw new Error('Failed to fetch PDF from storage')
-    const blob = await pdfRes.blob()
-    return {
-      blob,
-      fileName: `${brandName || 'proposal'}.pdf`,
-      mimeType: 'application/pdf',
-    }
-  }, [documentId, brandName, editor])
+  }
 
-  // ─── AI Rewrite ──────────────────────────────────────
-  const handleAIRewrite = useCallback(async (elementId: string, currentText: string) => {
-    setAiRewriteState({ elementId, loading: true })
+  function setSlideBg(bg: { color?: string; image?: string } | undefined) {
+    if (!pres) return
+    const next = { ...pres, slides: [...pres.slides] }
+    next.slides[idx] = { ...next.slides[idx], bg }
+    setPres(next)
+  }
 
+  async function regenerateSlide() {
+    if (!pres || !slide) return
+    const instruction = prompt('איך לשפר את השקף? (אופציונלי — ריק = עיצוב מחדש כללי)') || undefined
+    setRegenBusy(true)
     try {
-      const element = editor.selectedSlide?.elements.find(e => e.id === elementId)
-      const role = element && isTextElement(element) ? element.role : undefined
-
-      const res = await fetch('/api/copilot/rewrite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          currentText,
-          elementRole: role,
-          slideLabel: editor.selectedSlide?.label,
-          brandName,
-          // Context-aware fields
-          slideType: slideContext?.slideType,
-          slidePurpose: slideContext ? getSlidePurpose(slideContext.slideType) : undefined,
-          slideTextSummary: slideContext?.slideTextSummary,
-          industry: slideContext?.industry,
-          targetAudience: slideContext?.targetAudience,
-          brandPersonality: slideContext?.brandPersonality,
-        }),
+      const res = await fetch('/api/gamma-prototype/regenerate-slide', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slide, instruction, presentation: pres }),
       })
+      const json = await res.json()
+      if (!json.slide) { alert('רגן נכשל: ' + (json.error || 'unknown')); return }
+      const next = { ...pres, slides: [...pres.slides] }
+      next.slides[idx] = { ...json.slide, elementStyles: {}, freeElements: [], hiddenRoles: [] }
+      setPres(next)
+    } finally { setRegenBusy(false) }
+  }
 
-      const data = await res.json()
-      if (data.text) {
-        editor.updateElement(elementId, { content: data.text } as Partial<SlideElement>)
-      }
-    } catch (err) {
-      console.error('AI rewrite error:', err)
-    } finally {
-      setAiRewriteState(null)
-    }
-  }, [editor, brandName, slideContext])
+  function selectLayerInIframe(role: string) {
+    const frame = document.querySelector('iframe') as HTMLIFrameElement | null
+    frame?.contentWindow?.postMessage({ type: 'gamma-select', role }, '*')
+  }
 
-  // ─── Regenerate slide with AI ────────────────────────
-  const handleRegenerateSlide = useCallback(async (instruction?: string) => {
-    setIsRegenerating(true)
+  async function exportPdf() {
     try {
-      const res = await fetch('/api/regenerate-slide', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentId,
-          slideIndex: editor.selectedSlideIndex,
-          instruction: instruction || aiDesignInstruction || undefined,
-        }),
+      const res = await fetch('/api/gamma-prototype/pdf', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId: params.id, presentation: pres }),
       })
-
-      const data = await res.json()
-      if (data.slide) {
-        editor.replaceSlide(editor.selectedSlideIndex, data.slide as Slide)
-        setAiDesignInstruction('')
-      }
-    } catch (err) {
-      console.error('Regenerate slide error:', err)
-    } finally {
-      setIsRegenerating(false)
-    }
-  }, [documentId, editor, aiDesignInstruction])
-
-  // ─── Format painter: apply on element select ───────
-  useEffect(() => {
-    if (formatBrush && editor.selectedElementId && editor.selectedElement && isTextElement(editor.selectedElement)) {
-      editor.updateElement(editor.selectedElementId, formatBrush as Partial<SlideElement>)
-      setFormatBrush(null)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor.selectedElementId])
-
-  // ─── ESC to cancel format brush ────────────────────
-  useEffect(() => {
-    if (!formatBrush) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFormatBrush(null)
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [formatBrush])
-
-  // ─── Computed values ────────────────────────────────
-  const designSystem = editor.presentation.designSystem
-  const selectedElements = useMemo(() => {
-    if (!editor.selectedSlide) return []
-    return editor.selectedSlide.elements.filter(e => editor.selectedElementIds.includes(e.id))
-  }, [editor.selectedSlide, editor.selectedElementIds])
-
-  const selectedTextElement = editor.selectedElement && isTextElement(editor.selectedElement) ? editor.selectedElement : null
-
-  const handleAddText = useCallback(() => {
-    const element: TextElement = {
-      id: generateId('el'),
-      type: 'text',
-      x: 660, y: 440, width: 600, height: 200,
-      zIndex: 100,
-      fontSize: 36, fontWeight: 400,
-      color: designSystem.colors.text,
-      textAlign: 'right',
-      content: 'טקסט חדש',
-      role: 'body',
-      lineHeight: 1.4,
-    }
-    editor.addElement(element)
-  }, [editor, designSystem])
-
-  const handleAddShape = useCallback((shapeType: ShapeType) => {
-    let element: ShapeElement
-    switch (shapeType) {
-      case 'circle':
-        element = {
-          id: generateId('el'), type: 'shape',
-          x: 810, y: 390, width: 300, height: 300, zIndex: 50,
-          shapeType: 'circle', fill: designSystem.colors.accent, borderRadius: 9999,
-        }
-        break
-      case 'line':
-        element = {
-          id: generateId('el'), type: 'shape',
-          x: 460, y: 530, width: 1000, height: 4, zIndex: 50,
-          shapeType: 'line', fill: designSystem.colors.primary, borderRadius: 0,
-        }
-        break
-      default:
-        element = {
-          id: generateId('el'), type: 'shape',
-          x: 660, y: 390, width: 600, height: 300, zIndex: 50,
-          shapeType: 'rectangle', fill: designSystem.colors.cardBg, borderRadius: 16,
-        }
-    }
-    editor.addElement(element)
-  }, [editor, designSystem])
-
-  const handleAddImage = useCallback(() => {
-    setImageModalMode('add')
-    setImageModalElementId('__new__')
-    setImageModalTab('upload')
-  }, [])
-
-  const handleAddVideo = useCallback(() => {
-    setShowVideoModal(true)
-  }, [])
-
-  const handleVideoSelected = useCallback((src: string, provider: VideoProvider, posterImage?: string) => {
-    const ytId = provider === 'youtube' ? extractYouTubeId(src) : null
-    const element: VideoElement = {
-      id: generateId('el'),
-      type: 'video',
-      x: 460, y: 240, width: 1000, height: 560, zIndex: 60,
-      src,
-      videoProvider: provider,
-      posterImage: posterImage || (ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : undefined),
-      autoPlay: true,
-      muted: true,
-      loop: true,
-      objectFit: 'cover',
-    }
-    editor.addElement(element)
-    setShowVideoModal(false)
-  }, [editor])
-
-  const handleAddAdvancedElement = useCallback((type: AdvancedElementType) => {
-    let element: SlideElement
-    switch (type) {
-      case 'mockup': {
-        const el: MockupElement = {
-          id: generateId('el'), type: 'mockup',
-          x: 560, y: 140, width: 400, height: 700, zIndex: 60,
-          deviceType: 'iPhone 15 Pro',
-          contentType: 'color', contentSrc: '#1a1a2e',
-        }
-        element = el
-        break
-      }
-      case 'compare': {
-        const el: CompareElement = {
-          id: generateId('el'), type: 'compare',
-          x: 360, y: 190, width: 1200, height: 700, zIndex: 60,
-          beforeImage: '', afterImage: '',
-          beforeLabel: 'לפני', afterLabel: 'אחרי',
-          orientation: 'horizontal', initialPosition: 50,
-        }
-        element = el
-        break
-      }
-      case 'logo-strip': {
-        const el: LogoStripElement = {
-          id: generateId('el'), type: 'logo-strip',
-          x: 60, y: 900, width: 1800, height: 120, zIndex: 60,
-          logos: [], speed: 40, direction: 'rtl', grayscale: true, gap: 60,
-        }
-        element = el
-        break
-      }
-      case 'map': {
-        const el: MapElement = {
-          id: generateId('el'), type: 'map',
-          x: 560, y: 290, width: 800, height: 500, zIndex: 60,
-          address: '', zoom: 15, borderRadius: 16,
-        }
-        element = el
-        break
-      }
-    }
-    editor.addElement(element)
-  }, [editor])
-
-  const handleDuplicateElement = useCallback(() => {
-    if (editor.selectedElementId) {
-      editor.duplicateElement(editor.selectedElementId)
-    }
-  }, [editor])
-
-  const handleDeleteElement = useCallback(() => {
-    if (editor.selectedElementId) {
-      editor.deleteElement(editor.selectedElementId)
-    }
-  }, [editor])
-
-  // ─── Slide management ────────────────────────────────
-  const handleAddSlide = useCallback(() => {
-    const slides = editor.presentation.slides
-    const newSlide: Slide = {
-      id: generateId('slide'),
-      slideType: 'brief',
-      label: `שקף ${slides.length + 1}`,
-      background: { type: 'solid', value: designSystem.colors.background },
-      elements: [],
-    }
-    editor.addSlide(newSlide, editor.selectedSlideIndex + 1)
-  }, [editor, designSystem])
-
-  const handleDuplicateSlide = useCallback((index: number, e: React.MouseEvent) => {
-    e.stopPropagation()
-    editor.duplicateSlide(index)
-  }, [editor])
-
-  const handleDeleteSlide = useCallback((index: number, e: React.MouseEvent) => {
-    e.stopPropagation()
-    editor.deleteSlide(index)
-  }, [editor])
-
-  // ─── Image replace/add ───────────────────────────────
-  const imageModalElementIdRef = useRef<string | null>(null)
-  useEffect(() => {
-    imageModalElementIdRef.current = imageModalElementId
-  }, [imageModalElementId])
-
-  const handleImageSelected = useCallback((url: string, contentType?: 'image' | 'video') => {
-    const elementId = imageModalElementIdRef.current
-    console.log('[Editor] handleImageSelected called:', { url: url?.slice(0, 60), elementId, mode: imageModalMode, contentType })
-
-    if (imageModalMode === 'add') {
-      const element: ImageElement = {
-        id: generateId('el'),
-        type: 'image',
-        x: 560, y: 290, width: 800, height: 500, zIndex: 60,
-        src: url, alt: '', objectFit: 'cover', borderRadius: 12,
-      }
-      editor.addElement(element)
-    } else if (imageModalMode === 'mockup-content' && elementId) {
-      // Update mockup element content — detect type from callback or URL
-      const type = contentType || (url.match(/\.(mp4|webm|mov|avi)(\?|$)/i) ? 'video' : 'image')
-      editor.updateElement(elementId, { contentSrc: url, contentType: type } as Partial<SlideElement>)
-      console.log('[Editor] Mockup content updated:', elementId, type)
-    } else if (elementId) {
-      editor.updateElement(elementId, { src: url } as Partial<SlideElement>)
-      console.log('[Editor] Image element updated:', elementId)
-    }
-    setImageModalElementId(null)
-    setImageModalMode('replace')
-  }, [editor, imageModalMode])
-
-  // ─── Mobile block ──────────────────────────────────
-  if (isMobile) {
-    return (
-      <div dir="rtl" className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-6">
-        <div className="text-center max-w-sm">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/60">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
-            </svg>
-          </div>
-          <h2 className="text-white text-xl font-bold mb-2">עריכת מצגות זמינה רק במחשב</h2>
-          <p className="text-gray-400 text-sm mb-8 leading-relaxed">
-            לחוויית עריכה מלאה, פתחו את הדף בדפדפן במחשב שולחני או נייד.
-          </p>
-          <a
-            href="/dashboard"
-            className="inline-block px-6 py-2.5 bg-white text-[#0a0a0f] rounded-xl font-semibold text-sm hover:bg-gray-100 transition-colors"
-          >
-            חזרה לדשבורד
-          </a>
-        </div>
-      </div>
-    )
+      const json = await res.json()
+      if (json.pdfUrl) window.open(json.pdfUrl, '_blank')
+      else alert('PDF failed: ' + (json.error || 'unknown'))
+    } catch (e) { alert('PDF error: ' + (e instanceof Error ? e.message : 'unknown')) }
   }
 
-  // ─── Loading state ──────────────────────────────────
-  if (pageState === 'loading' || pageState === 'generating') {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative w-16 h-16 mx-auto mb-6">
-            <div className="absolute inset-0 rounded-full border-2 border-gray-800" />
-            <div className="absolute inset-0 rounded-full border-2 border-t-white animate-spin" />
-          </div>
-          <p className="text-gray-400 text-base" dir="rtl">
-            {pageState === 'generating' ? 'מעצב מצגת עם AI...' : 'טוען מצגת...'}
-          </p>
-          {pageState === 'generating' && (
-            <p className="text-gray-600 text-xs mt-1" dir="rtl">זה יכול לקחת עד דקה בפעם הראשונה</p>
-          )}
-        </div>
-      </div>
-    )
+  async function aiRewrite(key: string, mode: 'shorter' | 'dramatic' | 'formal') {
+    if (!slide) return
+    const value = (slide.slots as unknown as Record<string, unknown>)[key]
+    if (typeof value !== 'string' || !value.trim()) return
+    setAiBusy(key)
+    try {
+      const res = await fetch('/api/gamma-prototype/rewrite', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: value, mode, context: { slideType: slide.slideType, field: key } }),
+      })
+      const json = await res.json()
+      if (json.text) updateSlot(key, json.text)
+    } finally { setAiBusy(null) }
   }
 
-  // ─── Error state ────────────────────────────────────
-  if (pageState === 'error') {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center" dir="rtl">
-        <div className="text-center max-w-md">
-          <div className="text-4xl mb-4 text-red-400">!</div>
-          <h2 className="text-lg font-bold text-white mb-2">שגיאה בטעינה</h2>
-          <p className="text-gray-400 mb-6 text-sm">{error}</p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => { setError(null); loadDocument() }}
-              className="px-5 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
-            >
-              נסה שוב
-            </button>
-            <Link
-              href="/dashboard"
-              className="px-5 py-2 bg-gray-800 text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
-            >
-              חזרה לרשימה
-            </Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const [zoom, setZoom] = useState(0.6667)
 
-  // ─── HTML-Native presentation mode (v6) ─────────────
-  if (htmlSlides && htmlSlides.length > 0) {
-    const handleHtmlSlideUpdate = (newHtml: string) => {
-      const newSlides = [...(htmlSlides || [])]
-      newSlides[activeHtmlSlide] = newHtml
-      setHtmlSlides(newSlides)
-      // Save with fresh data (not stale closure)
-      fetch(`/api/documents/${documentId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ _htmlPresentation: { ...(documentData?._htmlPresentation as Record<string, unknown> || {}), htmlSlides: newSlides } }),
-      }).catch(() => {})
+  const selectedFreeEl = selectedRole?.startsWith('free-')
+    ? slide?.freeElements?.find(f => f.id === selectedRole)
+    : undefined
+
+  function updateFreeElement(id: string, patch: Partial<FreeElement>) {
+    if (!pres || !slide) return
+    const next = { ...pres, slides: [...pres.slides] }
+    next.slides[idx] = {
+      ...slide,
+      freeElements: (slide.freeElements || []).map(f => f.id === id ? { ...f, ...patch } : f),
     }
-
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex" dir="rtl">
-        {/* Sidebar — thumbnails */}
-        <div className="w-48 bg-[#111118] border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-2">
-          <div className="text-xs text-gray-500 font-medium px-1 mb-2">{brandName}</div>
-          <button
-            onClick={async () => {
-              if (!confirm('לשדרג לעורך החדש? זה ייצר גרסה מובנית של המצגת שתומכת בגרירה, עריכה inline, AI, ושיתוף.')) return
-              try {
-                const res = await fetch('/api/gamma-prototype', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ documentId }),
-                })
-                const json = await res.json()
-                if (!json.success) { alert('נכשל: ' + (json.error || 'unknown')); return }
-                await fetch(`/api/documents/${documentId}`, {
-                  method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ _structuredPresentation: json.presentation }),
-                })
-                router.replace(`/gamma-proto/${documentId}`)
-              } catch (e) {
-                alert('שגיאה: ' + (e instanceof Error ? e.message : 'unknown'))
-              }
-            }}
-            className="w-full mb-2 px-2 py-2 rounded bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
-            title="עורך חדש עם גרירה, עריכה inline, AI">
-            ✨ שדרג לעורך החדש
-          </button>
-          {htmlSlides.map((slideHtml, i) => (
-            <div
-              key={i}
-              data-slide-thumb={i}
-              onClick={() => {
-                setActiveHtmlSlide(i)
-                setTimeout(() => {
-                  document.querySelector(`[data-slide-thumb="${i}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-                }, 0)
-              }}
-              className={`cursor-pointer rounded-lg transition-all ${activeHtmlSlide === i ? 'ring-2 ring-blue-500' : 'hover:ring-1 hover:ring-gray-600'}`}
-            >
-              <HtmlSlideViewer
-                html={slideHtml}
-                scale={0.09}
-                isActive={activeHtmlSlide === i}
-                className="rounded"
-              />
-              <div className="text-[10px] text-gray-500 text-center mt-1">שקף {i + 1}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Main slide view */}
-        <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <div className="h-14 bg-[#111118] border-b border-gray-800 flex items-center justify-between px-6">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm">← חזרה</Link>
-              <h1 className="text-white font-medium">{brandName}</h1>
-              <span className="text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">HTML-Native ✨</span>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Regenerate current slide */}
-              <button
-                onClick={async () => {
-                  if (!htmlSlides || isRegenerating) return
-                  setIsRegenerating(true)
-                  try {
-                    const controller = new AbortController()
-                    const timeoutId = setTimeout(() => controller.abort(), 60000)
-                    const res = await fetch('/api/regenerate-slide', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ documentId, slideIndex: activeHtmlSlide }),
-                      signal: controller.signal,
-                    })
-                    clearTimeout(timeoutId)
-                    const data = await res.json()
-                    if (res.ok && data.html) {
-                      const updated = [...htmlSlides]
-                      updated[activeHtmlSlide] = data.html
-                      setHtmlSlides(updated)
-                      toast.success('השקף עוצב מחדש בהצלחה')
-                    } else {
-                      toast.error(data.error || 'שגיאה בעיצוב מחדש')
-                    }
-                  } catch (err) {
-                    toast.error(err instanceof Error && err.name === 'AbortError' ? 'העיצוב לקח יותר מדי זמן' : 'שגיאה בעיצוב מחדש')
-                  } finally { setIsRegenerating(false) }
-                }}
-                disabled={isRegenerating}
-                className="px-4 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-lg text-sm font-medium hover:bg-amber-500/20 transition-colors disabled:opacity-50"
-              >
-                {isRegenerating ? 'מעצב מחדש...' : '🔄 עצב מחדש'}
-              </button>
-
-              {/* Share button */}
-              <button
-                onClick={() => setShowShareDialog(true)}
-                className="px-4 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-lg text-sm font-medium hover:bg-blue-500/20 transition-colors"
-              >
-                🔗 שתף
-              </button>
-
-              {/* Follow-up reminder */}
-              <button
-                onClick={async () => {
-                  try {
-                    const res = await fetch('/api/follow-up', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ brandName, proposalType: 'presentation', businessDays: 3 }),
-                    })
-                    const data = await res.json()
-                    if (res.ok && data.success) {
-                      toast.success(`📅 תזכורת פולואפ נקבעה ל-${data.formattedDate}`)
-                    } else {
-                      toast.error(data.error || 'שגיאה ביצירת תזכורת')
-                    }
-                  } catch { toast.error('שגיאה ביצירת תזכורת') }
-                }}
-                className="px-4 py-2 bg-green-500/10 text-green-400 border border-green-500/30 rounded-lg text-sm font-medium hover:bg-green-500/20 transition-colors"
-              >
-                📅 פולואפ 3 ימים
-              </button>
-
-              {/* Download PDF */}
-              <button
-                onClick={async () => {
-                  setIsGeneratingPdf(true)
-                  toast.info('מייצר PDF — ייתכן שייקח עד 30 שניות...')
-                  try {
-                    const controller = new AbortController()
-                    const timeoutId = setTimeout(() => controller.abort(), 120000)
-                    const res = await fetch('/api/pdf', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ documentId, action: 'download' }),
-                      signal: controller.signal,
-                    })
-                    clearTimeout(timeoutId)
-                    if (res.ok) {
-                      const { pdfUrl } = await res.json()
-                      if (!pdfUrl) throw new Error('PDF URL חסר')
-                      // Fetch from Supabase CDN (no Vercel 4.5MB response limit)
-                      const pdfRes = await fetch(pdfUrl)
-                      if (!pdfRes.ok) throw new Error('הורדת PDF מ-Storage נכשלה')
-                      const blob = await pdfRes.blob()
-                      if (blob.size === 0) throw new Error('PDF ריק')
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a'); a.href = url; a.download = `${brandName}.pdf`; a.click()
-                      URL.revokeObjectURL(url)
-                      toast.success('PDF הורד בהצלחה')
-                    } else {
-                      const err = await res.json().catch(() => ({}))
-                      toast.error(err.error || 'שגיאה ביצירת PDF')
-                    }
-                  } catch (err) {
-                    toast.error(err instanceof Error && err.name === 'AbortError' ? 'יצירת PDF לקחה יותר מדי זמן' : 'שגיאה ביצירת PDF')
-                  } finally { setIsGeneratingPdf(false) }
-                }}
-                disabled={isGeneratingPdf}
-                className="px-4 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
-              >
-                {isGeneratingPdf ? 'מייצר PDF...' : 'הורד PDF'}
-              </button>
-
-              {/* PPTX Export */}
-              <button
-                onClick={async () => {
-                  if (!htmlSlides?.length) return
-                  toast.info('מייצר PPTX...')
-                  try {
-                    const { domToPptx } = await import('dom-to-pptx')
-                    // Create a hidden container with all slides
-                    const container = document.createElement('div')
-                    container.style.position = 'fixed'
-                    container.style.left = '-9999px'
-                    container.style.top = '0'
-                    document.body.appendChild(container)
-
-                    for (const slideHtml of htmlSlides) {
-                      const frame = document.createElement('iframe')
-                      frame.style.width = '1920px'
-                      frame.style.height = '1080px'
-                      frame.style.border = 'none'
-                      container.appendChild(frame)
-                      frame.contentDocument?.open()
-                      frame.contentDocument?.write(slideHtml)
-                      frame.contentDocument?.close()
-                    }
-
-                    // Wait for iframes to render
-                    await new Promise(r => setTimeout(r, 2000))
-
-                    // Convert each iframe's slide div to PPTX
-                    const slideElements: HTMLElement[] = []
-                    for (const frame of Array.from(container.querySelectorAll('iframe'))) {
-                      const slideEl = (frame as HTMLIFrameElement).contentDocument?.querySelector('.slide') as HTMLElement
-                      if (slideEl) slideElements.push(slideEl)
-                    }
-
-                    if (slideElements.length === 0) {
-                      toast.error('לא נמצאו שקפים לייצוא')
-                      document.body.removeChild(container)
-                      return
-                    }
-
-                    const pptxBlob = await domToPptx(slideElements, {
-                      slideWidth: 10,
-                      slideHeight: 5.625,
-                    })
-
-                    // Download
-                    const url = URL.createObjectURL(pptxBlob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `${brandName}.pptx`
-                    a.click()
-                    URL.revokeObjectURL(url)
-                    document.body.removeChild(container)
-                    toast.success('PPTX הורד בהצלחה')
-                  } catch (err) {
-                    console.error('PPTX export failed:', err)
-                    toast.error('שגיאה בייצוא PPTX')
-                  }
-                }}
-                className="px-4 py-2 bg-orange-500/10 text-orange-400 border border-orange-500/30 rounded-lg text-sm font-medium hover:bg-orange-500/20 transition-colors"
-              >
-                📊 PPTX
-              </button>
-
-              {/* Presentation mode */}
-              <button
-                onClick={() => setShowPresentation(true)}
-                className="px-4 py-2 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-lg text-sm font-medium hover:bg-purple-500/20 transition-colors"
-              >
-                ▶ הצגה
-              </button>
-            </div>
-          </div>
-
-          {/* Slide editor */}
-          <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
-            <HtmlSlideEditor
-              html={htmlSlides[activeHtmlSlide] || ''}
-              scale={0.55}
-              onHtmlChange={handleHtmlSlideUpdate}
-            />
-          </div>
-
-          {/* Slide counter + navigation */}
-          <div className="h-10 bg-[#111118] border-t border-gray-800 flex items-center justify-center gap-4">
-            <button
-              onClick={() => setActiveHtmlSlide(Math.max(0, activeHtmlSlide - 1))}
-              disabled={activeHtmlSlide === 0}
-              className="text-gray-400 hover:text-white disabled:opacity-30 text-sm px-2"
-            >←</button>
-            <span className="text-xs text-gray-500">
-              שקף {activeHtmlSlide + 1} מתוך {htmlSlides.length}
-            </span>
-            <button
-              onClick={() => setActiveHtmlSlide(Math.min(htmlSlides.length - 1, activeHtmlSlide + 1))}
-              disabled={activeHtmlSlide === htmlSlides.length - 1}
-              className="text-gray-400 hover:text-white disabled:opacity-30 text-sm px-2"
-            >→</button>
-          </div>
-        </div>
-
-        {/* Share dialog */}
-        <ShareDialog
-          isOpen={showShareDialog}
-          onClose={() => setShowShareDialog(false)}
-          documentId={documentId}
-        />
-
-        {/* Presentation mode overlay */}
-        {showPresentation && htmlSlides && (
-          <div className="fixed inset-0 z-[9999] bg-black">
-            <button
-              onClick={() => setShowPresentation(false)}
-              className="absolute top-4 left-4 z-[10000] text-white/50 hover:text-white text-sm px-3 py-1.5 rounded border border-white/20 bg-black/50"
-            >
-              ESC — יציאה
-            </button>
-            <HtmlSlideshow htmlSlides={htmlSlides} brandName={brandName} />
-          </div>
-        )}
-      </div>
-    )
+    setPres(next)
   }
-
-  // ─── No slides state ────────────────────────────────
-  if (editor.presentation.slides.length === 0) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center" dir="rtl">
-        <div className="text-center">
-          <p className="text-gray-400 text-base mb-4">לא נמצאו שקפים</p>
-          <Link
-            href={`/wizard/${documentId}`}
-            className="px-5 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
-          >
-            חזרה ל-Wizard
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  // ─── Thumbnail scale ────────────────────────────────
-  const thumbScale = 140 / 1920
-  const slides = editor.presentation.slides
 
   return (
-    <div className="h-screen bg-[#0a0a0f] flex flex-col overflow-hidden">
-      {/* ── Header ───────────────────────────────────── */}
-      <header className="bg-[#0f0f18]/90 backdrop-blur-md border-b border-white/5 z-50 flex-shrink-0" dir="rtl">
-        <div className="max-w-[1800px] mx-auto px-5 py-2.5">
-          <div className="flex items-center justify-between relative">
-            <div className="flex items-center gap-3">
-              <Link href="/dashboard" className="text-gray-500 hover:text-white transition-colors text-xs flex items-center gap-1">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
-                חזרה
-              </Link>
-              <div className="h-4 w-px bg-white/10" />
-              <h1 className="text-white/90 font-medium text-sm">{brandName}</h1>
-              <span className="text-gray-600 text-xs bg-white/5 px-2 py-0.5 rounded">{slides.length} שקפים</span>
-              {editor.isDirty && <span className="text-yellow-500/70 text-xs animate-pulse">שומר...</span>}
-              {aiRewriteState?.loading && <span className="text-purple-400/70 text-xs animate-pulse">AI כותב...</span>}
-              {isRegenerating && <span className="text-purple-400/70 text-xs animate-pulse">AI מעצב שקף...</span>}
-            </div>
+    <div style={{ background: '#0f0f10', color: '#eee', height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'Heebo, system-ui, sans-serif', overflow: 'hidden' }} dir="rtl">
+      {/* ─── Header ──────────────────────────── */}
+      <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '1px solid #1f1f22', background: '#15151a', height: 56, flexShrink: 0 }}>
+        <button onClick={() => history.back()} style={{ ...iconBtn(), padding: 6 }} title="חזרה">
+          <ChevronLeft size={18} />
+        </button>
+        <h1 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{pres?.brandName || 'עורך מצגת'}</h1>
+        <span style={{ fontSize: 11, color: saving === 'saving' ? '#fbbf24' : saving === 'saved' ? '#4ade80' : '#666' }}>
+          {saving === 'saving' ? '• שומר…' : saving === 'saved' ? '✓ נשמר' : ''}
+        </span>
 
-            <div className="hidden lg:block absolute left-1/2 -translate-x-1/2">
-              <FlowStepper currentStep="edit" compact />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-0.5 px-1">
-                <button onClick={editor.undo} disabled={!editor.canUndo} className="p-1.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors" title="בטל (Ctrl+Z)">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                </button>
-                <button onClick={editor.redo} disabled={!editor.canRedo} className="p-1.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors" title="בצע שוב (Ctrl+Shift+Z)">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-lg">
-                <button onClick={() => editor.selectSlide(Math.max(0, editor.selectedSlideIndex - 1))} disabled={editor.selectedSlideIndex === 0} className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-                <span className="text-white/70 text-xs font-medium tabular-nums min-w-[40px] text-center" dir="ltr">
-                  {editor.selectedSlideIndex + 1} / {slides.length}
-                </span>
-                <button onClick={() => editor.selectSlide(Math.min(slides.length - 1, editor.selectedSlideIndex + 1))} disabled={editor.selectedSlideIndex === slides.length - 1} className="text-gray-400 hover:text-white disabled:opacity-20 transition-colors">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-0.5 px-2 py-1 bg-white/5 rounded-lg">
-                <button
-                  onClick={() => setSlideScale(prev => Math.max(prev - 0.1, 0.2))}
-                  className="text-gray-400 hover:text-white transition-colors p-0.5"
-                  title="הקטן (Ctrl+-)"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                </button>
-                <span className="text-white/60 text-[10px] font-medium tabular-nums min-w-[36px] text-center">
-                  {Math.round(slideScale * 100)}%
-                </span>
-                <button
-                  onClick={() => setSlideScale(prev => Math.min(prev + 0.1, 1.5))}
-                  className="text-gray-400 hover:text-white transition-colors p-0.5"
-                  title="הגדל (Ctrl++)"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                </button>
-              </div>
-
-              <button onClick={() => setShowProperties(p => !p)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${showProperties ? 'text-white bg-white/20 ring-1 ring-white/30' : 'text-gray-400 bg-white/5 hover:bg-white/10 hover:text-white'}`}>
-                {showProperties ? 'סגור פאנל' : 'פאנל עריכה'}
-              </button>
-
-              <button
-                onClick={() => setShowShareDialog(true)}
-                className="px-3 py-1.5 text-xs font-medium text-blue-400 bg-blue-500/10 rounded-lg hover:bg-blue-500/20 transition-colors"
-                title="שתף מצגת"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline-block ml-1">
-                  <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                </svg>
-                שתף
-              </button>
-
-              <button
-                onClick={() => setIsPresentationMode(true)}
-                className="px-3 py-1.5 text-xs font-medium text-gray-300 bg-white/5 rounded-lg hover:bg-white/10 hover:text-white transition-colors"
-                title="מצב הצגה (F5)"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline-block ml-1">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                הצגה
-              </button>
-
-              <button onClick={downloadPdf} disabled={isGeneratingPdf} className="px-4 py-1.5 text-xs font-medium text-black bg-white rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                {isGeneratingPdf ? 'מייצר...' : 'הורד PDF'}
-              </button>
-
-              <GoogleDriveSaveButton
-                getFileData={getProposalPdf}
-                onSaved={(result) => window.open(result.webViewLink, '_blank')}
-                onError={() => alert('שגיאה בשמירה ל-Drive')}
-                label="שמור ב-Drive"
-                className="px-4 py-1.5 text-xs font-medium rounded-lg"
-              />
-
-              <button
-                onClick={() => setShowFeedback(true)}
-                className="px-3 py-1.5 text-xs font-medium text-amber-400 bg-amber-500/10 rounded-lg hover:bg-amber-500/20 transition-colors"
-                title="דרגו את ההצעה"
-              >
-                דרגו
-              </button>
-            </div>
-          </div>
+        <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
+          <ToolbarGroup>
+            <IconBtn onClick={undo} disabled={historyRef.current.length === 0} title="בטל (⌘Z)"><Undo2 size={16} /></IconBtn>
+            <IconBtn onClick={redo} disabled={futureRef.current.length === 0} title="חזור (⇧⌘Z)"><Redo2 size={16} /></IconBtn>
+          </ToolbarGroup>
+          <ToolbarGroup>
+            <IconBtn onClick={() => setGrid(g => !g)} active={grid} title="רשת"><Grid3x3 size={16} /></IconBtn>
+            <IconBtn onClick={() => setSnap(s => !s)} active={snap} title="הצמד לרשת"><Magnet size={16} /></IconBtn>
+            <IconBtn onClick={duplicateSlide} title="שכפל שקף (⌘D)"><Copy size={16} /></IconBtn>
+          </ToolbarGroup>
+          <ToolbarGroup>
+            <IconBtn onClick={() => setChatOpen(c => !c)} active={chatOpen} title="צ'אט AI"><MessageSquare size={16} /></IconBtn>
+            <IconBtn onClick={regenerateSlide} disabled={regenBusy} title="עצב מחדש את השקף (AI)">
+              <Sparkles size={16} />
+            </IconBtn>
+            <IconBtn onClick={generate} disabled={loading} title="ייצר מצגת מחדש (הכל)">
+              <RefreshCw size={16} />
+            </IconBtn>
+          </ToolbarGroup>
+          <ToolbarGroup>
+            <IconBtn onClick={() => setPresenting(true)} title="הצג במסך מלא"><Play size={16} /></IconBtn>
+            <IconBtn onClick={exportPdf} title="הורד PDF"><Download size={16} /></IconBtn>
+            <button onClick={() => setShareOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0ea5e9', color: '#fff', border: 0, borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+              <Share2 size={14} /> שיתוף
+            </button>
+          </ToolbarGroup>
         </div>
       </header>
 
-      {/* ── Toolbar ───────────────────────────────────── */}
-      <EditorToolbar
-        onAddText={handleAddText}
-        onAddShape={handleAddShape}
-        onAddImage={handleAddImage}
-        onAddVideo={handleAddVideo}
-        onAddAdvancedElement={handleAddAdvancedElement}
-        onDuplicate={handleDuplicateElement}
-        onDelete={handleDeleteElement}
-        selectedElement={editor.selectedElement}
-        gridVisible={gridVisible}
-        onToggleGrid={() => setGridVisible(prev => !prev)}
-        snapToGrid={snapToGrid}
-        onToggleSnap={() => setSnapToGrid(prev => !prev)}
-        onApplyStylePreset={(preset) => {
-          if (editor.selectedElementId) {
-            editor.updateElement(editor.selectedElementId, preset as Partial<SlideElement>)
-          }
-        }}
-        formatBrush={formatBrush}
-        onCopyFormat={() => {
-          if (selectedTextElement) {
-            setFormatBrush({
-              fontSize: selectedTextElement.fontSize,
-              fontWeight: selectedTextElement.fontWeight,
-              color: selectedTextElement.color,
-              fontFamily: selectedTextElement.fontFamily,
-              textAlign: selectedTextElement.textAlign,
-              lineHeight: selectedTextElement.lineHeight,
-            })
-          }
-        }}
-        onCancelFormat={() => setFormatBrush(null)}
-      />
+      {err && <div style={{ background: '#40141a', padding: 10, margin: 10, borderRadius: 6, fontSize: 13 }}>⚠ {err}</div>}
 
-      {/* ── Alignment bar (multi-select) ──────────── */}
-      {selectedElements.length >= 2 && (
-        <div className="flex-shrink-0 px-4 py-1 bg-[#0a0a14] border-b border-blue-500/10" dir="rtl">
-          <AlignmentToolbar
-            selectedElements={selectedElements}
-            onUpdateElement={editor.updateElement}
-          />
-        </div>
-      )}
-
-      {/* ── Main content ─────────────────────────────── */}
-      <div className="flex-1 flex min-h-0 relative z-10" dir="ltr">
-        {/* Thumbnails sidebar */}
-        <div
-          className="w-[160px] flex-shrink-0 bg-[#0f0f18]/50 border-r border-white/5 overflow-y-auto py-3 px-2 flex flex-col"
-          style={{ scrollbarWidth: 'thin', scrollbarColor: '#222 transparent' }}
-        >
-          <div ref={thumbnailsRef} className="flex-1">
-            {slides.map((slide, index) => (
-              <div
-                key={slide.id}
-                className={`relative group mb-2 ${dragOverIndex === index ? 'pt-6' : ''}`}
-                draggable
-                onDragStart={() => { dragSrcIndex.current = index }}
-                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(index) }}
-                onDragLeave={() => setDragOverIndex(null)}
-                onDrop={() => {
-                  if (dragSrcIndex.current !== null && dragSrcIndex.current !== index) {
-                    editor.reorderSlides(dragSrcIndex.current, index)
-                  }
-                  dragSrcIndex.current = null
-                  setDragOverIndex(null)
-                }}
-                onDragEnd={() => { dragSrcIndex.current = null; setDragOverIndex(null) }}
-              >
-                {dragOverIndex === index && (
-                  <div className="absolute top-0 left-2 right-2 h-1 bg-white/60 rounded-full" />
-                )}
-                <button
-                  onClick={() => editor.selectSlide(index)}
-                  className={`w-full rounded-lg overflow-hidden transition-all ${
-                    index === editor.selectedSlideIndex
-                      ? 'ring-2 ring-white/80 ring-offset-1 ring-offset-[#0a0a0f] shadow-lg shadow-white/5'
-                      : 'opacity-50 hover:opacity-80'
-                  }`}
-                  style={{ aspectRatio: '16/9', position: 'relative', cursor: 'grab' }}
-                  title={`${slide.label} (${index + 1}) — גרור לשינוי סדר`}
-                >
-                  <div style={{ position: 'absolute', top: 0, left: 0 }}>
-                    <SlideViewer slide={slide} designSystem={designSystem} scale={thumbScale} />
-                  </div>
-                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent pt-3 pb-1 text-center" style={{ zIndex: 1 }}>
-                    <span className="text-[9px] text-white/80 font-medium">{index + 1}</span>
-                  </div>
-                </button>
-
-                {/* Slide action buttons (visible on hover) */}
-                <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 2 }}>
-                  <button
-                    onClick={(e) => handleDuplicateSlide(index, e)}
-                    className="w-5 h-5 rounded bg-black/60 backdrop-blur-sm text-white/70 hover:text-white flex items-center justify-center"
-                    title="שכפל שקף"
-                  >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                  </button>
-                  {slides.length > 1 && (
-                    <button
-                      onClick={(e) => handleDeleteSlide(index, e)}
-                      className="w-5 h-5 rounded bg-black/60 backdrop-blur-sm text-red-400/70 hover:text-red-300 flex items-center justify-center"
-                      title="מחק שקף"
-                    >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </div>
+      {pres && slide && (
+        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+          {/* ─── Far left: slide thumbnails strip ─────── */}
+          <aside style={{ width: 140, borderInlineEnd: '1px solid #1f1f22', overflow: 'auto', padding: 8, background: '#141416' }}>
+            {pres.slides.map((s, i) => (
+              <SlideThumb key={i} slide={s} ds={pres.designSystem} index={i}
+                active={i === idx} onClick={() => setIdx(i)} />
             ))}
-          </div>
+            <button onClick={() => addSlide('hero-cover')}
+              style={{ width: '100%', padding: '10px 6px', marginTop: 8, background: '#1f1f22',
+                color: '#888', border: '1px dashed #333', borderRadius: 6, cursor: 'pointer',
+                fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              <Plus size={14} /> שקף
+            </button>
+          </aside>
 
-          {/* Add slide button */}
-          <button
-            onClick={handleAddSlide}
-            className="w-full mt-2 py-2.5 border-2 border-dashed border-white/10 rounded-lg text-gray-500 hover:text-white hover:border-white/30 transition-colors text-xs flex items-center justify-center gap-1"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            הוסף שקף
-          </button>
-        </div>
-
-        {/* Main slide area */}
-        <div ref={slideContainerRef} className="flex-1 flex items-center justify-center overflow-hidden relative" style={{ background: '#0a0a0f' }}>
-          {/* Layer Panel */}
-          {editor.selectedSlide && (
-            <LayerPanel
-              slide={editor.selectedSlide}
-              selectedElementId={editor.selectedElementId}
-              selectedElementIds={editor.selectedElementIds}
-              onElementSelect={editor.selectElement}
-              onBringToFront={editor.bringToFront}
-              onSendToBack={editor.sendToBack}
-              onMoveUp={editor.moveLayerUp}
-              onMoveDown={editor.moveLayerDown}
-              onToggleLock={(id, locked) => editor.updateElement(id, { locked } as Partial<SlideElement>)}
-              isOpen={layerPanelOpen}
-              onToggle={() => setLayerPanelOpen(p => !p)}
-            />
-          )}
-
-          {editor.selectedSlide && (
-            <div
-              className="rounded-xl shadow-2xl shadow-black/60"
-              style={{
-                width: Math.round(1920 * slideScale),
-                height: Math.round(1080 * slideScale),
-                position: 'relative',
-                overflow: 'visible',
+          {/* ─── Left: Elements panel ─────────────────── */}
+          <aside style={{ width: 240, borderInlineEnd: '1px solid #1f1f22', overflow: 'auto', background: '#18181b' }}>
+            <ElementsPanel
+              onAddText={() => addFreeMedia('text', 'טקסט חדש — לחץ פעמיים לעריכה')}
+              onAddImage={() => setMediaPicker('image')}
+              onAddVideo={() => setMediaPicker('video')}
+              onAddShape={addShape}
+              layouts={LAYOUTS}
+              onChangeLayout={(layout) => {
+                if (!pres || !slide) return
+                const next = { ...pres, slides: [...pres.slides] }
+                next.slides[idx] = { ...slide, layout, elementStyles: {}, freeElements: [], hiddenRoles: [] } as StructuredSlide
+                setPres(next)
               }}
-            >
-              {/* Text Format Bar (floating above selected text element) */}
-              {selectedTextElement && (
-                <TextFormatBar
-                  element={selectedTextElement}
-                  designSystem={designSystem}
-                  scale={slideScale}
-                  onChange={(changes) => editor.updateElement(selectedTextElement.id, changes as Partial<SlideElement>)}
-                />
-              )}
+              currentLayout={slide.layout}
+            />
+          </aside>
 
-              <div style={{ width: '100%', height: '100%', overflow: 'hidden', borderRadius: 'inherit' }}>
-                <SlideEditor
-                  slide={editor.selectedSlide}
-                  designSystem={designSystem}
-                  scale={slideScale}
-                  selectedElementId={editor.selectedElementId}
-                  selectedElementIds={editor.selectedElementIds}
-                  onElementSelect={editor.selectElement}
-                  onAddToSelection={editor.addToSelection}
-                  onRemoveFromSelection={editor.removeFromSelection}
-                  onSelectElements={editor.selectElements}
-                  onElementUpdate={editor.updateElement}
-                  onUpdateElements={editor.updateElements}
-                  onElementDelete={editor.deleteElement}
-                  onDeleteElements={editor.deleteElements}
-                  onDuplicateElement={editor.duplicateElement}
-                  gridVisible={gridVisible}
-                  snapToGrid={snapToGrid}
-                />
+          {/* ─── Center: canvas ──────────────────────── */}
+          <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#0f0f10' }}>
+            {/* Slide ops bar */}
+            <div style={{ display: 'flex', gap: 4, padding: '8px 16px', borderBottom: '1px solid #1f1f22', alignItems: 'center' }}>
+              <IconBtn onClick={() => moveSlide(idx, idx - 1)} disabled={idx === 0} title="הזז קודם"><ArrowRight size={16} /></IconBtn>
+              <IconBtn onClick={() => moveSlide(idx, idx + 1)} disabled={idx === pres.slides.length - 1} title="הזז אחרי"><ArrowLeft size={16} /></IconBtn>
+              <IconBtn onClick={deleteSlide} disabled={pres.slides.length <= 1} title="מחק שקף" danger><Trash2 size={16} /></IconBtn>
+              <span style={{ fontSize: 12, color: '#888', marginInlineStart: 12 }}>
+                שקף {idx + 1} / {pres.slides.length} · <span style={{ color: '#aaa' }}>{slide.layout}</span>
+              </span>
+              <div style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <IconBtn onClick={() => setZoom(z => Math.max(0.25, z - 0.1))} title="הקטן"><Minus size={14} /></IconBtn>
+                <span style={{ fontSize: 11, color: '#888', width: 40, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+                <IconBtn onClick={() => setZoom(z => Math.min(2, z + 0.1))} title="הגדל"><Plus size={14} /></IconBtn>
+                <button onClick={() => setZoom(0.6667)} style={{ fontSize: 11, color: '#888', background: 'transparent', border: '1px solid #333', borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>Fit</button>
               </div>
             </div>
-          )}
+
+            {/* Floating text format toolbar */}
+            {selectedFreeEl?.kind === 'text' && (
+              <div style={{ padding: '8px 16px', borderBottom: '1px solid #1f1f22' }}>
+                <TextFormatToolbar element={selectedFreeEl} ds={pres.designSystem}
+                  onChange={(fmt) => updateFreeElement(selectedFreeEl.id, { format: { ...selectedFreeEl.format, ...fmt } })} />
+              </div>
+            )}
+
+            {/* Canvas */}
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+              <div style={{
+                width: 1920 * zoom, height: 1080 * zoom, position: 'relative',
+                background: '#000', borderRadius: 8, overflow: 'hidden', boxShadow: '0 12px 48px rgba(0,0,0,0.6)',
+              }}>
+                <iframe srcDoc={html} style={{
+                  width: 1920, height: 1080, border: 0,
+                  transform: `scale(${zoom})`, transformOrigin: 'top left',
+                  position: 'absolute', top: 0, left: 0,
+                }} />
+              </div>
+            </div>
+          </main>
+
+          {/* ─── Right: contextual properties + layers ─ */}
+          <aside style={{ width: 340, borderInlineStart: '1px solid #1f1f22', overflow: 'auto', background: '#18181b', display: 'flex', flexDirection: 'column' }}>
+            <PropertiesPanel
+              slide={slide}
+              pres={pres}
+              selectedRole={selectedRole}
+              selectedFreeEl={selectedFreeEl}
+              onUpdateFreeElement={updateFreeElement}
+              onUpdateSlot={updateSlot}
+              onAiRewrite={aiRewrite}
+              aiBusy={aiBusy}
+              onSetBg={setSlideBg}
+              onResetOverrides={() => {
+                if (!pres) return
+                const next = { ...pres, slides: [...pres.slides] }
+                next.slides[idx] = { ...next.slides[idx], elementStyles: {} }
+                setPres(next)
+              }}
+              onDeleteFreeElement={(id) => {
+                if (!pres || !slide) return
+                const next = { ...pres, slides: [...pres.slides] }
+                next.slides[idx] = { ...slide, freeElements: (slide.freeElements || []).filter(f => f.id !== id) }
+                setPres(next)
+                setSelectedRole(null)
+              }}
+            />
+
+            <div style={{ borderTop: '1px solid #1f1f22', padding: 12, flexShrink: 0 }}>
+              <LayersPanel
+                html={html}
+                slide={slide}
+                onSelect={(role) => selectLayerInIframe(role)}
+                onToggleHide={(role) => {
+                  if (!pres) return
+                  const hidden = new Set(slide.hiddenRoles || [])
+                  if (hidden.has(role)) hidden.delete(role); else hidden.add(role)
+                  const next = { ...pres, slides: [...pres.slides] }
+                  next.slides[idx] = { ...slide, hiddenRoles: Array.from(hidden) }
+                  setPres(next)
+                }}
+                onResetElement={(role) => {
+                  if (!pres) return
+                  const styles = { ...(slide.elementStyles || {}) }
+                  delete styles[role]
+                  const next = { ...pres, slides: [...pres.slides] }
+                  next.slides[idx] = { ...slide, elementStyles: styles }
+                  setPres(next)
+                }}
+              />
+            </div>
+          </aside>
         </div>
+      )}
 
-        {/* Properties panel */}
-        {showProperties && editor.selectedSlide && (
-          <PropertiesPanel
-            slide={editor.selectedSlide}
-            selectedElement={editor.selectedElement}
-            designSystem={designSystem}
-            documentId={documentId}
-            onElementUpdate={editor.updateElement}
-            onBackgroundUpdate={editor.updateSlideBackground}
-            onClose={() => setShowProperties(false)}
-            onImageReplace={(elementId, tab) => { setImageModalMode('replace'); setImageModalElementId(elementId); setImageModalTab(tab || 'upload') }}
-            onMockupContentReplace={(elementId) => { setImageModalMode('mockup-content'); setImageModalElementId(elementId); setImageModalTab('upload') }}
-            onAIRewrite={handleAIRewrite}
-            onRegenerateSlide={() => handleRegenerateSlide()}
-            aiDesignInstruction={aiDesignInstruction}
-            onAiDesignInstructionChange={setAiDesignInstruction}
-            isRegenerating={isRegenerating}
-          />
-        )}
-      </div>
-
-      {/* Image source modal */}
-      <ImageSourceModal
-        isOpen={imageModalElementId !== null}
-        onClose={() => { setImageModalElementId(null); setImageModalMode('replace') }}
-        onImageSelected={handleImageSelected}
-        designSystem={designSystem}
-        documentId={documentId}
-        slideLabel={editor.selectedSlide?.label}
-        initialTab={imageModalTab}
-        slideContext={slideContext}
-        allowVideo={imageModalMode === 'mockup-content'}
-      />
-
-      <FeedbackDialog
-        documentId={documentId}
-        isOpen={showFeedback}
-        onClose={() => setShowFeedback(false)}
-      />
+      {loading && !pres && (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+          <Sparkles size={20} style={{ marginInlineEnd: 10 }} /> טוען / מייצר…
+        </div>
+      )}
 
       <ShareDialog
-        isOpen={showShareDialog}
-        onClose={() => setShowShareDialog(false)}
-        documentId={documentId}
+        isOpen={shareOpen}
+        onClose={() => setShareOpen(false)}
+        documentId={params.id as string}
       />
 
-      {showVideoModal && (
-        <VideoSourceModal
-          onSelect={handleVideoSelected}
-          onClose={() => setShowVideoModal(false)}
+      {chatOpen && pres && (
+        <AIChatPanel
+          presentation={pres}
+          onApply={(next) => setPres(next)}
+          onClose={() => setChatOpen(false)}
         />
       )}
 
-      {isPresentationMode && (
+      {presenting && pres && (
         <PresentationMode
-          slides={slides}
-          designSystem={designSystem}
-          startIndex={editor.selectedSlideIndex}
-          onExit={() => setIsPresentationMode(false)}
+          presentation={pres}
+          startIndex={idx}
+          onClose={() => setPresenting(false)}
         />
       )}
+
+      {mediaPicker && (
+        <MediaPicker
+          kind={mediaPicker}
+          onClose={() => setMediaPicker(null)}
+          onPick={(url) => { addFreeMedia(mediaPicker, url); setMediaPicker(null) }}
+          documentId={params.id as string}
+        />
+      )}
+    </div>
+  )
+}
+
+function btn(bg: string): React.CSSProperties {
+  return { padding: '6px 12px', background: bg, color: '#fff', border: 0, borderRadius: 4, cursor: 'pointer', fontSize: 12 }
+}
+
+function iconBtn(): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    width: 30, height: 30, background: 'transparent', color: '#bbb',
+    border: 0, borderRadius: 6, cursor: 'pointer',
+  }
+}
+
+function IconBtn({ children, onClick, disabled, title, active, danger }: {
+  children: React.ReactNode
+  onClick?: () => void
+  disabled?: boolean
+  title?: string
+  active?: boolean
+  danger?: boolean
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled} title={title}
+      style={{
+        ...iconBtn(),
+        background: active ? '#E94560' : 'transparent',
+        color: disabled ? '#444' : danger ? '#f87171' : active ? '#fff' : '#bbb',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+      onMouseEnter={(e) => { if (!disabled && !active) (e.currentTarget.style.background = '#27272a') }}
+      onMouseLeave={(e) => { if (!active) (e.currentTarget.style.background = 'transparent') }}>
+      {children}
+    </button>
+  )
+}
+
+function ToolbarGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', gap: 2, paddingInline: 6, borderInlineEnd: '1px solid #27272a' }}>
+      {children}
+    </div>
+  )
+}
+
+// ─── Elements panel (left sidebar) ──────────────────────
+
+function ElementsPanel({
+  onAddText, onAddImage, onAddVideo, onAddShape, layouts, onChangeLayout, currentLayout,
+}: {
+  onAddText: () => void
+  onAddImage: () => void
+  onAddVideo: () => void
+  onAddShape: (s: 'rect' | 'circle' | 'line') => void
+  layouts: readonly LayoutId[]
+  onChangeLayout: (l: LayoutId) => void
+  currentLayout: LayoutId
+}) {
+  const [tab, setTab] = useState<'elements' | 'layouts'>('elements')
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid #27272a' }}>
+        {(['elements', 'layouts'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{
+              flex: 1, padding: 10, background: tab === t ? '#27272a' : 'transparent',
+              color: tab === t ? '#fff' : '#888', border: 0, fontSize: 12, cursor: 'pointer',
+              borderBottom: tab === t ? '2px solid #E94560' : '2px solid transparent',
+              fontWeight: tab === t ? 600 : 400, fontFamily: 'inherit',
+            }}>
+            {t === 'elements' ? 'רכיבים' : 'פריסות'}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+        {tab === 'elements' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <ElementCard icon={<Type size={22} />} label="טקסט" onClick={onAddText} />
+            <ElementCard icon={<ImageIcon size={22} />} label="תמונה" onClick={onAddImage} />
+            <ElementCard icon={<Video size={22} />} label="וידאו" onClick={onAddVideo} />
+            <ElementCard icon={<Square size={22} />} label="מלבן" onClick={() => onAddShape('rect')} />
+            <ElementCard icon={<Circle size={22} />} label="עיגול" onClick={() => onAddShape('circle')} />
+            <ElementCard icon={<Minus size={22} />} label="קו" onClick={() => onAddShape('line')} />
+          </div>
+        )}
+
+        {tab === 'layouts' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 10, opacity: 0.5, marginBottom: 4 }}>לחץ לבחירת פריסה לשקף הנוכחי</div>
+            {layouts.map(l => (
+              <button key={l} onClick={() => onChangeLayout(l)}
+                style={{
+                  padding: '8px 10px', background: l === currentLayout ? '#E94560' : '#1f1f22',
+                  color: l === currentLayout ? '#fff' : '#bbb',
+                  border: 0, borderRadius: 5, cursor: 'pointer', fontSize: 11,
+                  textAlign: 'right', fontFamily: 'inherit', fontWeight: l === currentLayout ? 600 : 400,
+                }}>{layoutLabel(l)}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ElementCard({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        gap: 6, padding: '16px 8px', background: '#1f1f22', color: '#bbb',
+        border: '1px solid #27272a', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+        fontFamily: 'inherit', transition: 'all 0.15s',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a2f'; e.currentTarget.style.color = '#fff' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = '#1f1f22'; e.currentTarget.style.color = '#bbb' }}>
+      {icon}
+      <span>{label}</span>
+    </button>
+  )
+}
+
+function layoutLabel(l: LayoutId): string {
+  const map: Record<LayoutId, string> = {
+    'hero-cover': 'שער',
+    'full-bleed-image-text': 'תמונה מלאה + טקסט',
+    'split-image-text': 'פיצול תמונה/טקסט',
+    'centered-insight': 'תובנה מרכזית',
+    'three-pillars-grid': '3 עמודים',
+    'numbered-stats': 'נתונים ממוספרים',
+    'influencer-grid': 'גריד משפיענים',
+    'closing-cta': 'סיום + CTA',
+  }
+  return map[l] || l
+}
+
+// ─── Properties panel (contextual right sidebar) ────────
+
+function PropertiesPanel({
+  slide, pres, selectedRole, selectedFreeEl,
+  onUpdateFreeElement, onUpdateSlot, onAiRewrite, aiBusy,
+  onSetBg, onResetOverrides, onDeleteFreeElement,
+}: {
+  slide: StructuredSlide
+  pres: StructuredPresentation
+  selectedRole: string | null
+  selectedFreeEl?: FreeElement
+  onUpdateFreeElement: (id: string, patch: Partial<FreeElement>) => void
+  onUpdateSlot: (k: string, v: unknown) => void
+  onAiRewrite: (k: string, mode: 'shorter' | 'dramatic' | 'formal') => void
+  aiBusy: string | null
+  onSetBg: (bg: { color?: string; image?: string } | undefined) => void
+  onResetOverrides: () => void
+  onDeleteFreeElement: (id: string) => void
+}) {
+  const ds = pres.designSystem
+
+  // Nothing selected → slide settings
+  if (!selectedRole) {
+    return (
+      <div style={{ padding: 16, flex: 1, overflow: 'auto' }}>
+        <PanelHeader icon={<Settings size={14} />} title="הגדרות שקף" />
+
+        <Section label="רקע השקף">
+          <ColorRow label="צבע" value={slide.bg?.color || ds.colors.background}
+            palette={[ds.colors.background, ds.colors.primary, ds.colors.secondary, ds.colors.accent, '#0a0a0a', '#ffffff']}
+            onChange={(c) => onSetBg({ ...(slide.bg || {}), color: c })} />
+          {slide.bg && (
+            <button onClick={() => onSetBg(undefined)} style={ghostBtn()}>
+              <RotateCcw size={12} /> אפס רקע
+            </button>
+          )}
+        </Section>
+
+        <Section label="מיקומים">
+          <button onClick={onResetOverrides} style={ghostBtn()}>
+            <RotateCcw size={12} /> אפס כל המיקומים בשקף
+          </button>
+        </Section>
+
+        <Section label="שדות תוכן">
+          <SlotEditor
+            slots={slide.slots as unknown as Record<string, unknown>}
+            onChange={onUpdateSlot}
+            onAiRewrite={onAiRewrite}
+            aiBusy={aiBusy}
+          />
+        </Section>
+      </div>
+    )
+  }
+
+  // Free element selected
+  if (selectedFreeEl) {
+    return (
+      <div style={{ padding: 16, flex: 1, overflow: 'auto' }}>
+        <PanelHeader icon={iconForFreeKind(selectedFreeEl.kind)} title={labelForFreeKind(selectedFreeEl.kind)} />
+
+        {selectedFreeEl.kind === 'text' && (
+          <Section label="תוכן">
+            <textarea
+              value={selectedFreeEl.text || ''}
+              onChange={(e) => onUpdateFreeElement(selectedFreeEl.id, { text: e.target.value })}
+              rows={4}
+              style={inputStyle()} />
+          </Section>
+        )}
+
+        {(selectedFreeEl.kind === 'image' || selectedFreeEl.kind === 'video') && (
+          <Section label="מקור">
+            <input value={selectedFreeEl.src || ''}
+              onChange={(e) => onUpdateFreeElement(selectedFreeEl.id, { src: e.target.value })}
+              style={inputStyle()} />
+            {selectedFreeEl.src && selectedFreeEl.kind === 'image' && (
+              <img src={selectedFreeEl.src} alt="" style={{ marginTop: 8, maxWidth: '100%', borderRadius: 4 }} />
+            )}
+          </Section>
+        )}
+
+        {selectedFreeEl.kind === 'shape' && (
+          <>
+            <Section label="מילוי">
+              <ColorRow label="צבע" value={selectedFreeEl.fill || ds.colors.primary}
+                palette={[ds.colors.primary + '40', ds.colors.primary, ds.colors.accent + '40', ds.colors.accent, '#ffffff40', '#00000040']}
+                onChange={(c) => onUpdateFreeElement(selectedFreeEl.id, { fill: c })} />
+            </Section>
+            <Section label="מסגרת">
+              <ColorRow label="צבע" value={selectedFreeEl.stroke || ''}
+                palette={[ds.colors.primary, ds.colors.accent, ds.colors.secondary, '#ffffff', 'transparent']}
+                onChange={(c) => onUpdateFreeElement(selectedFreeEl.id, { stroke: c })} />
+            </Section>
+          </>
+        )}
+
+        <div style={{ marginTop: 20, paddingTop: 12, borderTop: '1px solid #27272a' }}>
+          <button onClick={() => onDeleteFreeElement(selectedFreeEl.id)}
+            style={{ ...ghostBtn(), color: '#f87171' }}>
+            <Trash2 size={12} /> מחק אלמנט
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Slot/decor role selected — just show layer info + reset
+  return (
+    <div style={{ padding: 16, flex: 1, overflow: 'auto' }}>
+      <PanelHeader icon={<Eye size={14} />} title={`נבחר: ${selectedRole}`} />
+      <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
+        גרור בתצוגה להזיז. לחץ פעמיים לערוך טקסט.
+      </div>
+      <div style={{ fontSize: 12, opacity: 0.6 }}>
+        משנה שדות תוכן? בטל את הבחירה וגלול לתחתית.
+      </div>
+    </div>
+  )
+}
+
+function PanelHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid #27272a' }}>
+      <span style={{ color: '#888' }}>{icon}</span>
+      <span style={{ fontSize: 13, fontWeight: 600 }}>{title}</span>
+    </div>
+  )
+}
+
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, color: '#888', marginBottom: 6, fontWeight: 500 }}>{label}</div>
+      {children}
+    </div>
+  )
+}
+
+function ColorRow({ value, palette, onChange }: { label: string; value: string; palette: string[]; onChange: (c: string) => void }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+      {palette.map(c => (
+        <button key={c} onClick={() => onChange(c)} title={c}
+          style={{
+            width: 26, height: 26, background: c, borderRadius: 4, cursor: 'pointer',
+            border: value === c ? '2px solid #fff' : '1px solid #333',
+          }} />
+      ))}
+      <input type="color" value={value.startsWith('#') && value.length === 7 ? value : '#ffffff'}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ width: 32, height: 26, background: 'transparent', border: '1px solid #333', borderRadius: 4, cursor: 'pointer' }} />
+    </div>
+  )
+}
+
+function ghostBtn(): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    padding: '6px 10px', background: '#1f1f22', color: '#bbb',
+    border: '1px solid #2a2a2f', borderRadius: 5, cursor: 'pointer',
+    fontSize: 11, fontFamily: 'inherit',
+  }
+}
+
+function iconForFreeKind(k: FreeElement['kind']): React.ReactNode {
+  if (k === 'text') return <Type size={14} />
+  if (k === 'image') return <ImageIcon size={14} />
+  if (k === 'video') return <Video size={14} />
+  return <Square size={14} />
+}
+
+function labelForFreeKind(k: FreeElement['kind']): string {
+  if (k === 'text') return 'טקסט'
+  if (k === 'image') return 'תמונה'
+  if (k === 'video') return 'וידאו'
+  return 'צורה'
+}
+
+// ─── Slot editor ──────────────────────────────────────────
+
+function SlotEditor({
+  slots, onChange, onAiRewrite, aiBusy,
+}: {
+  slots: Record<string, unknown>
+  onChange: (k: string, v: unknown) => void
+  onAiRewrite: (k: string, mode: 'shorter' | 'dramatic' | 'formal') => void
+  aiBusy: string | null
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {Object.entries(slots).map(([key, value]) => (
+        <Field key={key} fieldKey={key} value={value} onChange={onChange} onAiRewrite={onAiRewrite} aiBusy={aiBusy} />
+      ))}
+    </div>
+  )
+}
+
+function Field({
+  fieldKey, value, onChange, onAiRewrite, aiBusy,
+}: {
+  fieldKey: string
+  value: unknown
+  onChange: (k: string, v: unknown) => void
+  onAiRewrite: (k: string, mode: 'shorter' | 'dramatic' | 'formal') => void
+  aiBusy: string | null
+}) {
+  const label = (
+    <label style={{ display: 'block', fontSize: 11, opacity: 0.6, marginBottom: 4 }}>{fieldKey}</label>
+  )
+
+  // Strings
+  if (typeof value === 'string' || value == null) {
+    const s = String(value ?? '')
+    const isLong = s.length > 60 || /\n/.test(s)
+    const isImage = /^https?:\/\//.test(s) && /(image|pic|bg|photo|img)/i.test(fieldKey)
+    return (
+      <div>
+        {label}
+        {isLong ? (
+          <textarea value={s} onChange={(e) => onChange(fieldKey, e.target.value)} rows={4}
+            style={inputStyle()} />
+        ) : (
+          <input value={s} onChange={(e) => onChange(fieldKey, e.target.value)} style={inputStyle()} />
+        )}
+        {isImage && s && (
+          <img src={s} alt="" style={{ maxWidth: '100%', maxHeight: 100, marginTop: 6, borderRadius: 4 }} />
+        )}
+        {typeof value === 'string' && s.trim() && !isImage && (
+          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+            {(['shorter', 'dramatic', 'formal'] as const).map(m => (
+              <button key={m} onClick={() => onAiRewrite(fieldKey, m)} disabled={aiBusy === fieldKey}
+                style={{ padding: '3px 8px', background: '#1f3a4d', color: '#9cf', border: 0, borderRadius: 3, fontSize: 10, cursor: 'pointer' }}>
+                {aiBusy === fieldKey ? '…' : `AI: ${m}`}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Booleans
+  if (typeof value === 'boolean') {
+    return (
+      <div>
+        {label}
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+          <input type="checkbox" checked={value} onChange={(e) => onChange(fieldKey, e.target.checked)} />
+          {fieldKey}
+        </label>
+      </div>
+    )
+  }
+
+  // Arrays
+  if (Array.isArray(value)) {
+    return (
+      <div>
+        {label}
+        <ArrayField fieldKey={fieldKey} arr={value} onChange={(v) => onChange(fieldKey, v)} />
+      </div>
+    )
+  }
+
+  // Fallback (objects → JSON)
+  return (
+    <div>
+      {label}
+      <textarea value={JSON.stringify(value, null, 2)} rows={6}
+        onChange={(e) => { try { onChange(fieldKey, JSON.parse(e.target.value)) } catch {} }}
+        style={{ ...inputStyle(), fontFamily: 'monospace', fontSize: 11 }} />
+    </div>
+  )
+}
+
+function ArrayField({ arr, onChange }: { fieldKey: string; arr: unknown[]; onChange: (v: unknown[]) => void }) {
+  function updateItem(i: number, v: unknown) {
+    const next = [...arr]; next[i] = v; onChange(next)
+  }
+  function deleteItem(i: number) { onChange(arr.filter((_, j) => j !== i)) }
+  function addItem() {
+    const sample = arr[0]
+    if (typeof sample === 'string') onChange([...arr, ''])
+    else if (sample && typeof sample === 'object') {
+      const blank = Object.fromEntries(Object.keys(sample as object).map(k => [k, '']))
+      onChange([...arr, blank])
+    } else onChange([...arr, ''])
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {arr.map((item, i) => (
+        <div key={i} style={{ background: '#141414', padding: 8, borderRadius: 4, position: 'relative' }}>
+          <button onClick={() => deleteItem(i)}
+            style={{ position: 'absolute', top: 4, insetInlineStart: 4, background: '#5a1a1a', color: '#fff', border: 0, borderRadius: 3, fontSize: 10, cursor: 'pointer', padding: '2px 6px' }}>×</button>
+          {typeof item === 'string' ? (
+            <input value={item} onChange={(e) => updateItem(i, e.target.value)} style={inputStyle()} />
+          ) : item && typeof item === 'object' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {Object.entries(item as Record<string, unknown>).map(([k, v]) => (
+                <div key={k}>
+                  <label style={{ fontSize: 10, opacity: 0.5, display: 'block' }}>{k}</label>
+                  <input
+                    value={String(v ?? '')}
+                    onChange={(e) => updateItem(i, { ...(item as object), [k]: e.target.value })}
+                    style={inputStyle()}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ))}
+      <button onClick={addItem}
+        style={{ padding: '6px', background: '#1a3a1a', color: '#9f9', border: 0, borderRadius: 3, cursor: 'pointer', fontSize: 11 }}>
+        + הוסף פריט
+      </button>
+    </div>
+  )
+}
+
+function inputStyle(): React.CSSProperties {
+  return {
+    width: '100%', background: '#1a1a1a', color: '#eee', border: '1px solid #333',
+    borderRadius: 4, padding: '6px 8px', fontSize: 12, fontFamily: 'inherit',
+    direction: 'rtl' as const,
+  }
+}
+
+// ─── Default slots per layout ─────────────────────────────
+
+function defaultSlotsFor(layout: LayoutId): unknown {
+  switch (layout) {
+    case 'hero-cover': return { brandName: '', title: 'כותרת', subtitle: '', tagline: '', eyebrowLabel: '' }
+    case 'full-bleed-image-text': return { image: '', eyebrowLabel: '', title: 'כותרת', subtitle: '', body: '' }
+    case 'split-image-text': return { image: '', imageSide: 'left', eyebrowLabel: '', title: 'כותרת', bodyText: '', bullets: [] }
+    case 'centered-insight': return { eyebrowLabel: '', title: 'תובנה', dataPoint: '', dataLabel: '', source: '' }
+    case 'three-pillars-grid': return { eyebrowLabel: '', title: 'כותרת', pillars: [
+      { number: '01', title: '', description: '' },
+      { number: '02', title: '', description: '' },
+      { number: '03', title: '', description: '' },
+    ] }
+    case 'numbered-stats': return { eyebrowLabel: '', title: 'נתונים', stats: [{ value: '', label: '' }] }
+    case 'influencer-grid': return { eyebrowLabel: '', title: 'משפיענים', subtitle: '', influencers: [{ name: '', handle: '', followers: '', engagement: '' }] }
+    case 'closing-cta': return { brandName: '', title: 'בואו נתחיל', tagline: '' }
+  }
+}
+
+// ─── Layers panel ─────────────────────────────────────────
+
+const DECOR_LABELS: Record<string, string> = {
+  'decor-atm-1': '✨ זוהר אטמוספרי',
+  'decor-stripe-top': '▔ פס עליון',
+  'decor-stripe-bottom': '▁ פס תחתון',
+  'decor-corner-tl': '◤ פינה שמאל-עליון',
+  'decor-corner-br': '◢ פינה ימין-תחתון',
+  'decor-slide-num': '# מספר שקף',
+  'decor-img-bleed': '🖼 תמונת רקע',
+  'decor-img-overlay': '▦ שכבת כהוי',
+}
+
+function LayersPanel({
+  html, slide, onSelect, onToggleHide, onResetElement,
+}: {
+  html: string
+  slide: StructuredSlide
+  onSelect: (role: string) => void
+  onToggleHide: (role: string) => void
+  onResetElement: (role: string) => void
+}) {
+  // Extract all data-role values from rendered HTML
+  const roles = useMemo(() => {
+    const found = new Set<string>()
+    const re = /data-role="([^"]+)"/g
+    let m
+    while ((m = re.exec(html)) !== null) found.add(m[1])
+    return Array.from(found)
+  }, [html])
+
+  const hidden = new Set(slide.hiddenRoles || [])
+  const overridden = new Set(Object.keys(slide.elementStyles || {}))
+  const decor = roles.filter(r => r.startsWith('decor-'))
+  const free = roles.filter(r => r.startsWith('free-'))
+  const content = roles.filter(r => !r.startsWith('decor-') && !r.startsWith('free-'))
+
+  function Row({ role, label }: { role: string; label: string }) {
+    const isHidden = hidden.has(role)
+    const isOverridden = overridden.has(role)
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 6px', background: '#141414', borderRadius: 3, marginBottom: 2 }}>
+        <button onClick={() => !isHidden && onSelect(role)}
+          style={{ flex: 1, textAlign: 'right', background: 'transparent', color: isHidden ? '#555' : '#ddd', border: 0, cursor: isHidden ? 'default' : 'pointer', fontSize: 11, padding: 0 }}>
+          {label} {isOverridden && <span style={{ color: '#E94560', fontSize: 9 }}>●</span>}
+        </button>
+        {isOverridden && !isHidden && (
+          <button onClick={() => onResetElement(role)} title="אפס מיקום"
+            style={{ background: '#2a2a2a', color: '#888', border: 0, borderRadius: 2, cursor: 'pointer', fontSize: 10, padding: '2px 5px' }}>↺</button>
+        )}
+        <button onClick={() => onToggleHide(role)} title={isHidden ? 'הצג' : 'הסתר'}
+          style={{ background: '#2a2a2a', color: isHidden ? '#E94560' : '#888', border: 0, borderRadius: 2, cursor: 'pointer', fontSize: 10, padding: '2px 5px' }}>
+          {isHidden ? '◌' : '◉'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 8 }}>שכבות</div>
+      {content.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 10, opacity: 0.5, marginBottom: 4 }}>תוכן</div>
+          {content.map(r => <Row key={r} role={r} label={r} />)}
+        </div>
+      )}
+      {free.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 10, opacity: 0.5, marginBottom: 4 }}>אלמנטים חופשיים</div>
+          {free.map(r => <Row key={r} role={r} label={r.replace(/^free-/, '') + ' ✎'} />)}
+        </div>
+      )}
+      {decor.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 10, opacity: 0.5, marginBottom: 4 }}>קישוטים</div>
+          {decor.map(r => <Row key={r} role={r} label={DECOR_LABELS[r] || r} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── AI chat panel ────────────────────────────────────────
+
+function AIChatPanel({ presentation, onApply, onClose }: {
+  presentation: StructuredPresentation
+  onApply: (next: StructuredPresentation) => void
+  onClose: () => void
+}) {
+  const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [log, setLog] = useState<Array<{ role: 'user' | 'ai'; text: string }>>([])
+
+  async function send() {
+    if (!input.trim() || busy) return
+    const instruction = input.trim()
+    setLog(l => [...l, { role: 'user', text: instruction }])
+    setInput('')
+    setBusy(true)
+    try {
+      const res = await fetch('/api/gamma-prototype/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presentation, instruction }),
+      })
+      const json = await res.json()
+      if (!json.presentation) throw new Error(json.error || 'chat failed')
+      onApply(json.presentation)
+      setLog(l => [...l, { role: 'ai', text: '✓ עדכנתי את המצגת' }])
+    } catch (e) {
+      setLog(l => [...l, { role: 'ai', text: '❌ ' + (e instanceof Error ? e.message : 'error') }])
+    } finally { setBusy(false) }
+  }
+
+  const quick = [
+    'קצר את כל הטקסטים',
+    'הפוך את הטון לדרמטי יותר',
+    'תרגם הכל לאנגלית',
+    'שנה את הפלטה לצבעים חמים',
+  ]
+
+  return (
+    <div style={{ position: 'fixed', bottom: 16, insetInlineStart: 16, width: 360, background: '#141414', border: '1px solid #333', borderRadius: 10, zIndex: 80, display: 'flex', flexDirection: 'column', maxHeight: 520 }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid #222' }}>
+        <strong style={{ fontSize: 13, color: '#eee' }}>💬 צ'אט AI — שינויים רוחביים</strong>
+        <button onClick={onClose} style={{ marginInlineStart: 'auto', background: 'transparent', color: '#888', border: 0, fontSize: 18, cursor: 'pointer' }}>×</button>
+      </div>
+      <div style={{ padding: 10, flex: 1, overflow: 'auto', fontSize: 12, color: '#ddd' }}>
+        {log.length === 0 && (
+          <div style={{ opacity: 0.6, marginBottom: 8 }}>
+            כתוב/י מה לשנות במצגת כולה.
+          </div>
+        )}
+        {log.map((m, i) => (
+          <div key={i} style={{ marginBottom: 8, padding: 8, background: m.role === 'user' ? '#1f2937' : '#1a1a1a', borderRadius: 6 }}>
+            <div style={{ fontSize: 10, opacity: 0.5, marginBottom: 2 }}>{m.role === 'user' ? 'אתה' : 'AI'}</div>
+            {m.text}
+          </div>
+        ))}
+        {busy && <div style={{ opacity: 0.7 }}>⏳ AI עובד…</div>}
+      </div>
+      <div style={{ padding: 8, borderTop: '1px solid #222' }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+          {quick.map(q => (
+            <button key={q} onClick={() => setInput(q)} disabled={busy}
+              style={{ padding: '3px 8px', background: '#222', color: '#aaa', border: 0, borderRadius: 3, cursor: 'pointer', fontSize: 10 }}>
+              {q}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input value={input} onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+            disabled={busy}
+            placeholder="לדוגמה: 'הפוך את כל הכותרות למינימליסטיות'"
+            style={{ flex: 1, background: '#0a0a0a', color: '#eee', border: '1px solid #333', borderRadius: 4, padding: '6px 8px', fontSize: 12 }} />
+          <button onClick={send} disabled={busy || !input.trim()} style={{ ...btn('#E94560'), padding: '6px 12px' }}>שלח</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Text formatting toolbar (for selected free text) ────
+
+function TextFormatToolbar({ element, ds, onChange }: {
+  element: FreeElement
+  ds: StructuredPresentation['designSystem']
+  onChange: (fmt: NonNullable<FreeElement['format']>) => void
+}) {
+  const fmt = element.format || {}
+  const palette = [ds.colors.text, ds.colors.primary, ds.colors.accent, ds.colors.secondary, ds.colors.muted, '#ffffff', '#000000']
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: 8, background: '#1a1a1a', borderRadius: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, opacity: 0.6, marginInlineEnd: 6 }}>טקסט:</span>
+      <button onClick={() => onChange({ fontWeight: fmt.fontWeight === '800' ? '400' : '800' })}
+        style={{ ...btn(fmt.fontWeight === '800' ? '#E94560' : '#333'), fontWeight: 'bold' }}>B</button>
+      <button onClick={() => onChange({ fontStyle: fmt.fontStyle === 'italic' ? 'normal' : 'italic' })}
+        style={{ ...btn(fmt.fontStyle === 'italic' ? '#E94560' : '#333'), fontStyle: 'italic' }}>I</button>
+      <button onClick={() => onChange({ textDecoration: fmt.textDecoration === 'underline' ? 'none' : 'underline' })}
+        style={{ ...btn(fmt.textDecoration === 'underline' ? '#E94560' : '#333'), textDecoration: 'underline' }}>U</button>
+      <div style={{ width: 1, height: 20, background: '#333' }} />
+      <input type="number" value={fmt.fontSize || 32} min={8} max={300}
+        onChange={(e) => onChange({ fontSize: Number(e.target.value) })}
+        style={{ width: 60, background: '#0a0a0a', color: '#eee', border: '1px solid #333', borderRadius: 3, padding: '4px 6px', fontSize: 12 }} />
+      <span style={{ fontSize: 10, opacity: 0.5 }}>px</span>
+      <div style={{ width: 1, height: 20, background: '#333' }} />
+      {(['right','center','left'] as const).map(a => (
+        <button key={a} onClick={() => onChange({ textAlign: a })}
+          style={btn(fmt.textAlign === a ? '#E94560' : '#333')}>
+          {a === 'right' ? '⇥' : a === 'center' ? '☰' : '⇤'}
+        </button>
+      ))}
+      <div style={{ width: 1, height: 20, background: '#333' }} />
+      <span style={{ fontSize: 11, opacity: 0.6 }}>צבע:</span>
+      {palette.map(c => (
+        <button key={c} onClick={() => onChange({ color: c })}
+          title={c}
+          style={{ width: 22, height: 22, background: c, border: fmt.color === c ? '2px solid #fff' : '1px solid #444', borderRadius: 3, cursor: 'pointer' }} />
+      ))}
+      <input type="color" value={fmt.color || '#ffffff'}
+        onChange={(e) => onChange({ color: e.target.value })}
+        style={{ width: 30, height: 22, background: 'transparent', border: '1px solid #444', borderRadius: 3, cursor: 'pointer' }} />
+    </div>
+  )
+}
+
+// ─── Background picker ────────────────────────────────────
+
+function BgPickerButton({ slide, ds, onChange }: {
+  slide: StructuredSlide
+  ds: StructuredPresentation['designSystem']
+  onChange: (bg: { color?: string; image?: string } | undefined) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const palette = [ds.colors.background, ds.colors.primary, ds.colors.secondary, ds.colors.accent, '#0a0a0a', '#ffffff']
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={btn('#333')} title="רקע שקף">🎨 רקע</button>
+      {open && (
+        <div style={{ position: 'absolute', top: 36, insetInlineEnd: 0, background: '#1a1a1a', padding: 12, borderRadius: 6, border: '1px solid #333', zIndex: 50, minWidth: 220 }}>
+          <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>מהפלטה:</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+            {palette.map(c => (
+              <button key={c} onClick={() => { onChange({ color: c }); setOpen(false) }}
+                style={{ width: 32, height: 32, background: c, border: '1px solid #444', borderRadius: 4, cursor: 'pointer' }} />
+            ))}
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>צבע חופשי:</div>
+          <input type="color" defaultValue={slide.bg?.color || ds.colors.background}
+            onChange={(e) => onChange({ color: e.target.value })}
+            style={{ width: '100%', height: 32, background: 'transparent', border: 0, cursor: 'pointer' }} />
+          <button onClick={() => { onChange(undefined); setOpen(false) }}
+            style={{ ...btn('#222'), width: '100%', marginTop: 8 }}>אפס רקע</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Slide thumbnail ──────────────────────────────────────
+
+function SlideThumb({ slide, ds, index, active, onClick }: {
+  slide: StructuredSlide
+  ds: StructuredPresentation['designSystem']
+  index: number
+  active: boolean
+  onClick: () => void
+}) {
+  const html = useMemo(() => renderStructuredSlide(slide, ds), [slide, ds])
+  return (
+    <div onClick={onClick}
+      style={{
+        marginBottom: 8,
+        border: active ? '2px solid #E94560' : '2px solid #222',
+        borderRadius: 4, cursor: 'pointer', overflow: 'hidden',
+        background: '#000', position: 'relative',
+      }}>
+      <div style={{ width: '100%', aspectRatio: '16 / 9', position: 'relative', overflow: 'hidden' }}>
+        <iframe srcDoc={html} tabIndex={-1}
+          style={{
+            width: 1920, height: 1080, border: 0, pointerEvents: 'none',
+            transform: 'scale(0.1)', transformOrigin: 'top left',
+            position: 'absolute', top: 0, left: 0,
+          }}
+          sandbox="allow-same-origin"
+        />
+      </div>
+      <div style={{ padding: '4px 8px', fontSize: 10, color: active ? '#fff' : '#999', background: active ? '#E94560' : '#141414', display: 'flex', justifyContent: 'space-between' }}>
+        <span>{index + 1}</span>
+        <span style={{ opacity: 0.8 }}>{slide.slideType}</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Presentation mode ────────────────────────────────────
+
+function PresentationMode({ presentation, startIndex, onClose }: {
+  presentation: StructuredPresentation
+  startIndex: number
+  onClose: () => void
+}) {
+  const [i, setI] = useState(startIndex)
+  const html = useMemo(() => {
+    const s = presentation.slides[i]
+    return s ? renderStructuredSlide(s, presentation.designSystem) : ''
+  }, [presentation, i])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+      else if (['ArrowRight','PageDown',' '].includes(e.key)) setI(x => Math.min(x + 1, presentation.slides.length - 1))
+      else if (['ArrowLeft','PageUp'].includes(e.key)) setI(x => Math.max(x - 1, 0))
+      else if (e.key === 'Home') setI(0)
+      else if (e.key === 'End') setI(presentation.slides.length - 1)
+    }
+    window.addEventListener('keydown', onKey)
+    // Try native fullscreen
+    document.documentElement.requestFullscreen?.().catch(() => {})
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+    }
+  }, [onClose, presentation.slides.length])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 200, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <div style={{ position: 'relative', width: 'min(100vw, calc(100vh * 16 / 9))', aspectRatio: '16 / 9' }}>
+          <iframe
+            srcDoc={html}
+            style={{
+              width: 1920, height: 1080, border: 0,
+              transform: `scale(calc(min(100vw, 100vh * 16 / 9) / 1920))`,
+              transformOrigin: 'top left',
+              position: 'absolute', top: 0, left: 0,
+            }}
+          />
+        </div>
+      </div>
+      <div style={{ padding: 8, color: '#888', fontSize: 12, display: 'flex', alignItems: 'center', gap: 14, background: '#0a0a0a', borderTop: '1px solid #222' }}>
+        <button onClick={onClose} style={{ padding: '4px 10px', background: '#333', color: '#fff', border: 0, borderRadius: 4, cursor: 'pointer' }}>✕ סגור (Esc)</button>
+        <button onClick={() => setI(x => Math.max(x - 1, 0))} disabled={i === 0} style={{ padding: '4px 10px', background: '#222', color: '#fff', border: 0, borderRadius: 4, cursor: 'pointer' }}>◀</button>
+        <button onClick={() => setI(x => Math.min(x + 1, presentation.slides.length - 1))} disabled={i === presentation.slides.length - 1} style={{ padding: '4px 10px', background: '#222', color: '#fff', border: 0, borderRadius: 4, cursor: 'pointer' }}>▶</button>
+        <span>{i + 1} / {presentation.slides.length}</span>
+        <span style={{ marginInlineStart: 'auto', opacity: 0.5 }}>⌨ חצים / רווח / Home / End</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Media picker modal ───────────────────────────────────
+
+function MediaPicker({ kind, onClose, onPick, documentId }: {
+  kind: 'image' | 'video'
+  onClose: () => void
+  onPick: (url: string) => void
+  documentId: string
+}) {
+  const [tab, setTab] = useState<'upload' | 'url' | 'ai'>(kind === 'image' ? 'ai' : 'upload')
+  const [url, setUrl] = useState('')
+  const [prompt, setPrompt] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [genUrl, setGenUrl] = useState<string | null>(null)
+
+  async function doUpload(file: File) {
+    setBusy('העלאה…'); setErr(null)
+    try {
+      const fd = new FormData(); fd.append('file', file); fd.append('kind', kind)
+      const res = await fetch('/api/gamma-prototype/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!json.url) throw new Error(json.error || 'Upload failed')
+      onPick(json.url)
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed') }
+    finally { setBusy(null) }
+  }
+
+  async function doGenerate() {
+    if (!prompt.trim()) return
+    setBusy('מייצר תמונה…'); setErr(null); setGenUrl(null)
+    try {
+      const res = await fetch('/api/image', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, documentId }),
+      })
+      const json = await res.json()
+      if (!json.imageUrl) throw new Error(json.error || 'Generation failed')
+      setGenUrl(json.imageUrl)
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Generation failed') }
+    finally { setBusy(null) }
+  }
+
+  const tabs: Array<{ id: 'upload' | 'url' | 'ai'; label: string; show: boolean }> = [
+    { id: 'ai', label: '✨ ייצר עם AI', show: kind === 'image' },
+    { id: 'upload', label: '⬆ מהמחשב', show: true },
+    { id: 'url', label: '🔗 כתובת', show: true },
+  ]
+
+  return (
+    <div onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ background: '#141414', borderRadius: 10, padding: 20, width: 520, maxHeight: '90vh', overflow: 'auto', direction: 'rtl', color: '#eee' }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 18 }}>{kind === 'image' ? 'הוספת תמונה' : 'הוספת וידאו'}</h3>
+          <button onClick={onClose} style={{ marginInlineStart: 'auto', background: 'transparent', color: '#888', border: 0, fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #333' }}>
+          {tabs.filter(t => t.show).map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              style={{ padding: '8px 14px', background: 'transparent', color: tab === t.id ? '#E94560' : '#888',
+                border: 0, borderBottom: tab === t.id ? '2px solid #E94560' : '2px solid transparent',
+                cursor: 'pointer', fontSize: 13 }}>{t.label}</button>
+          ))}
+        </div>
+
+        {err && <div style={{ background: '#40141a', padding: 8, borderRadius: 4, marginBottom: 12, fontSize: 12 }}>{err}</div>}
+        {busy && <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 12 }}>⏳ {busy}</div>}
+
+        {tab === 'ai' && kind === 'image' && (
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
+              תיאור התמונה (באנגלית או עברית, ככל שמפורט יותר — טוב יותר):
+            </div>
+            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)}
+              placeholder="לדוגמה: אישה צעירה יושבת בקפה בתל אביב, אור שמש רך של אחר הצהריים, מצולם כאילו מאינסטגרם"
+              rows={4} style={inputStyle()} />
+            <button onClick={doGenerate} disabled={!!busy || !prompt.trim()}
+              style={{ ...btn('#E94560'), marginTop: 10, width: '100%', padding: '10px' }}>
+              ✨ ייצר תמונה
+            </button>
+            {genUrl && (
+              <div style={{ marginTop: 14 }}>
+                <img src={genUrl} alt="" style={{ width: '100%', borderRadius: 6 }} />
+                <button onClick={() => onPick(genUrl)}
+                  style={{ ...btn('#1a3a1a'), marginTop: 8, width: '100%' }}>השתמש בתמונה הזאת</button>
+                <button onClick={() => { setGenUrl(null); setPrompt('') }}
+                  style={{ ...btn('#333'), marginTop: 6, width: '100%' }}>ייצר שוב עם תיאור אחר</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'upload' && (
+          <div>
+            <label style={{ display: 'block', border: '2px dashed #444', borderRadius: 8, padding: 40, textAlign: 'center', cursor: 'pointer', background: '#0a0a0a' }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>{kind === 'image' ? '🖼️' : '🎬'}</div>
+              <div style={{ fontSize: 13, opacity: 0.8 }}>לחץ לבחירת קובץ או גרור לכאן</div>
+              <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4 }}>
+                {kind === 'image' ? 'JPG / PNG / WebP' : 'MP4 / WebM — עד 50MB'}
+              </div>
+              <input type="file" accept={kind === 'image' ? 'image/*' : 'video/*'} style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) doUpload(f) }} />
+            </label>
+          </div>
+        )}
+
+        {tab === 'url' && (
+          <div>
+            <label style={{ fontSize: 12, opacity: 0.7, display: 'block', marginBottom: 6 }}>כתובת URL</label>
+            <input value={url} onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://..." style={inputStyle()} />
+            <button onClick={() => url.trim() && onPick(url.trim())}
+              disabled={!url.trim()}
+              style={{ ...btn('#1a3a1a'), marginTop: 10, width: '100%', padding: '10px' }}>
+              הוסף
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

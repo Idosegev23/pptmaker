@@ -482,7 +482,7 @@ export default function GeneratePage() {
           })
           console.log(`[Generate] ✅ Gamma version saved — ${gammaJson.slideCount} slides`)
           setStage('done')
-          setTimeout(() => router.push(`/gamma-proto/${documentId}`), 1500)
+          setTimeout(() => router.push(`/edit/${documentId}`), 1500)
           return
         }
         console.warn('[Generate] Gamma generation failed, falling back to HTML editor')
