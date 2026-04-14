@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import type { Presentation, Slide, SlideElement, TextElement, ShapeElement, ImageElement, VideoElement, MockupElement, CompareElement, LogoStripElement, MapElement, ShapeType, VideoProvider } from '@/types/presentation'
@@ -47,6 +47,7 @@ function generateId(prefix: string): string {
 
 export default function PresentationEditorPage() {
   const params = useParams()
+  const router = useRouter()
   const documentId = params.id as string
 
   const [pageState, setPageState] = useState<PageState>('loading')
@@ -126,6 +127,14 @@ export default function PresentationEditorPage() {
       const docData = doc.data as Record<string, unknown>
       setBrandName((docData.brandName as string) || doc.title || 'הצעת מחיר')
       setDocumentData(docData)
+
+      // Check for Structured (Gamma) presentation first — redirect to new editor
+      const structured = docData._structuredPresentation as { slides?: unknown[] } | undefined
+      if (structured?.slides?.length) {
+        console.log(`[Editor] Structured presentation found — redirecting to gamma editor`)
+        router.replace(`/gamma-proto/${documentId}`)
+        return
+      }
 
       // Check for HTML-Native presentation first (v6)
       const htmlPres = docData._htmlPresentation as { htmlSlides?: string[]; slideTypes?: string[]; designSystem?: unknown } | undefined
@@ -734,6 +743,29 @@ export default function PresentationEditorPage() {
         {/* Sidebar — thumbnails */}
         <div className="w-48 bg-[#111118] border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-2">
           <div className="text-xs text-gray-500 font-medium px-1 mb-2">{brandName}</div>
+          <button
+            onClick={async () => {
+              if (!confirm('לשדרג לעורך החדש? זה ייצר גרסה מובנית של המצגת שתומכת בגרירה, עריכה inline, AI, ושיתוף.')) return
+              try {
+                const res = await fetch('/api/gamma-prototype', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ documentId }),
+                })
+                const json = await res.json()
+                if (!json.success) { alert('נכשל: ' + (json.error || 'unknown')); return }
+                await fetch(`/api/documents/${documentId}`, {
+                  method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ _structuredPresentation: json.presentation }),
+                })
+                router.replace(`/gamma-proto/${documentId}`)
+              } catch (e) {
+                alert('שגיאה: ' + (e instanceof Error ? e.message : 'unknown'))
+              }
+            }}
+            className="w-full mb-2 px-2 py-2 rounded bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+            title="עורך חדש עם גרירה, עריכה inline, AI">
+            ✨ שדרג לעורך החדש
+          </button>
           {htmlSlides.map((slideHtml, i) => (
             <div
               key={i}

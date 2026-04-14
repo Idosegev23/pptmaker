@@ -467,6 +467,29 @@ export default function GeneratePage() {
         }
       } catch { /* follow-up is non-critical */ }
 
+      // Also generate structured (gamma) version for the new editor
+      try {
+        console.log('[Generate] Starting gamma generation (structured format for new editor)')
+        const gammaRes = await fetch('/api/gamma-prototype', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId }),
+        })
+        const gammaJson = await gammaRes.json()
+        if (gammaJson.success && gammaJson.presentation) {
+          await fetch(`/api/documents/${documentId}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ _structuredPresentation: gammaJson.presentation }),
+          })
+          console.log(`[Generate] ✅ Gamma version saved — ${gammaJson.slideCount} slides`)
+          setStage('done')
+          setTimeout(() => router.push(`/gamma-proto/${documentId}`), 1500)
+          return
+        }
+        console.warn('[Generate] Gamma generation failed, falling back to HTML editor')
+      } catch (gammaErr) {
+        console.warn('[Generate] Gamma generation error, falling back:', gammaErr)
+      }
+
       setStage('done')
       setTimeout(() => router.push(`/edit/${documentId}`), 1500)
     } catch (err) {
