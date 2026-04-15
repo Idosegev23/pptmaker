@@ -768,8 +768,15 @@ function __gammaInit(){
     const snapSize = window.__gammaSnap || 0;
     const snapV = (v) => snapSize > 0 ? Math.round(v / snapSize) * snapSize : Math.round(v);
     if (dragging.mode === 'move') {
-      const x = snapV(dragging.origX + dx);
-      const y = snapV(dragging.origY + dy);
+      let x = snapV(dragging.origX + dx);
+      let y = snapV(dragging.origY + dy);
+      const w = selected.offsetWidth || 200;
+      const h = selected.offsetHeight || 100;
+      // Smart guides: snap to slide-center and edges of other data-role elements
+      const guides = computeSmartGuides(x, y, w, h, selected);
+      if (guides.x !== null) x = guides.x;
+      if (guides.y !== null) y = guides.y;
+      renderGuides(guides);
       selected.style.position = 'absolute';
       selected.style.left = x + 'px';
       selected.style.top = y + 'px';
@@ -789,7 +796,104 @@ function __gammaInit(){
   document.addEventListener('pointerup', () => {
     if (dragging && dragging.moved) commitMove();
     dragging = null;
+    clearGuides();
   });
+
+  // ── Smart guides (alignment lines) ──
+  const GUIDE_THRESHOLD = 6; // slide-unit pixels
+  const guideEls = { h: [], v: [] };
+
+  function computeSmartGuides(x, y, w, h, el) {
+    const targets = [];
+    // Slide edges + center
+    targets.push({ t: 'v', pos: 0 }, { t: 'v', pos: 960 }, { t: 'v', pos: 1920 });
+    targets.push({ t: 'h', pos: 0 }, { t: 'h', pos: 540 }, { t: 'h', pos: 1080 });
+    // Other elements' edges + centers
+    document.querySelectorAll('[data-role]').forEach(other => {
+      if (other === el) return;
+      if (other.classList.contains('__handle') || other.classList.contains('__editing')) return;
+      const r = other.getBoundingClientRect();
+      const { sr, scaleX, scaleY } = getSlideMetrics();
+      const ox = (r.left - sr.left) * scaleX;
+      const oy = (r.top - sr.top) * scaleY;
+      const ow = r.width * scaleX;
+      const oh = r.height * scaleY;
+      targets.push({ t: 'v', pos: ox }, { t: 'v', pos: ox + ow / 2 }, { t: 'v', pos: ox + ow });
+      targets.push({ t: 'h', pos: oy }, { t: 'h', pos: oy + oh / 2 }, { t: 'h', pos: oy + oh });
+    });
+
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    const xRight = x + w;
+    const yBottom = y + h;
+
+    const hits = { x: null, y: null, xLines: [], yLines: [] };
+    let bestVDist = GUIDE_THRESHOLD;
+    let bestHDist = GUIDE_THRESHOLD;
+
+    targets.forEach(tg => {
+      if (tg.t === 'v') {
+        // Check: left edge, center, right edge
+        [
+          { candidate: tg.pos, newX: tg.pos },
+          { candidate: tg.pos, newX: tg.pos - w / 2 },
+          { candidate: tg.pos, newX: tg.pos - w },
+        ].forEach(({ candidate, newX }) => {
+          // Check if our current computed edge or center is near the target
+          const dists = [Math.abs(x - candidate), Math.abs(cx - candidate), Math.abs(xRight - candidate)];
+          const minDist = Math.min(...dists);
+          if (minDist < bestVDist) {
+            bestVDist = minDist;
+            hits.x = newX;
+            hits.xLines = [candidate];
+          }
+        });
+      } else {
+        [
+          { candidate: tg.pos, newY: tg.pos },
+          { candidate: tg.pos, newY: tg.pos - h / 2 },
+          { candidate: tg.pos, newY: tg.pos - h },
+        ].forEach(({ candidate, newY }) => {
+          const dists = [Math.abs(y - candidate), Math.abs(cy - candidate), Math.abs(yBottom - candidate)];
+          const minDist = Math.min(...dists);
+          if (minDist < bestHDist) {
+            bestHDist = minDist;
+            hits.y = newY;
+            hits.yLines = [candidate];
+          }
+        });
+      }
+    });
+    return hits;
+  }
+
+  function renderGuides(hits) {
+    clearGuides();
+    if (hits.xLines.length) {
+      hits.xLines.forEach(pos => {
+        const g = document.createElement('div');
+        g.style.cssText = 'position:absolute; top:0; bottom:0; width:1px; background:#E94560; z-index:9997; pointer-events:none; box-shadow:0 0 4px #E94560;';
+        g.style.left = pos + 'px';
+        SLIDE.appendChild(g);
+        guideEls.v.push(g);
+      });
+    }
+    if (hits.yLines.length) {
+      hits.yLines.forEach(pos => {
+        const g = document.createElement('div');
+        g.style.cssText = 'position:absolute; left:0; right:0; height:1px; background:#E94560; z-index:9997; pointer-events:none; box-shadow:0 0 4px #E94560;';
+        g.style.top = pos + 'px';
+        SLIDE.appendChild(g);
+        guideEls.h.push(g);
+      });
+    }
+  }
+
+  function clearGuides() {
+    guideEls.v.forEach(g => g.remove());
+    guideEls.h.forEach(g => g.remove());
+    guideEls.v = []; guideEls.h = [];
+  }
 
   window.addEventListener('resize', positionHandles);
   setTimeout(positionHandles, 200);

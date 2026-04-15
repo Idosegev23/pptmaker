@@ -956,11 +956,7 @@ export default function GammaProtoPage() {
         </div>
       )}
 
-      {loading && !pres && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
-          <Sparkles size={20} style={{ marginInlineEnd: 10 }} /> טוען / מייצר…
-        </div>
-      )}
+      {loading && !pres && <GenerationLoader />}
 
       <ShareDialog
         isOpen={shareOpen}
@@ -1924,6 +1920,126 @@ function SlideThumbCompact({ slide, ds, index, active, onClick, onContextMenu, s
       }}>
         <span style={{ fontWeight: 600 }}>{index + 1}</span>
         <span style={{ opacity: 0.7, fontSize: 9 }}>{slide.slideType}</span>
+      </div>
+    </div>
+  )
+}
+
+function GenerationLoader() {
+  const steps = [
+    { icon: '📄', label: 'קורא את הבריף', detail: 'מנתח מותג, קהל, מטרות ומסרים' },
+    { icon: '🔍', label: 'משלים מחקר', detail: 'מאתר נתוני שוק ותובנות מבוססות' },
+    { icon: '🎨', label: 'בוחר פלטה ועיצוב', detail: 'מתאים צבעים וטיפוגרפיה למותג' },
+    { icon: '📐', label: 'בונה שלד מצגת', detail: 'קובע זרימה של 14+ שקפים לפי עומק הבריף' },
+    { icon: '✍️', label: 'כותב תוכן', detail: 'מחבר טקסטים חדים בעברית לכל שקף' },
+    { icon: '📊', label: 'מאתר תובנות עם מקור', detail: 'מצרף נתונים ומחקרים אמיתיים' },
+    { icon: '🎭', label: 'מוסיף רפרנסים', detail: 'משבץ קמפיינים מהעולם כהשראה' },
+    { icon: '🖼️', label: 'מוסיף תמונות ומשפיענים', detail: 'מחבר תמונות פרופיל ונתוני IMAI' },
+    { icon: '✨', label: 'עיצוב סופי', detail: 'מבצע בדיקות איכות אחרונות' },
+  ]
+  const [stepIdx, setStepIdx] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    // Step progression — slower near the end
+    const intervals = [3000, 4000, 4000, 5000, 8000, 7000, 5000, 6000, 99999]
+    let i = 0
+    const tick = () => {
+      setStepIdx(i)
+      if (i < steps.length - 1) {
+        const t = setTimeout(() => { i++; tick() }, intervals[i])
+        return () => clearTimeout(t)
+      }
+    }
+    tick()
+    const elapsedTimer = setInterval(() => setElapsed(e => e + 1), 1000)
+    return () => clearInterval(elapsedTimer)
+  }, [])
+
+  const progress = Math.min(95, ((stepIdx + 1) / steps.length) * 100)
+
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+      <div style={{ maxWidth: 560, width: '100%', textAlign: 'center', direction: 'rtl' }}>
+        {/* Animated hero */}
+        <div style={{ marginBottom: 40, position: 'relative', height: 100 }}>
+          <style>{`
+            @keyframes gammaGlow {
+              0%, 100% { opacity: 0.4; transform: scale(1); }
+              50% { opacity: 1; transform: scale(1.1); }
+            }
+            @keyframes gammaPulse {
+              0%, 100% { opacity: 0.6; }
+              50% { opacity: 1; }
+            }
+          `}</style>
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <div style={{
+              width: 80, height: 80, borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(233,69,96,0.4), transparent 70%)',
+              animation: 'gammaGlow 2s ease-in-out infinite',
+            }} />
+            <Sparkles size={44} style={{
+              position: 'absolute', color: '#E94560',
+              animation: 'gammaPulse 2s ease-in-out infinite',
+            }} />
+          </div>
+        </div>
+
+        <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 700, color: '#fff' }}>
+          Leaders AI בונה את המצגת שלך
+        </h2>
+        <p style={{ margin: '0 0 32px', fontSize: 13, color: '#999' }}>
+          זה יכול לקחת 45-90 שניות. אנחנו מעדיפים מצגת שווה על פני מצגת מהירה.
+        </p>
+
+        {/* Progress bar */}
+        <div style={{ marginBottom: 24, position: 'relative', height: 8, background: '#1f1f22', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{
+            position: 'absolute', top: 0, bottom: 0, right: 0,
+            width: `${progress}%`,
+            background: 'linear-gradient(90deg, #E94560, #F39C12)',
+            transition: 'width 0.6s ease-out',
+            boxShadow: '0 0 12px rgba(233,69,96,0.5)',
+          }} />
+        </div>
+
+        {/* Current step */}
+        <div style={{
+          padding: 20, background: '#1f1f22', borderRadius: 10,
+          border: '1px solid #27272a', textAlign: 'start', marginBottom: 16,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ fontSize: 32 }}>{steps[stepIdx].icon}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 2 }}>
+                {steps[stepIdx].label}
+              </div>
+              <div style={{ fontSize: 12, color: '#999' }}>{steps[stepIdx].detail}</div>
+            </div>
+            <div style={{ fontSize: 11, color: '#666', fontFamily: 'monospace' }}>
+              {stepIdx + 1} / {steps.length}
+            </div>
+          </div>
+        </div>
+
+        {/* Mini step list */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
+          {steps.map((_, i) => (
+            <div key={i} style={{
+              width: 24, height: 3, borderRadius: 2,
+              background: i <= stepIdx ? '#E94560' : '#2a2a2f',
+              transition: 'background 0.3s',
+            }} />
+          ))}
+        </div>
+
+        <div style={{ marginTop: 20, fontSize: 11, color: '#555' }}>
+          {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')} עברו · ניתן לעצב מחדש אחרי שהמצגת נטענת
+        </div>
       </div>
     </div>
   )
