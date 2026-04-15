@@ -673,6 +673,7 @@ export default function GammaProtoPage() {
   // Media swap handler (called when picker closes with a URL for the swap target)
   function handleMediaSwap(url: string) {
     if (!mediaSwapTarget || !pres || !slide) { setMediaSwapTarget(null); return }
+    console.log('[handleMediaSwap] target:', mediaSwapTarget, 'url:', url, 'layout:', slide.layout)
     const next = { ...pres, slides: [...pres.slides] }
     if (mediaSwapTarget.kind === 'free') {
       next.slides[idx] = {
@@ -680,8 +681,19 @@ export default function GammaProtoPage() {
         freeElements: (slide.freeElements || []).map(f => f.id === mediaSwapTarget.id ? { ...f, src: url } : f),
       }
     } else {
-      // Slot: the id is the data-role, which usually equals the slot key
-      const key = ROLE_TO_SLOT_KEY[mediaSwapTarget.id] || mediaSwapTarget.id
+      const role = mediaSwapTarget.id
+      // Resolve role → slot key. Background img-bleeds use different keys per layout.
+      let key: string
+      if (role === 'decor-img-bleed') {
+        key = (slide.layout === 'hero-cover' || slide.layout === 'closing-cta') ? 'backgroundImage' : 'image'
+      } else if (role === 'hero') {
+        key = 'image'
+      } else if (ROLE_TO_SLOT_KEY[role]) {
+        key = ROLE_TO_SLOT_KEY[role]
+      } else {
+        key = role
+      }
+      console.log('[handleMediaSwap] resolved role→key:', role, '→', key)
       next.slides[idx] = { ...slide, slots: { ...slide.slots, [key]: url } as never }
     }
     setPres(next)
