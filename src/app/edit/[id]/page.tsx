@@ -126,6 +126,19 @@ function computeInstantIssues(slide: StructuredSlide): SlideIssue[] {
   return issues
 }
 
+function buildStyleContext(pres: StructuredPresentation): string {
+  const ds = pres.designSystem
+  const parts: string[] = []
+  parts.push(`Brand: ${pres.brandName}.`)
+  parts.push(`Color palette — primary ${ds.colors.primary}, secondary ${ds.colors.secondary}, accent ${ds.colors.accent}, background ${ds.colors.background}, muted ${ds.colors.muted}.`)
+  if (ds.creativeDirection?.visualMetaphor) parts.push(`Visual metaphor: ${ds.creativeDirection.visualMetaphor}.`)
+  if (ds.creativeDirection?.oneRule) parts.push(`One design rule: ${ds.creativeDirection.oneRule}.`)
+  parts.push(`Typography: ${ds.fonts.heading} / ${ds.fonts.body}.`)
+  parts.push(`Mood: premium, editorial, slightly cinematic. Photography style — natural light, subtle film grain, not over-saturated.`)
+  parts.push(`Aspect ratio 16:9. Compose for a presentation slide (text may overlay — leave breathing room on one side).`)
+  return parts.join(' ')
+}
+
 function slideStatusColor(issues: SlideIssue[]): string {
   if (issues.some(i => i.severity === 'error')) return '#ef4444' // red
   if (issues.some(i => i.severity === 'warning')) return '#f59e0b' // amber
@@ -1011,6 +1024,7 @@ export default function GammaProtoPage() {
             setMediaPicker(null)
           }}
           documentId={params.id as string}
+          styleContext={pres ? buildStyleContext(pres) : undefined}
         />
       )}
     </div>
@@ -2175,11 +2189,12 @@ function PresentationMode({ presentation, startIndex, onClose }: {
 
 // ─── Media picker modal ───────────────────────────────────
 
-function MediaPicker({ kind, onClose, onPick, documentId }: {
+function MediaPicker({ kind, onClose, onPick, documentId, styleContext }: {
   kind: 'image' | 'video'
   onClose: () => void
   onPick: (url: string) => void
   documentId: string
+  styleContext?: string
 }) {
   const [tab, setTab] = useState<'upload' | 'url' | 'ai'>(kind === 'image' ? 'ai' : 'upload')
   const [url, setUrl] = useState('')
@@ -2187,6 +2202,7 @@ function MediaPicker({ kind, onClose, onPick, documentId }: {
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [genUrl, setGenUrl] = useState<string | null>(null)
+  const [refImageUrl, setRefImageUrl] = useState<string | null>(null)
 
   async function doUpload(file: File) {
     setBusy('העלאה…'); setErr(null)
@@ -2200,13 +2216,31 @@ function MediaPicker({ kind, onClose, onPick, documentId }: {
     finally { setBusy(null) }
   }
 
+  async function uploadRef(file: File) {
+    setBusy('מעלה תמונת רפרנס…'); setErr(null)
+    try {
+      const fd = new FormData(); fd.append('file', file); fd.append('kind', 'image')
+      const res = await fetch('/api/gamma-prototype/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!json.url) throw new Error(json.error || 'Upload failed')
+      setRefImageUrl(json.url)
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Upload failed') }
+    finally { setBusy(null) }
+  }
+
   async function doGenerate() {
     if (!prompt.trim()) return
-    setBusy('מייצר תמונה…'); setErr(null); setGenUrl(null)
+    setBusy(refImageUrl ? 'מייצר על בסיס הרפרנס…' : 'מייצר תמונה…')
+    setErr(null); setGenUrl(null)
     try {
       const res = await fetch('/api/image', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, documentId }),
+        body: JSON.stringify({
+          prompt,
+          documentId,
+          styleContext,
+          referenceImageUrl: refImageUrl || undefined,
+        }),
       })
       const json = await res.json()
       if (!json.imageUrl) throw new Error(json.error || 'Generation failed')
@@ -2245,15 +2279,55 @@ function MediaPicker({ kind, onClose, onPick, documentId }: {
 
         {tab === 'ai' && kind === 'image' && (
           <div>
+            {styleContext && (
+              <div style={{
+                background: '#1a1f2e', border: '1px solid #2a3a5a', borderRadius: 6,
+                padding: 10, marginBottom: 12, fontSize: 11, color: '#93c5fd',
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+              }}>
+                <span style={{ fontSize: 14 }}>🎨</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>סגנון המצגת יישתל אוטומטית</div>
+                  <div style={{ opacity: 0.8, fontSize: 10 }}>{styleContext}</div>
+                </div>
+              </div>
+            )}
+
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 8 }}>
               תיאור התמונה (באנגלית או עברית, ככל שמפורט יותר — טוב יותר):
             </div>
             <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)}
               placeholder="לדוגמה: אישה צעירה יושבת בקפה בתל אביב, אור שמש רך של אחר הצהריים, מצולם כאילו מאינסטגרם"
               rows={4} style={inputStyle()} />
+
+            {/* Reference image uploader */}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 6 }}>
+                תמונת רפרנס (אופציונלי) — ה-AI ישתמש בה כנקודת התחלה
+              </div>
+              {refImageUrl ? (
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <img src={refImageUrl} alt="reference" style={{ maxHeight: 100, borderRadius: 6, border: '1px solid #333' }} />
+                  <button onClick={() => setRefImageUrl(null)}
+                    style={{ position: 'absolute', top: 4, insetInlineStart: 4, width: 22, height: 22,
+                      background: '#b00020', color: '#fff', border: 0, borderRadius: '50%', cursor: 'pointer', fontSize: 12 }}>×</button>
+                </div>
+              ) : (
+                <label style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '10px 12px', background: '#1a1a1a', color: '#9cf',
+                  border: '1px dashed #333', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                }}>
+                  + העלה תמונת רפרנס
+                  <input type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadRef(f) }} />
+                </label>
+              )}
+            </div>
+
             <button onClick={doGenerate} disabled={!!busy || !prompt.trim()}
-              style={{ ...btn('#E94560'), marginTop: 10, width: '100%', padding: '10px' }}>
-              ✨ ייצר תמונה
+              style={{ ...btn('#E94560'), marginTop: 14, width: '100%', padding: '10px' }}>
+              ✨ {refImageUrl ? 'ייצר על בסיס הרפרנס' : 'ייצר תמונה'}
             </button>
             {genUrl && (
               <div style={{ marginTop: 14 }}>

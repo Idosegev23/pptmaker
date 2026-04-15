@@ -34,12 +34,15 @@ export interface ImageGenerationOptions {
  */
 export async function generateImage(
   prompt: string,
-  options: ImageGenerationOptions = {}
+  options: ImageGenerationOptions & {
+    referenceImage?: { base64: string; mimeType: string }
+  } = {}
 ): Promise<GeneratedImage | null> {
-  const { 
+  const {
     aspectRatio = '16:9',
     imageSize = '4K',
-    useGoogleSearch = false 
+    useGoogleSearch = false,
+    referenceImage,
   } = options
 
   try {
@@ -51,7 +54,7 @@ export async function generateImage(
       finalPrompt = await createGroundedVisualPrompt(prompt);
       console.log(`[Gemini Image] Grounded Prompt: ${finalPrompt}`);
     } else {
-      console.log(`[Gemini Image] Generating image...`);
+      console.log(`[Gemini Image] Generating image${referenceImage ? ' with reference' : ''}...`);
     }
 
     const config: any = {
@@ -62,9 +65,20 @@ export async function generateImage(
       }
     }
 
+    // If a reference image is provided, build a multi-part contents array (img-to-img)
+    const contents: unknown = referenceImage
+      ? [{
+          role: 'user',
+          parts: [
+            { inlineData: { data: referenceImage.base64, mimeType: referenceImage.mimeType } },
+            { text: finalPrompt },
+          ],
+        }]
+      : finalPrompt
+
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
-      contents: finalPrompt,
+      contents: contents as any,
       config: config,
     })
 

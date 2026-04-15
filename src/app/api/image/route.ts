@@ -18,16 +18,44 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { prompt, documentId } = body
+    const { prompt, documentId, referenceImageUrl, styleContext } = body as {
+      prompt: string
+      documentId?: string
+      referenceImageUrl?: string
+      styleContext?: string
+    }
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
     }
 
+    // Compose final prompt with brand/presentation style context
+    let finalPrompt = prompt
+    if (styleContext) {
+      finalPrompt = `${prompt}\n\n[Style context — match this aesthetic closely]:\n${styleContext}`
+    }
+
+    // If a reference image is provided, fetch it and pass as inline data (img2img)
+    let referenceImage: { base64: string; mimeType: string } | undefined
+    if (referenceImageUrl) {
+      try {
+        console.log(`[Image] Fetching reference: ${referenceImageUrl}`)
+        const refRes = await fetch(referenceImageUrl)
+        if (!refRes.ok) throw new Error(`ref fetch ${refRes.status}`)
+        const mimeType = refRes.headers.get('content-type') || 'image/jpeg'
+        const buf = Buffer.from(await refRes.arrayBuffer())
+        referenceImage = { base64: buf.toString('base64'), mimeType }
+        finalPrompt = `${finalPrompt}\n\n[Reference image provided — use its subject/composition as the starting point. Preserve key elements from the reference but apply the requested style.]`
+      } catch (e) {
+        console.warn('[Image] Reference fetch failed, continuing without:', e)
+      }
+    }
+
     // Generate image using Gemini 3 Pro Image Preview (4K quality)
-    const result = await generateImage(prompt, {
+    const result = await generateImage(finalPrompt, {
       aspectRatio: '16:9',
       imageSize: '4K',
+      referenceImage,
     })
 
     if (!result) {

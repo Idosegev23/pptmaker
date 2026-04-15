@@ -603,44 +603,72 @@ function __gammaInit(){
     document.execCommand('insertText', false, text);
   });
 
-  // Image hover-edit button
+  // Image hover-edit button — works on the element under the cursor, not via mouseover on img
+  // (img is often covered by positioned content, so mouseover rarely fires on it)
   let imgHoverBtn = null;
   let imgHoverTarget = null;
+
+  function findImageUnderPoint(x, y) {
+    // document.elementsFromPoint returns the stack at x,y — find any img[data-role] or element
+    // whose ::backdrop is the slide image. We prefer img-bleed or any img with data-role.
+    const stack = document.elementsFromPoint(x, y);
+    for (const el of stack) {
+      if (el.tagName === 'IMG' && el.hasAttribute('data-role')) return el;
+    }
+    // fallback: check if the topmost slide has a .img-bleed (bg image)
+    if (stack.some(el => el === SLIDE || el.closest && el.closest('.slide') === SLIDE)) {
+      const bleed = SLIDE.querySelector('img.img-bleed[data-role], img[data-role]');
+      if (bleed) return bleed;
+    }
+    return null;
+  }
+
   function showImgHover(el) {
+    if (imgHoverTarget === el && imgHoverBtn) return; // already showing
     hideImgHover();
     imgHoverTarget = el;
     imgHoverBtn = document.createElement('button');
-    imgHoverBtn.textContent = '✎ החלף';
-    imgHoverBtn.style.cssText = 'position:absolute; background:#E94560; color:#fff; border:0; border-radius:4px; padding:6px 12px; font:600 13px Heebo,sans-serif; cursor:pointer; z-index:9998; box-shadow:0 4px 12px rgba(0,0,0,0.5); direction:rtl;';
-    imgHoverBtn.addEventListener('click', (ev) => {
+    imgHoverBtn.textContent = '✎ החלף תמונה';
+    imgHoverBtn.style.cssText = 'position:absolute; background:#E94560; color:#fff; border:0; border-radius:6px; padding:10px 18px; font:600 15px Heebo,sans-serif; cursor:pointer; z-index:99999; box-shadow:0 6px 20px rgba(0,0,0,0.6); direction:rtl; pointer-events:auto; transition:transform 0.15s;';
+    imgHoverBtn.addEventListener('mouseenter', () => { imgHoverBtn.style.transform = 'scale(1.05)'; });
+    imgHoverBtn.addEventListener('mouseleave', () => { imgHoverBtn.style.transform = 'none'; });
+    // Use mousedown (fires before any pointerdown cleanup) + click for safety
+    const fire = (ev) => {
       ev.preventDefault(); ev.stopPropagation();
       const role = imgHoverTarget && imgHoverTarget.getAttribute('data-role');
       if (role) parent.postMessage({ type: 'gamma-swap-image', role }, '*');
-    });
+    };
+    imgHoverBtn.addEventListener('mousedown', fire);
+    imgHoverBtn.addEventListener('click', fire);
     SLIDE.appendChild(imgHoverBtn);
     const r = el.getBoundingClientRect();
     const m = getSlideMetrics();
     const cx = ((r.left + r.right) / 2 - m.sr.left) * m.scaleX;
     const cy = ((r.top + r.bottom) / 2 - m.sr.top) * m.scaleY;
-    imgHoverBtn.style.left = (cx - 50) + 'px';
-    imgHoverBtn.style.top = (cy - 20) + 'px';
+    imgHoverBtn.style.left = (cx - 80) + 'px';
+    imgHoverBtn.style.top = (cy - 22) + 'px';
   }
   function hideImgHover() {
     if (imgHoverBtn) imgHoverBtn.remove();
     imgHoverBtn = null; imgHoverTarget = null;
   }
-  document.addEventListener('mouseover', (e) => {
-    const img = e.target && e.target.closest && e.target.closest('img[data-role]');
-    if (img) showImgHover(img);
-  });
-  document.addEventListener('mouseout', (e) => {
-    const img = e.target && e.target.closest && e.target.closest('img[data-role]');
-    if (!img) return;
-    setTimeout(() => {
-      if (!imgHoverBtn) return;
-      const el = document.querySelector(':hover');
-      if (!el || (!el.matches('img[data-role]') && el !== imgHoverBtn)) hideImgHover();
-    }, 100);
+
+  // Use mousemove on document — check if an image is under the pointer
+  let mouseMoveTimer = null;
+  document.addEventListener('mousemove', (e) => {
+    if (mouseMoveTimer) return;
+    mouseMoveTimer = setTimeout(() => { mouseMoveTimer = null; }, 80);
+    // Ignore when dragging or hovering a handle / selected outline
+    if (dragging) return;
+    if (e.target && e.target.classList && (e.target.classList.contains('__handle') || e.target === imgHoverBtn)) return;
+    const img = findImageUnderPoint(e.clientX, e.clientY);
+    if (img) {
+      showImgHover(img);
+    } else {
+      // Only hide if pointer is not over the button
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if (el !== imgHoverBtn) hideImgHover();
+    }
   });
 
   // Double-click → inline text editing
