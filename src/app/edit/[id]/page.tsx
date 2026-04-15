@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback, Fragment } from 'react'
 import { useParams } from 'next/navigation'
 import { renderStructuredSlide } from '@/lib/gemini/layout-prototypes/renderer'
 import ShareDialog from '@/components/share/ShareDialog'
@@ -371,10 +371,60 @@ export default function GammaProtoPage() {
   }
 
   const [zoom, setZoom] = useState(0.6667)
+  const [elementsOpen, setElementsOpen] = useState(false)
+  const [focusMode, setFocusMode] = useState(false)
+  const [cheatsheetOpen, setCheatsheetOpen] = useState(false)
+  const [propertiesPinned, setPropertiesPinned] = useState(false)
+  const canvasContainerRef = useRef<HTMLDivElement>(null)
 
   const selectedFreeEl = selectedRole?.startsWith('free-')
     ? slide?.freeElements?.find(f => f.id === selectedRole)
     : undefined
+
+  // Auto-fit zoom: recompute when container resizes or slide changes
+  useEffect(() => {
+    function recomputeFit() {
+      const el = canvasContainerRef.current
+      if (!el) return
+      const padding = 48
+      const availW = el.clientWidth - padding
+      const availH = el.clientHeight - padding
+      if (availW <= 0 || availH <= 0) return
+      const fit = Math.min(availW / 1920, availH / 1080)
+      setZoom(Math.max(0.1, Math.min(2, fit)))
+    }
+    recomputeFit()
+    const ro = new ResizeObserver(recomputeFit)
+    if (canvasContainerRef.current) ro.observe(canvasContainerRef.current)
+    return () => ro.disconnect()
+  }, [idx, focusMode])
+
+  // Extra shortcuts: F (focus), ? (cheatsheet), L (lock — TODO), G (grid), D (duplicate element if selected)
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      if (isTyping) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'f' || e.key === 'F') { e.preventDefault(); setFocusMode(v => !v) }
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) { e.preventDefault(); setCheatsheetOpen(true) }
+      if (e.key === 'g' || e.key === 'G') setGrid(v => !v)
+      if (e.key === 'd' || e.key === 'D') {
+        if (selectedFreeEl) {
+          e.preventDefault()
+          const clone = { ...selectedFreeEl, id: `free-${selectedFreeEl.kind}-${Date.now()}` }
+          appendFreeElement(clone)
+        }
+      }
+      if (e.key === 'Escape') {
+        if (focusMode) { setFocusMode(false); return }
+        if (cheatsheetOpen) { setCheatsheetOpen(false); return }
+        if (elementsOpen) { setElementsOpen(false); return }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   function updateFreeElement(id: string, patch: Partial<FreeElement>) {
     if (!pres || !slide) return
@@ -386,9 +436,12 @@ export default function GammaProtoPage() {
     setPres(next)
   }
 
+  const propertiesOpen = !focusMode && (selectedRole !== null || propertiesPinned)
+
   return (
     <div style={{ background: '#0f0f10', color: '#eee', height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'Heebo, system-ui, sans-serif', overflow: 'hidden' }} dir="rtl">
       {/* ─── Header ──────────────────────────── */}
+      {!focusMode && (
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: '1px solid #1f1f22', background: '#15151a', height: 56, flexShrink: 0 }}>
         <button onClick={() => history.back()} style={{ ...iconBtn(), padding: 6 }} title="חזרה">
           <ChevronLeft size={18} />
@@ -399,6 +452,9 @@ export default function GammaProtoPage() {
         </span>
 
         <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
+          <ToolbarGroup>
+            <IconBtn onClick={() => setElementsOpen(v => !v)} active={elementsOpen} title="הוסף רכיב"><Plus size={16} /></IconBtn>
+          </ToolbarGroup>
           <ToolbarGroup>
             <IconBtn onClick={undo} disabled={historyRef.current.length === 0} title="בטל (⌘Z)"><Undo2 size={16} /></IconBtn>
             <IconBtn onClick={redo} disabled={futureRef.current.length === 0} title="חזור (⇧⌘Z)"><Redo2 size={16} /></IconBtn>
@@ -418,6 +474,8 @@ export default function GammaProtoPage() {
             </IconBtn>
           </ToolbarGroup>
           <ToolbarGroup>
+            <IconBtn onClick={() => setFocusMode(true)} title="מצב פוקוס (F)"><Eye size={16} /></IconBtn>
+            <IconBtn onClick={() => setCheatsheetOpen(true)} title="קיצורי מקלדת (?)"><Settings size={16} /></IconBtn>
             <IconBtn onClick={() => setPresenting(true)} title="הצג במסך מלא"><Play size={16} /></IconBtn>
             <IconBtn onClick={exportPdf} title="הורד PDF"><Download size={16} /></IconBtn>
             <button onClick={() => setShareOpen(true)}
@@ -427,63 +485,42 @@ export default function GammaProtoPage() {
           </ToolbarGroup>
         </div>
       </header>
+      )}
 
       {err && <div style={{ background: '#40141a', padding: 10, margin: 10, borderRadius: 6, fontSize: 13 }}>⚠ {err}</div>}
 
       {pres && slide && (
-        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-          {/* ─── Far left: slide thumbnails strip ─────── */}
-          <aside style={{ width: 140, borderInlineEnd: '1px solid #1f1f22', overflow: 'auto', padding: 8, background: '#141416' }}>
-            {pres.slides.map((s, i) => (
-              <SlideThumb key={i} slide={s} ds={pres.designSystem} index={i}
-                active={i === idx} onClick={() => setIdx(i)} />
-            ))}
-            <button onClick={() => addSlide('hero-cover')}
-              style={{ width: '100%', padding: '10px 6px', marginTop: 8, background: '#1f1f22',
-                color: '#888', border: '1px dashed #333', borderRadius: 6, cursor: 'pointer',
-                fontSize: 11, display: 'flex', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              <Plus size={14} /> שקף
-            </button>
-          </aside>
-
-          {/* ─── Left: Elements panel ─────────────────── */}
-          <aside style={{ width: 240, borderInlineEnd: '1px solid #1f1f22', overflow: 'auto', background: '#18181b' }}>
-            <ElementsPanel
-              onAddText={() => addFreeMedia('text', 'טקסט חדש — לחץ פעמיים לעריכה')}
-              onAddImage={() => setMediaPicker('image')}
-              onAddVideo={() => setMediaPicker('video')}
-              onAddShape={addShape}
-              layouts={LAYOUTS}
-              onChangeLayout={(layout) => {
-                if (!pres || !slide) return
-                const next = { ...pres, slides: [...pres.slides] }
-                next.slides[idx] = { ...slide, layout, elementStyles: {}, freeElements: [], hiddenRoles: [] } as StructuredSlide
-                setPres(next)
-              }}
-              currentLayout={slide.layout}
-            />
-          </aside>
-
-          {/* ─── Center: canvas ──────────────────────── */}
-          <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#0f0f10' }}>
-            {/* Slide ops bar */}
-            <div style={{ display: 'flex', gap: 4, padding: '8px 16px', borderBottom: '1px solid #1f1f22', alignItems: 'center' }}>
-              <IconBtn onClick={() => moveSlide(idx, idx - 1)} disabled={idx === 0} title="הזז קודם"><ArrowRight size={16} /></IconBtn>
-              <IconBtn onClick={() => moveSlide(idx, idx + 1)} disabled={idx === pres.slides.length - 1} title="הזז אחרי"><ArrowLeft size={16} /></IconBtn>
-              <IconBtn onClick={deleteSlide} disabled={pres.slides.length <= 1} title="מחק שקף" danger><Trash2 size={16} /></IconBtn>
-              <span style={{ fontSize: 12, color: '#888', marginInlineStart: 12 }}>
-                שקף {idx + 1} / {pres.slides.length} · <span style={{ color: '#aaa' }}>{slide.layout}</span>
-              </span>
-              <div style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <IconBtn onClick={() => setZoom(z => Math.max(0.25, z - 0.1))} title="הקטן"><Minus size={14} /></IconBtn>
-                <span style={{ fontSize: 11, color: '#888', width: 40, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
-                <IconBtn onClick={() => setZoom(z => Math.min(2, z + 0.1))} title="הגדל"><Plus size={14} /></IconBtn>
-                <button onClick={() => setZoom(0.6667)} style={{ fontSize: 11, color: '#888', background: 'transparent', border: '1px solid #333', borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>Fit</button>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
+          {/* ─── Canvas area (always visible) ──────────── */}
+          <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#0f0f10', position: 'relative' }}>
+            {/* Slide ops bar — hidden in focus mode */}
+            {!focusMode && (
+              <div style={{ display: 'flex', gap: 4, padding: '8px 16px', borderBottom: '1px solid #1f1f22', alignItems: 'center' }}>
+                <IconBtn onClick={() => moveSlide(idx, idx - 1)} disabled={idx === 0} title="הזז קודם"><ArrowRight size={16} /></IconBtn>
+                <IconBtn onClick={() => moveSlide(idx, idx + 1)} disabled={idx === pres.slides.length - 1} title="הזז אחרי"><ArrowLeft size={16} /></IconBtn>
+                <IconBtn onClick={deleteSlide} disabled={pres.slides.length <= 1} title="מחק שקף" danger><Trash2 size={16} /></IconBtn>
+                <span style={{ fontSize: 12, color: '#888', marginInlineStart: 12 }}>
+                  שקף {idx + 1} / {pres.slides.length} · <span style={{ color: '#aaa' }}>{slide.layout}</span>
+                </span>
+                <div style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <IconBtn onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} title="הקטן"><Minus size={14} /></IconBtn>
+                  <span style={{ fontSize: 11, color: '#888', width: 40, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+                  <IconBtn onClick={() => setZoom(z => Math.min(2, z + 0.1))} title="הגדל"><Plus size={14} /></IconBtn>
+                  <button
+                    onClick={() => {
+                      const el = canvasContainerRef.current
+                      if (!el) return
+                      const fit = Math.min((el.clientWidth - 48) / 1920, (el.clientHeight - 48) / 1080)
+                      setZoom(Math.max(0.1, Math.min(2, fit)))
+                    }}
+                    style={{ fontSize: 11, color: '#888', background: 'transparent', border: '1px solid #333', borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}>Fit</button>
+                  <IconBtn onClick={() => setPropertiesPinned(p => !p)} active={propertiesPinned} title="נעל פאנל מאפיינים"><Layers size={16} /></IconBtn>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Floating text format toolbar */}
-            {selectedFreeEl?.kind === 'text' && (
+            {!focusMode && selectedFreeEl?.kind === 'text' && (
               <div style={{ padding: '8px 16px', borderBottom: '1px solid #1f1f22' }}>
                 <TextFormatToolbar element={selectedFreeEl} ds={pres.designSystem}
                   onChange={(fmt) => updateFreeElement(selectedFreeEl.id, { format: { ...selectedFreeEl.format, ...fmt } })} />
@@ -491,10 +528,11 @@ export default function GammaProtoPage() {
             )}
 
             {/* Canvas */}
-            <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div ref={canvasContainerRef} style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, minHeight: 0 }}>
               <div style={{
                 width: 1920 * zoom, height: 1080 * zoom, position: 'relative',
                 background: '#000', borderRadius: 8, overflow: 'hidden', boxShadow: '0 12px 48px rgba(0,0,0,0.6)',
+                flexShrink: 0,
               }}>
                 <iframe srcDoc={html} style={{
                   width: 1920, height: 1080, border: 0,
@@ -503,59 +541,142 @@ export default function GammaProtoPage() {
                 }} />
               </div>
             </div>
+
+            {/* Focus mode floating exit button */}
+            {focusMode && (
+              <button
+                onClick={() => setFocusMode(false)}
+                style={{
+                  position: 'absolute', top: 16, insetInlineStart: 16, zIndex: 50,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(0,0,0,0.7)', color: '#fff', border: '1px solid #333',
+                  borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12,
+                  backdropFilter: 'blur(8px)',
+                }}>
+                <EyeOff size={14} /> יציאה ממצב פוקוס (Esc)
+              </button>
+            )}
           </main>
 
-          {/* ─── Right: contextual properties + layers ─ */}
-          <aside style={{ width: 340, borderInlineStart: '1px solid #1f1f22', overflow: 'auto', background: '#18181b', display: 'flex', flexDirection: 'column' }}>
-            <PropertiesPanel
-              slide={slide}
-              pres={pres}
-              selectedRole={selectedRole}
-              selectedFreeEl={selectedFreeEl}
-              onUpdateFreeElement={updateFreeElement}
-              onUpdateSlot={updateSlot}
-              onAiRewrite={aiRewrite}
-              aiBusy={aiBusy}
-              onSetBg={setSlideBg}
-              onResetOverrides={() => {
-                if (!pres) return
-                const next = { ...pres, slides: [...pres.slides] }
-                next.slides[idx] = { ...next.slides[idx], elementStyles: {} }
-                setPres(next)
-              }}
-              onDeleteFreeElement={(id) => {
-                if (!pres || !slide) return
-                const next = { ...pres, slides: [...pres.slides] }
-                next.slides[idx] = { ...slide, freeElements: (slide.freeElements || []).filter(f => f.id !== id) }
-                setPres(next)
-                setSelectedRole(null)
-              }}
-            />
+          {/* ─── Bottom strip: thumbnails (hidden in focus mode) ─── */}
+          {!focusMode && (
+            <div style={{
+              height: 120, borderTop: '1px solid #1f1f22', background: '#141416',
+              padding: '8px 12px', display: 'flex', gap: 8, overflowX: 'auto', flexShrink: 0, alignItems: 'center',
+            }}>
+              {pres.slides.map((s, i) => (
+                <SlideThumbCompact key={i} slide={s} ds={pres.designSystem} index={i}
+                  active={i === idx} onClick={() => setIdx(i)} />
+              ))}
+              <button onClick={() => addSlide('hero-cover')}
+                style={{
+                  minWidth: 90, height: 100, background: '#1f1f22', color: '#888',
+                  border: '1px dashed #333', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  flexShrink: 0,
+                }}>
+                <Plus size={18} />
+                <span>שקף</span>
+              </button>
+            </div>
+          )}
 
-            <div style={{ borderTop: '1px solid #1f1f22', padding: 12, flexShrink: 0 }}>
-              <LayersPanel
-                html={html}
-                slide={slide}
-                onSelect={(role) => selectLayerInIframe(role)}
-                onToggleHide={(role) => {
-                  if (!pres) return
-                  const hidden = new Set(slide.hiddenRoles || [])
-                  if (hidden.has(role)) hidden.delete(role); else hidden.add(role)
+          {/* ─── Elements popover (floating from +) ───── */}
+          {elementsOpen && !focusMode && (
+            <>
+              <div onClick={() => setElementsOpen(false)}
+                style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
+              <div style={{
+                position: 'fixed', top: 64, insetInlineEnd: 100, width: 300,
+                background: '#18181b', border: '1px solid #27272a', borderRadius: 10,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 31,
+                maxHeight: 'calc(100vh - 80px)', overflow: 'auto',
+              }}>
+                <ElementsPanel
+                  onAddText={() => { addFreeMedia('text', 'טקסט חדש — לחץ פעמיים לעריכה'); setElementsOpen(false) }}
+                  onAddImage={() => { setMediaPicker('image'); setElementsOpen(false) }}
+                  onAddVideo={() => { setMediaPicker('video'); setElementsOpen(false) }}
+                  onAddShape={(s) => { addShape(s); setElementsOpen(false) }}
+                  layouts={LAYOUTS}
+                  onChangeLayout={(layout) => {
+                    if (!pres || !slide) return
+                    const next = { ...pres, slides: [...pres.slides] }
+                    next.slides[idx] = { ...slide, layout, elementStyles: {}, freeElements: [], hiddenRoles: [] } as StructuredSlide
+                    setPres(next)
+                    setElementsOpen(false)
+                  }}
+                  currentLayout={slide.layout}
+                />
+              </div>
+            </>
+          )}
+
+          {/* ─── Properties drawer (slides in from right on selection or pin) ─── */}
+          {propertiesOpen && (
+            <aside style={{
+              position: 'absolute', top: 0, bottom: 0, insetInlineStart: 0,
+              width: 340, background: '#18181b', borderInlineEnd: '1px solid #1f1f22',
+              display: 'flex', flexDirection: 'column', zIndex: 20,
+              boxShadow: '4px 0 16px rgba(0,0,0,0.4)',
+              animation: 'slideInFromLeft 0.18s ease-out',
+            }}>
+              <style>{`@keyframes slideInFromLeft { from { transform: translateX(-100%); } to { transform: none; } }`}</style>
+              <div style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid #1f1f22' }}>
+                <span style={{ fontSize: 12, color: '#888' }}>מאפיינים</span>
+                <button onClick={() => { setSelectedRole(null); setPropertiesPinned(false); selectLayerInIframe('') }}
+                  style={{ marginInlineStart: 'auto', background: 'transparent', color: '#666', border: 0, cursor: 'pointer', fontSize: 16 }}>×</button>
+              </div>
+              <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+                <PropertiesPanel
+                  slide={slide}
+                  pres={pres}
+                  selectedRole={selectedRole}
+                  selectedFreeEl={selectedFreeEl}
+                  onUpdateFreeElement={updateFreeElement}
+                  onUpdateSlot={updateSlot}
+                  onAiRewrite={aiRewrite}
+                  aiBusy={aiBusy}
+                  onSetBg={setSlideBg}
+                  onResetOverrides={() => {
+                    if (!pres) return
+                    const next = { ...pres, slides: [...pres.slides] }
+                    next.slides[idx] = { ...next.slides[idx], elementStyles: {} }
+                    setPres(next)
+                  }}
+                  onDeleteFreeElement={(id) => {
+                    if (!pres || !slide) return
+                    const next = { ...pres, slides: [...pres.slides] }
+                    next.slides[idx] = { ...slide, freeElements: (slide.freeElements || []).filter(f => f.id !== id) }
+                    setPres(next)
+                    setSelectedRole(null)
+                  }}
+                />
+                <div style={{ borderTop: '1px solid #1f1f22', padding: 12, flexShrink: 0 }}>
+                  <LayersPanel
+                    html={html}
+                    slide={slide}
+                    onSelect={(role) => selectLayerInIframe(role)}
+                    onToggleHide={(role) => {
+                      if (!pres) return
+                      const hidden = new Set(slide.hiddenRoles || [])
+                      if (hidden.has(role)) hidden.delete(role); else hidden.add(role)
                   const next = { ...pres, slides: [...pres.slides] }
                   next.slides[idx] = { ...slide, hiddenRoles: Array.from(hidden) }
                   setPres(next)
                 }}
-                onResetElement={(role) => {
-                  if (!pres) return
-                  const styles = { ...(slide.elementStyles || {}) }
-                  delete styles[role]
-                  const next = { ...pres, slides: [...pres.slides] }
-                  next.slides[idx] = { ...slide, elementStyles: styles }
-                  setPres(next)
-                }}
-              />
-            </div>
-          </aside>
+                    onResetElement={(role) => {
+                      if (!pres) return
+                      const styles = { ...(slide.elementStyles || {}) }
+                      delete styles[role]
+                      const next = { ...pres, slides: [...pres.slides] }
+                      next.slides[idx] = { ...slide, elementStyles: styles }
+                      setPres(next)
+                    }}
+                  />
+                </div>
+              </div>
+            </aside>
+          )}
         </div>
       )}
 
@@ -570,6 +691,8 @@ export default function GammaProtoPage() {
         onClose={() => setShareOpen(false)}
         documentId={params.id as string}
       />
+
+      {cheatsheetOpen && <CheatsheetModal onClose={() => setCheatsheetOpen(false)} />}
 
       {chatOpen && pres && (
         <AIChatPanel
@@ -1325,6 +1448,83 @@ function BgPickerButton({ slide, ds, onChange }: {
 }
 
 // ─── Slide thumbnail ──────────────────────────────────────
+
+function SlideThumbCompact({ slide, ds, index, active, onClick }: {
+  slide: StructuredSlide
+  ds: StructuredPresentation['designSystem']
+  index: number
+  active: boolean
+  onClick: () => void
+}) {
+  const html = useMemo(() => renderStructuredSlide(slide, ds), [slide, ds])
+  return (
+    <div onClick={onClick}
+      style={{
+        minWidth: 160, height: 100, flexShrink: 0,
+        border: active ? '2px solid #E94560' : '2px solid #27272a',
+        borderRadius: 6, cursor: 'pointer', overflow: 'hidden',
+        background: '#000', position: 'relative',
+      }}>
+      <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+        <iframe srcDoc={html} tabIndex={-1}
+          style={{
+            width: 1920, height: 1080, border: 0, pointerEvents: 'none',
+            transform: 'scale(0.083)', transformOrigin: 'top left',
+            position: 'absolute', top: 0, left: 0,
+          }}
+          sandbox="allow-same-origin"
+        />
+      </div>
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        padding: '3px 8px', fontSize: 10, color: '#fff',
+        background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+      }}>
+        <span style={{ fontWeight: 600 }}>{index + 1}</span>
+        <span style={{ opacity: 0.7, fontSize: 9 }}>{slide.slideType}</span>
+      </div>
+    </div>
+  )
+}
+
+function CheatsheetModal({ onClose }: { onClose: () => void }) {
+  const rows: Array<[string, string]> = [
+    ['⌘/Ctrl + Z', 'בטל'],
+    ['⌘/Ctrl + Shift + Z', 'חזור'],
+    ['⌘/Ctrl + D', 'שכפל שקף'],
+    ['D (אלמנט נבחר)', 'שכפל אלמנט'],
+    ['⌘/Ctrl + C / V', 'העתק / הדבק אלמנט בין שקפים'],
+    ['חצים', 'הזז אלמנט 1px'],
+    ['Shift + חצים', 'הזז 10px (40px כשההצמדה פעילה)'],
+    ['Delete', 'מחק אלמנט חופשי'],
+    ['Double-click', 'ערוך טקסט inline'],
+    ['Esc', 'צא מעריכה / מפוקוס / מקיצורים'],
+    ['F', 'מצב פוקוס'],
+    ['G', 'הצג/הסתר רשת'],
+    ['?', 'פתח חלון קיצורים'],
+  ]
+  return (
+    <div onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ background: '#18181b', borderRadius: 12, padding: 24, width: 480, maxHeight: '80vh', overflow: 'auto', direction: 'rtl', color: '#eee', border: '1px solid #27272a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>קיצורי מקלדת</h3>
+          <button onClick={onClose} style={{ marginInlineStart: 'auto', background: 'transparent', color: '#888', border: 0, fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '10px 16px' }}>
+          {rows.map(([keys, desc], i) => (
+            <Fragment key={i}>
+              <code style={{ background: '#0f0f10', color: '#9cf', padding: '3px 8px', borderRadius: 4, fontSize: 12, fontFamily: 'monospace', border: '1px solid #27272a' }}>{keys}</code>
+              <span style={{ fontSize: 13, color: '#ccc' }}>{desc}</span>
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function SlideThumb({ slide, ds, index, active, onClick }: {
   slide: StructuredSlide
