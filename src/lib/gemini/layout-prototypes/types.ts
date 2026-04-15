@@ -148,6 +148,14 @@ export interface StructuredSlide {
   hiddenRoles?: string[]
   /** Per-slide background override (swaps background on .slide). */
   bg?: { color?: string; image?: string }
+  /** Validation / trust metadata (computed + persisted). */
+  meta?: {
+    validation?: {
+      source?: { status: 'verified' | 'unverified' | 'fake'; reasoning?: string; checkedAt?: string; foundUrl?: string }
+      reference?: { status: 'verified' | 'unverified' | 'fake'; reasoning?: string; checkedAt?: string }
+      image?: { status: 'ok' | 'broken' | 'mismatch'; reasoning?: string; checkedAt?: string }
+    }
+  }
 }
 
 export interface FreeElement {

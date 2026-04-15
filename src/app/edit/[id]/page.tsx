@@ -8,6 +8,7 @@ import {
   Undo2, Redo2, Grid3x3, Magnet, Copy, Sparkles, Play, Download, Share2, MessageSquare,
   Image as ImageIcon, Video, Type, Square, Circle, Minus, Palette, RefreshCw, Eye, EyeOff,
   ArrowLeft, ArrowRight, Trash2, RotateCcw, Plus, ChevronLeft, Layers, Settings,
+  ShieldCheck, AlertTriangle,
 } from 'lucide-react'
 import type { StructuredPresentation, StructuredSlide, LayoutId, FreeElement } from '@/lib/gemini/layout-prototypes/types'
 
@@ -39,6 +40,97 @@ interface ContextMenuItem {
   danger?: boolean
   separator?: boolean
   disabled?: boolean
+}
+
+// ─── Client-side instant validation ──────────────────────
+
+type IssueSeverity = 'error' | 'warning' | 'info'
+interface SlideIssue {
+  field?: string
+  severity: IssueSeverity
+  message: string
+}
+
+const PLACEHOLDER_PATTERNS = [
+  /^\s*\.{2,}\s*$/,
+  /^\s*(xxx|tbd|todo|placeholder|lorem ipsum)\s*$/i,
+  /^\s*\[.+\]\s*$/,
+]
+
+function isPlaceholder(s: unknown): boolean {
+  if (typeof s !== 'string') return false
+  const t = s.trim()
+  if (!t) return false
+  return PLACEHOLDER_PATTERNS.some(re => re.test(t))
+}
+
+function computeInstantIssues(slide: StructuredSlide): SlideIssue[] {
+  const issues: SlideIssue[] = []
+  const slots = slide.slots as unknown as Record<string, unknown>
+
+  // Title check (every layout has one except closing-cta might)
+  if (!slots.title || String(slots.title).trim().length < 2) {
+    issues.push({ field: 'title', severity: 'error', message: 'חסרה כותרת' })
+  } else if (isPlaceholder(slots.title)) {
+    issues.push({ field: 'title', severity: 'warning', message: 'כותרת נראית כמו placeholder' })
+  }
+
+  // Insight source check
+  if (slide.layout === 'centered-insight') {
+    if (!slots.dataPoint || !String(slots.dataPoint).trim()) {
+      issues.push({ field: 'dataPoint', severity: 'warning', message: 'אין נתון (dataPoint) — תובנה צריכה מספר ספציפי' })
+    }
+    if (!slots.source || !String(slots.source).trim()) {
+      issues.push({ field: 'source', severity: 'error', message: 'חסר source — תובנה חייבת להציג מקור' })
+    }
+  }
+
+  // Array fields: empty items
+  for (const key of ['bullets', 'pillars', 'stats', 'influencers']) {
+    const arr = slots[key]
+    if (Array.isArray(arr)) {
+      arr.forEach((item, i) => {
+        if (typeof item === 'string' && (!item.trim() || isPlaceholder(item))) {
+          issues.push({ field: `${key}[${i}]`, severity: 'warning', message: `${key} #${i + 1} ריק או placeholder` })
+        } else if (item && typeof item === 'object') {
+          const obj = item as Record<string, unknown>
+          if (obj.title && isPlaceholder(obj.title)) {
+            issues.push({ field: `${key}[${i}].title`, severity: 'warning', message: `${key} #${i + 1}: כותרת placeholder` })
+          }
+          if (obj.value && isPlaceholder(obj.value)) {
+            issues.push({ field: `${key}[${i}].value`, severity: 'warning', message: `${key} #${i + 1}: ערך placeholder` })
+          }
+        }
+      })
+      // Influencer: missing pic
+      if (key === 'influencers') {
+        (arr as Array<Record<string, unknown>>).forEach((inf, i) => {
+          if (!inf.profilePicUrl) {
+            issues.push({ field: `influencers[${i}].profilePicUrl`, severity: 'info', message: `${inf.name || `משפיען ${i + 1}`}: אין תמונת פרופיל` })
+          }
+        })
+      }
+    }
+  }
+
+  // AI validation results (from /api/gamma-prototype/validate)
+  const v = slide.meta?.validation
+  if (v?.source) {
+    if (v.source.status === 'fake') issues.push({ field: 'source', severity: 'error', message: `AI סימן את המקור כמזויף: ${v.source.reasoning || ''}` })
+    else if (v.source.status === 'unverified') issues.push({ field: 'source', severity: 'warning', message: `לא אומת: ${v.source.reasoning || ''}` })
+  }
+  if (v?.reference && v.reference.status === 'fake') {
+    issues.push({ field: 'body', severity: 'error', message: `AI סימן את הרפרנס כמזויף: ${v.reference.reasoning || ''}` })
+  }
+
+  return issues
+}
+
+function slideStatusColor(issues: SlideIssue[]): string {
+  if (issues.some(i => i.severity === 'error')) return '#ef4444' // red
+  if (issues.some(i => i.severity === 'warning')) return '#f59e0b' // amber
+  if (issues.some(i => i.severity === 'info')) return '#64748b' // slate
+  return '#22c55e' // green
 }
 
 export default function GammaProtoPage() {
@@ -400,10 +492,66 @@ export default function GammaProtoPage() {
   const [canRevertChat, setCanRevertChat] = useState(false)
   const [mediaSwapTarget, setMediaSwapTarget] = useState<{ kind: 'free' | 'slot'; id: string } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [validatingSlide, setValidatingSlide] = useState<number | null>(null)
+  const [validatingAll, setValidatingAll] = useState(false)
 
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(null), 3000)
+  }
+
+  async function validateSlide(slideIndex: number) {
+    if (!pres) return
+    const s = pres.slides[slideIndex]
+    if (!s) return
+    setValidatingSlide(slideIndex)
+    try {
+      const res = await fetch('/api/gamma-prototype/validate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slide: s }),
+      })
+      const json = await res.json()
+      if (!json.validation) throw new Error(json.error || 'validation failed')
+      const next = { ...pres, slides: [...pres.slides] }
+      next.slides[slideIndex] = {
+        ...s,
+        meta: { ...(s.meta || {}), validation: { ...(s.meta?.validation || {}), ...json.validation } },
+      }
+      setPres(next)
+      const v = json.validation
+      if (v.source?.status === 'fake' || v.reference?.status === 'fake') {
+        showToast('⚠ זוהתה טענה לא אמינה בשקף')
+      } else if (v.source?.status === 'verified' || v.reference?.status === 'verified') {
+        showToast('✓ המקור אומת')
+      } else {
+        showToast('לא הצלחנו לאמת — בדוק ידנית')
+      }
+    } catch (e) {
+      showToast('אימות נכשל: ' + (e instanceof Error ? e.message : 'שגיאה'))
+    } finally { setValidatingSlide(null) }
+  }
+
+  async function validateAllSlides() {
+    if (!pres) return
+    setValidatingAll(true)
+    try {
+      // Only validate slides that have something to validate (insight with source, creative with body)
+      const targets = pres.slides
+        .map((s, i) => ({ s, i }))
+        .filter(({ s }) => {
+          if (s.layout === 'centered-insight' && (s.slots as unknown as Record<string, unknown>).source) return true
+          if ((s.layout === 'full-bleed-image-text' || s.layout === 'split-image-text')) {
+            const body = String((s.slots as unknown as Record<string, unknown>).body || (s.slots as unknown as Record<string, unknown>).bodyText || '')
+            return /\b(19|20)\d{2}\b/.test(body) && body.length > 30
+          }
+          return false
+        })
+      showToast(`בודק ${targets.length} שקפים — Google grounded…`)
+      for (const { i } of targets) {
+        await validateSlide(i)
+      }
+      showToast(`✓ אימות הסתיים (${targets.length} שקפים)`)
+    } finally { setValidatingAll(false) }
   }
 
   const selectedFreeEl = selectedRole?.startsWith('free-')
@@ -576,6 +724,11 @@ export default function GammaProtoPage() {
             </IconBtn>
           </ToolbarGroup>
           <ToolbarGroup>
+            <IconBtn onClick={validateAllSlides} disabled={validatingAll} title="אמת מקורות ורפרנסים (Google grounded)">
+              <ShieldCheck size={16} />
+            </IconBtn>
+          </ToolbarGroup>
+          <ToolbarGroup>
             <IconBtn onClick={() => setFocusMode(true)} title="מצב פוקוס (F)"><Eye size={16} /></IconBtn>
             <IconBtn onClick={() => setCheatsheetOpen(true)} title="קיצורי מקלדת (?)"><Settings size={16} /></IconBtn>
             <IconBtn onClick={() => setPresenting(true)} title="הצג במסך מלא"><Play size={16} /></IconBtn>
@@ -666,25 +819,32 @@ export default function GammaProtoPage() {
               height: 120, borderTop: '1px solid #1f1f22', background: '#141416',
               padding: '8px 12px', display: 'flex', gap: 8, overflowX: 'auto', flexShrink: 0, alignItems: 'center',
             }}>
-              {pres.slides.map((s, i) => (
-                <SlideThumbCompact key={i} slide={s} ds={pres.designSystem} index={i}
-                  active={i === idx} onClick={() => setIdx(i)}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    setCtxMenu({
-                      x: e.clientX, y: e.clientY,
-                      items: [
-                        { label: 'שכפל שקף', icon: <Copy size={14} />, onClick: () => { setIdx(i); duplicateSlide() } },
-                        { label: 'עצב מחדש (AI)', icon: <Sparkles size={14} />, onClick: () => { setIdx(i); regenerateSlide() } },
-                        { separator: true, label: '' },
-                        { label: 'הזז קודם', icon: <ArrowRight size={14} />, onClick: () => moveSlide(i, i - 1), disabled: i === 0 },
-                        { label: 'הזז אחרי', icon: <ArrowLeft size={14} />, onClick: () => moveSlide(i, i + 1), disabled: i === pres.slides.length - 1 },
-                        { separator: true, label: '' },
-                        { label: 'מחק שקף', icon: <Trash2 size={14} />, onClick: () => { setIdx(i); deleteSlide() }, danger: true, disabled: pres.slides.length <= 1 },
-                      ],
-                    })
-                  }} />
-              ))}
+              {pres.slides.map((s, i) => {
+                const issues = computeInstantIssues(s)
+                const validating = validatingSlide === i
+                return (
+                  <SlideThumbCompact key={i} slide={s} ds={pres.designSystem} index={i}
+                    active={i === idx} onClick={() => setIdx(i)}
+                    statusColor={issues.length ? slideStatusColor(issues) : (s.meta?.validation?.source?.status === 'verified' ? '#22c55e' : undefined)}
+                    validating={validating}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setCtxMenu({
+                        x: e.clientX, y: e.clientY,
+                        items: [
+                          { label: 'שכפל שקף', icon: <Copy size={14} />, onClick: () => { setIdx(i); duplicateSlide() } },
+                          { label: 'עצב מחדש (AI)', icon: <Sparkles size={14} />, onClick: () => { setIdx(i); regenerateSlide() } },
+                          { label: 'אמת מקור (AI)', icon: <ShieldCheck size={14} />, onClick: () => validateSlide(i) },
+                          { separator: true, label: '' },
+                          { label: 'הזז קודם', icon: <ArrowRight size={14} />, onClick: () => moveSlide(i, i - 1), disabled: i === 0 },
+                          { label: 'הזז אחרי', icon: <ArrowLeft size={14} />, onClick: () => moveSlide(i, i + 1), disabled: i === pres.slides.length - 1 },
+                          { separator: true, label: '' },
+                          { label: 'מחק שקף', icon: <Trash2 size={14} />, onClick: () => { setIdx(i); deleteSlide() }, danger: true, disabled: pres.slides.length <= 1 },
+                        ],
+                      })
+                    }} />
+                )
+              })}
               <button onClick={() => addSlide('hero-cover')}
                 style={{
                   minWidth: 90, height: 100, background: '#1f1f22', color: '#888',
@@ -750,6 +910,8 @@ export default function GammaProtoPage() {
                   onUpdateSlot={updateSlot}
                   onAiRewrite={aiRewrite}
                   aiBusy={aiBusy}
+                  onValidateSlide={() => validateSlide(idx)}
+                  validating={validatingSlide === idx}
                   onSetBg={setSlideBg}
                   onResetOverrides={() => {
                     if (!pres) return
@@ -1053,6 +1215,7 @@ function PropertiesPanel({
   slide, pres, selectedRole, selectedFreeEl,
   onUpdateFreeElement, onUpdateSlot, onAiRewrite, aiBusy,
   onSetBg, onResetOverrides, onDeleteFreeElement,
+  onValidateSlide, validating,
 }: {
   slide: StructuredSlide
   pres: StructuredPresentation
@@ -1065,14 +1228,19 @@ function PropertiesPanel({
   onSetBg: (bg: { color?: string; image?: string } | undefined) => void
   onResetOverrides: () => void
   onDeleteFreeElement: (id: string) => void
+  onValidateSlide?: () => void
+  validating?: boolean
 }) {
   const ds = pres.designSystem
+  const issues = computeInstantIssues(slide)
 
   // Nothing selected → slide settings
   if (!selectedRole) {
     return (
       <div style={{ padding: 16, flex: 1, overflow: 'auto' }}>
         <PanelHeader icon={<Settings size={14} />} title="הגדרות שקף" />
+
+        <ValidationSection issues={issues} slide={slide} onValidate={onValidateSlide} validating={validating} />
 
         <Section label="רקע השקף">
           <ColorRow label="צבע" value={slide.bg?.color || ds.colors.background}
@@ -1166,6 +1334,68 @@ function PropertiesPanel({
         משנה שדות תוכן? בטל את הבחירה וגלול לתחתית.
       </div>
     </div>
+  )
+}
+
+function ValidationSection({ issues, slide, onValidate, validating }: {
+  issues: SlideIssue[]
+  slide: StructuredSlide
+  onValidate?: () => void
+  validating?: boolean
+}) {
+  const canAiValidate = slide.layout === 'centered-insight'
+    || slide.layout === 'full-bleed-image-text'
+    || slide.layout === 'split-image-text'
+  const v = slide.meta?.validation
+
+  if (issues.length === 0 && !v && !canAiValidate) return null
+
+  return (
+    <Section label="סטטוס ואמינות">
+      {issues.length === 0 ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#4ade80' }}>
+          <ShieldCheck size={14} /> אין בעיות זוהות בבדיקה מהירה
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {issues.map((issue, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 6,
+              padding: '6px 8px', borderRadius: 4, fontSize: 11,
+              background: issue.severity === 'error' ? '#40141a' :
+                         issue.severity === 'warning' ? '#3d2b0a' : '#1a202c',
+              color: issue.severity === 'error' ? '#fca5a5' :
+                     issue.severity === 'warning' ? '#fbbf24' : '#94a3b8',
+            }}>
+              <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>{issue.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {v?.source && (
+        <div style={{ marginTop: 8, padding: 8, borderRadius: 4, background: '#141416', fontSize: 11, color: '#bbb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <ShieldCheck size={12} style={{ color: v.source.status === 'verified' ? '#4ade80' : v.source.status === 'fake' ? '#ef4444' : '#f59e0b' }} />
+            <strong>מקור: {v.source.status === 'verified' ? 'אומת' : v.source.status === 'fake' ? 'לא אמין' : 'לא אומת'}</strong>
+          </div>
+          {v.source.reasoning && <div style={{ opacity: 0.8 }}>{v.source.reasoning}</div>}
+          {v.source.foundUrl && (
+            <a href={v.source.foundUrl} target="_blank" rel="noopener noreferrer"
+              style={{ color: '#60a5fa', fontSize: 10, marginTop: 4, display: 'inline-block', textDecoration: 'underline' }}>
+              פתח מקור ↗
+            </a>
+          )}
+        </div>
+      )}
+      {canAiValidate && onValidate && (
+        <button onClick={onValidate} disabled={validating}
+          style={{ ...ghostBtn(), marginTop: 8, width: '100%', justifyContent: 'center', background: '#1a3a4d', color: '#7dd3fc', borderColor: '#1e40af' }}>
+          <ShieldCheck size={12} />
+          {validating ? 'בודק…' : 'אמת מקור ב-Google'}
+        </button>
+      )}
+    </Section>
   )
 }
 
@@ -1648,13 +1878,15 @@ function BgPickerButton({ slide, ds, onChange }: {
 
 // ─── Slide thumbnail ──────────────────────────────────────
 
-function SlideThumbCompact({ slide, ds, index, active, onClick, onContextMenu }: {
+function SlideThumbCompact({ slide, ds, index, active, onClick, onContextMenu, statusColor, validating }: {
   slide: StructuredSlide
   ds: StructuredPresentation['designSystem']
   index: number
   active: boolean
   onClick: () => void
   onContextMenu?: (e: React.MouseEvent) => void
+  statusColor?: string
+  validating?: boolean
 }) {
   const html = useMemo(() => renderStructuredSlide(slide, ds), [slide, ds])
   return (
@@ -1665,6 +1897,15 @@ function SlideThumbCompact({ slide, ds, index, active, onClick, onContextMenu }:
         borderRadius: 6, cursor: 'pointer', overflow: 'hidden',
         background: '#000', position: 'relative',
       }}>
+      {statusColor && (
+        <div title="סטטוס שקף" style={{
+          position: 'absolute', top: 6, insetInlineEnd: 6, width: 10, height: 10,
+          borderRadius: '50%', background: statusColor, zIndex: 3,
+          boxShadow: '0 0 0 2px rgba(0,0,0,0.5)',
+          animation: validating ? 'pulse 1s ease-in-out infinite' : undefined,
+        }} />
+      )}
+      {validating && <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>}
       <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
         <iframe srcDoc={html} tabIndex={-1}
           style={{
