@@ -593,6 +593,56 @@ function __gammaInit(){
     parent.postMessage({ type: 'gamma-text', role, text }, '*');
   }
 
+  // Paste-as-plain-text in contentEditable elements
+  document.addEventListener('paste', (e) => {
+    const t = e.target;
+    if (!t || !t.hasAttribute || !t.hasAttribute('data-role')) return;
+    if (t.contentEditable !== 'true') return;
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain') || '';
+    document.execCommand('insertText', false, text);
+  });
+
+  // Image hover-edit button
+  let imgHoverBtn = null;
+  let imgHoverTarget = null;
+  function showImgHover(el) {
+    hideImgHover();
+    imgHoverTarget = el;
+    imgHoverBtn = document.createElement('button');
+    imgHoverBtn.textContent = '✎ החלף';
+    imgHoverBtn.style.cssText = 'position:absolute; background:#E94560; color:#fff; border:0; border-radius:4px; padding:6px 12px; font:600 13px Heebo,sans-serif; cursor:pointer; z-index:9998; box-shadow:0 4px 12px rgba(0,0,0,0.5); direction:rtl;';
+    imgHoverBtn.addEventListener('click', (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      const role = imgHoverTarget && imgHoverTarget.getAttribute('data-role');
+      if (role) parent.postMessage({ type: 'gamma-swap-image', role }, '*');
+    });
+    SLIDE.appendChild(imgHoverBtn);
+    const r = el.getBoundingClientRect();
+    const m = getSlideMetrics();
+    const cx = ((r.left + r.right) / 2 - m.sr.left) * m.scaleX;
+    const cy = ((r.top + r.bottom) / 2 - m.sr.top) * m.scaleY;
+    imgHoverBtn.style.left = (cx - 50) + 'px';
+    imgHoverBtn.style.top = (cy - 20) + 'px';
+  }
+  function hideImgHover() {
+    if (imgHoverBtn) imgHoverBtn.remove();
+    imgHoverBtn = null; imgHoverTarget = null;
+  }
+  document.addEventListener('mouseover', (e) => {
+    const img = e.target && e.target.closest && e.target.closest('img[data-role]');
+    if (img) showImgHover(img);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const img = e.target && e.target.closest && e.target.closest('img[data-role]');
+    if (!img) return;
+    setTimeout(() => {
+      if (!imgHoverBtn) return;
+      const el = document.querySelector(':hover');
+      if (!el || (!el.matches('img[data-role]') && el !== imgHoverBtn)) hideImgHover();
+    }, 100);
+  });
+
   // Double-click → inline text editing
   document.addEventListener('dblclick', (e) => {
     const el = e.target.closest('[data-role]');

@@ -28,6 +28,17 @@ const ROLE_TO_SLOT_KEY: Record<string, string> = {
   'data-point': 'dataPoint',
   'data-label': 'dataLabel',
   source: 'source',
+  image: 'image',
+  backgroundImage: 'backgroundImage',
+}
+
+interface ContextMenuItem {
+  label: string
+  icon?: React.ReactNode
+  onClick?: () => void
+  danger?: boolean
+  separator?: boolean
+  disabled?: boolean
 }
 
 export default function GammaProtoPage() {
@@ -227,6 +238,14 @@ export default function GammaProtoPage() {
         setSelectedRole(ev.data.role || null)
         return
       }
+
+      if (ev.data.type === 'gamma-swap-image') {
+        const { role } = ev.data as { role: string }
+        const kind: 'free' | 'slot' = role.startsWith('free-') ? 'free' : 'slot'
+        setMediaSwapTarget({ kind, id: role })
+        setMediaPicker('image')
+        return
+      }
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
@@ -376,6 +395,16 @@ export default function GammaProtoPage() {
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false)
   const [propertiesPinned, setPropertiesPinned] = useState(false)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
+  const preChatSnapshot = useRef<StructuredPresentation | null>(null)
+  const [canRevertChat, setCanRevertChat] = useState(false)
+  const [mediaSwapTarget, setMediaSwapTarget] = useState<{ kind: 'free' | 'slot'; id: string } | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const selectedFreeEl = selectedRole?.startsWith('free-')
     ? slide?.freeElements?.find(f => f.id === selectedRole)
@@ -420,11 +449,84 @@ export default function GammaProtoPage() {
         if (focusMode) { setFocusMode(false); return }
         if (cheatsheetOpen) { setCheatsheetOpen(false); return }
         if (elementsOpen) { setElementsOpen(false); return }
+        if (ctxMenu) { setCtxMenu(null); return }
+      }
+      // Slide nav when no element selected + no modal: ArrowUp/Down (and Page keys)
+      if (!selectedRole && !cheatsheetOpen && !elementsOpen) {
+        if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+          e.preventDefault()
+          setIdx(i => Math.max(0, i - 1))
+        }
+        if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+          e.preventDefault()
+          setIdx(i => Math.min((pres?.slides.length || 1) - 1, i + 1))
+        }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
+
+  // Smart layout switch: preserve shared slot keys, show warning toast if any lost
+  function changeLayout(newLayout: LayoutId) {
+    if (!pres || !slide) return
+    const oldSlots = slide.slots as unknown as Record<string, unknown>
+    const defaults = defaultSlotsFor(newLayout) as Record<string, unknown>
+    const migrated: Record<string, unknown> = { ...defaults }
+    const keptKeys: string[] = []
+    const lostKeys: string[] = []
+    for (const key of Object.keys(oldSlots)) {
+      if (key in defaults && oldSlots[key] !== undefined && oldSlots[key] !== '') {
+        migrated[key] = oldSlots[key]
+        keptKeys.push(key)
+      } else {
+        if (oldSlots[key] !== undefined && oldSlots[key] !== '' && !(Array.isArray(oldSlots[key]) && (oldSlots[key] as unknown[]).length === 0)) {
+          lostKeys.push(key)
+        }
+      }
+    }
+    const next = { ...pres, slides: [...pres.slides] }
+    next.slides[idx] = { ...slide, layout: newLayout, slots: migrated as never }
+    setPres(next)
+    if (lostKeys.length > 0) {
+      showToast(`ה-layout הוחלף. ${keptKeys.length} שדות נשמרו, ${lostKeys.length} לא תואמים ל-layout החדש.`)
+    } else {
+      showToast(`ה-layout הוחלף.`)
+    }
+  }
+
+  // AI chat revert
+  function onChatApply(next: StructuredPresentation) {
+    if (pres) preChatSnapshot.current = pres
+    setPres(next)
+    setCanRevertChat(true)
+  }
+  function revertChat() {
+    if (preChatSnapshot.current) {
+      setPres(preChatSnapshot.current)
+      setCanRevertChat(false)
+      showToast('השינוי מה-AI בוטל')
+    }
+  }
+
+  // Media swap handler (called when picker closes with a URL for the swap target)
+  function handleMediaSwap(url: string) {
+    if (!mediaSwapTarget || !pres || !slide) { setMediaSwapTarget(null); return }
+    const next = { ...pres, slides: [...pres.slides] }
+    if (mediaSwapTarget.kind === 'free') {
+      next.slides[idx] = {
+        ...slide,
+        freeElements: (slide.freeElements || []).map(f => f.id === mediaSwapTarget.id ? { ...f, src: url } : f),
+      }
+    } else {
+      // Slot: the id is the data-role, which usually equals the slot key
+      const key = ROLE_TO_SLOT_KEY[mediaSwapTarget.id] || mediaSwapTarget.id
+      next.slides[idx] = { ...slide, slots: { ...slide.slots, [key]: url } as never }
+    }
+    setPres(next)
+    setMediaSwapTarget(null)
+    showToast('התמונה הוחלפה')
+  }
 
   function updateFreeElement(id: string, patch: Partial<FreeElement>) {
     if (!pres || !slide) return
@@ -566,7 +668,22 @@ export default function GammaProtoPage() {
             }}>
               {pres.slides.map((s, i) => (
                 <SlideThumbCompact key={i} slide={s} ds={pres.designSystem} index={i}
-                  active={i === idx} onClick={() => setIdx(i)} />
+                  active={i === idx} onClick={() => setIdx(i)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setCtxMenu({
+                      x: e.clientX, y: e.clientY,
+                      items: [
+                        { label: 'שכפל שקף', icon: <Copy size={14} />, onClick: () => { setIdx(i); duplicateSlide() } },
+                        { label: 'עצב מחדש (AI)', icon: <Sparkles size={14} />, onClick: () => { setIdx(i); regenerateSlide() } },
+                        { separator: true, label: '' },
+                        { label: 'הזז קודם', icon: <ArrowRight size={14} />, onClick: () => moveSlide(i, i - 1), disabled: i === 0 },
+                        { label: 'הזז אחרי', icon: <ArrowLeft size={14} />, onClick: () => moveSlide(i, i + 1), disabled: i === pres.slides.length - 1 },
+                        { separator: true, label: '' },
+                        { label: 'מחק שקף', icon: <Trash2 size={14} />, onClick: () => { setIdx(i); deleteSlide() }, danger: true, disabled: pres.slides.length <= 1 },
+                      ],
+                    })
+                  }} />
               ))}
               <button onClick={() => addSlide('hero-cover')}
                 style={{
@@ -599,10 +716,7 @@ export default function GammaProtoPage() {
                   onAddShape={(s) => { addShape(s); setElementsOpen(false) }}
                   layouts={LAYOUTS}
                   onChangeLayout={(layout) => {
-                    if (!pres || !slide) return
-                    const next = { ...pres, slides: [...pres.slides] }
-                    next.slides[idx] = { ...slide, layout, elementStyles: {}, freeElements: [], hiddenRoles: [] } as StructuredSlide
-                    setPres(next)
+                    changeLayout(layout)
                     setElementsOpen(false)
                   }}
                   currentLayout={slide.layout}
@@ -694,11 +808,27 @@ export default function GammaProtoPage() {
 
       {cheatsheetOpen && <CheatsheetModal onClose={() => setCheatsheetOpen(false)} />}
 
+      {ctxMenu && <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxMenu.items} onClose={() => setCtxMenu(null)} />}
+
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, insetInlineStart: '50%', transform: 'translateX(50%)',
+          background: '#1f1f22', color: '#fff', padding: '10px 18px', borderRadius: 8,
+          border: '1px solid #333', fontSize: 13, zIndex: 250,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', animation: 'fadeInUp 0.2s ease-out',
+        }}>
+          <style>{`@keyframes fadeInUp { from { opacity: 0; transform: translate(50%, 10px); } to { opacity: 1; transform: translate(50%, 0); } }`}</style>
+          {toast}
+        </div>
+      )}
+
       {chatOpen && pres && (
         <AIChatPanel
           presentation={pres}
-          onApply={(next) => setPres(next)}
+          onApply={onChatApply}
           onClose={() => setChatOpen(false)}
+          canRevert={canRevertChat}
+          onRevert={revertChat}
         />
       )}
 
@@ -713,12 +843,72 @@ export default function GammaProtoPage() {
       {mediaPicker && (
         <MediaPicker
           kind={mediaPicker}
-          onClose={() => setMediaPicker(null)}
-          onPick={(url) => { addFreeMedia(mediaPicker, url); setMediaPicker(null) }}
+          onClose={() => { setMediaPicker(null); setMediaSwapTarget(null) }}
+          onPick={(url) => {
+            if (mediaSwapTarget) {
+              handleMediaSwap(url)
+            } else {
+              addFreeMedia(mediaPicker, url)
+            }
+            setMediaPicker(null)
+          }}
           documentId={params.id as string}
         />
       )}
     </div>
+  )
+}
+
+// ─── Context menu ─────────────────────────────────────────
+
+function ContextMenu({ x, y, items, onClose }: {
+  x: number; y: number; items: ContextMenuItem[]; onClose: () => void
+}) {
+  // Clamp to viewport
+  const [pos, setPos] = useState({ x, y })
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!ref.current) return
+    const r = ref.current.getBoundingClientRect()
+    const maxX = window.innerWidth - r.width - 4
+    const maxY = window.innerHeight - r.height - 4
+    setPos({ x: Math.min(x, maxX), y: Math.min(y, maxY) })
+  }, [x, y])
+
+  return (
+    <>
+      <div onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose() }}
+        style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
+      <div ref={ref}
+        style={{
+          position: 'fixed', left: pos.x, top: pos.y,
+          background: '#1f1f22', border: '1px solid #333',
+          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+          minWidth: 180, padding: 4, zIndex: 301,
+          direction: 'rtl',
+        }}>
+        {items.map((it, i) => it.separator ? (
+          <div key={i} style={{ height: 1, background: '#333', margin: '4px 0' }} />
+        ) : (
+          <button
+            key={i}
+            disabled={it.disabled}
+            onClick={() => { it.onClick?.(); onClose() }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              width: '100%', padding: '7px 12px', textAlign: 'right',
+              background: 'transparent', color: it.disabled ? '#555' : it.danger ? '#f87171' : '#ddd',
+              border: 0, borderRadius: 5, cursor: it.disabled ? 'not-allowed' : 'pointer',
+              fontSize: 12, fontFamily: 'inherit',
+            }}
+            onMouseEnter={(e) => { if (!it.disabled) e.currentTarget.style.background = '#2a2a2f' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
+            {it.icon && <span style={{ opacity: 0.8, display: 'inline-flex' }}>{it.icon}</span>}
+            <span>{it.label}</span>
+          </button>
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -1292,10 +1482,12 @@ function LayersPanel({
 
 // ─── AI chat panel ────────────────────────────────────────
 
-function AIChatPanel({ presentation, onApply, onClose }: {
+function AIChatPanel({ presentation, onApply, onClose, canRevert, onRevert }: {
   presentation: StructuredPresentation
   onApply: (next: StructuredPresentation) => void
   onClose: () => void
+  canRevert?: boolean
+  onRevert?: () => void
 }) {
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1332,7 +1524,14 @@ function AIChatPanel({ presentation, onApply, onClose }: {
     <div style={{ position: 'fixed', bottom: 16, insetInlineStart: 16, width: 360, background: '#141414', border: '1px solid #333', borderRadius: 10, zIndex: 80, display: 'flex', flexDirection: 'column', maxHeight: 520 }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid #222' }}>
         <strong style={{ fontSize: 13, color: '#eee' }}>💬 צ'אט AI — שינויים רוחביים</strong>
-        <button onClick={onClose} style={{ marginInlineStart: 'auto', background: 'transparent', color: '#888', border: 0, fontSize: 18, cursor: 'pointer' }}>×</button>
+        {canRevert && onRevert && (
+          <button onClick={onRevert}
+            style={{ marginInlineStart: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, background: '#40141a', color: '#fca5a5', border: '1px solid #5a1a1a', borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer' }}
+            title="בטל את השינוי האחרון של AI">
+            ↺ שחזור
+          </button>
+        )}
+        <button onClick={onClose} style={{ marginInlineStart: canRevert ? 8 : 'auto', background: 'transparent', color: '#888', border: 0, fontSize: 18, cursor: 'pointer' }}>×</button>
       </div>
       <div style={{ padding: 10, flex: 1, overflow: 'auto', fontSize: 12, color: '#ddd' }}>
         {log.length === 0 && (
@@ -1449,16 +1648,17 @@ function BgPickerButton({ slide, ds, onChange }: {
 
 // ─── Slide thumbnail ──────────────────────────────────────
 
-function SlideThumbCompact({ slide, ds, index, active, onClick }: {
+function SlideThumbCompact({ slide, ds, index, active, onClick, onContextMenu }: {
   slide: StructuredSlide
   ds: StructuredPresentation['designSystem']
   index: number
   active: boolean
   onClick: () => void
+  onContextMenu?: (e: React.MouseEvent) => void
 }) {
   const html = useMemo(() => renderStructuredSlide(slide, ds), [slide, ds])
   return (
-    <div onClick={onClick}
+    <div onClick={onClick} onContextMenu={onContextMenu}
       style={{
         minWidth: 160, height: 100, flexShrink: 0,
         border: active ? '2px solid #E94560' : '2px solid #27272a',
